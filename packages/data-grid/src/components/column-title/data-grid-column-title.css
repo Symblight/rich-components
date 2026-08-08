@@ -1,0 +1,12 @@
+:host {
+  /* The only real (in-flow) flex item in md-data-grid-header-cell's flex row
+     — md-data-grid-column-separator is position: absolute, out of flow. Grow
+     and shrink to fill the header's available width so overflow/ellipsis
+     has something to actually clip against. */
+  display: block;
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}

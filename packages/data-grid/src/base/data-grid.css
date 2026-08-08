@@ -1,0 +1,174 @@
+:host {
+  --md-data-grid-row-divider-color: var(--md-sys-color-outline-variant);
+  --md-data-grid-row-hover-color: color-mix(
+    in oklch,
+    var(--md-sys-color-on-surface),
+    transparent 96%
+  );
+  --md-data-grid-border-color: var(--md-sys-color-outline-variant);
+  --md-data-grid-shape: var(--md-sys-shape-corner-medium, 1rem);
+  --md-data-grid-empty-state-color: var(--md-sys-color-on-surface-variant);
+  --md-data-grid-empty-state-text-font: var(
+    --md-sys-typescale-body-medium-font,
+    inherit
+  );
+  --md-data-grid-empty-state-text-size: var(
+    --md-sys-typescale-body-medium-size,
+    0.875rem
+  );
+  --md-data-grid-loading-overlay-color: color-mix(
+    in oklch,
+    white,
+    transparent 40%
+  );
+  --md-data-grid-row-selected-color: color-mix(
+    in oklch,
+    var(--md-sys-color-primary),
+    transparent 92%
+  );
+  --md-data-grid-row-selected-hover-color: color-mix(
+    in oklch,
+    var(--md-sys-color-primary),
+    transparent 86%
+  );
+  --md-data-grid-detail-row-background: color-mix(
+    in oklch,
+    var(--md-sys-color-on-surface),
+    transparent 97%
+  );
+
+  display: block;
+  background-color: transparent;
+}
+
+.data-grid {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid var(--md-data-grid-border-color);
+  border-radius: var(--md-data-grid-shape);
+}
+
+.data-grid__header {
+  display: grid;
+  align-items: stretch;
+  flex: none;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  border-bottom: 1px solid var(--md-data-grid-row-divider-color);
+  background-color: inherit;
+}
+
+/* Reserves space for the viewport's vertical scrollbar (which sits inside
+   .data-grid__viewport, outside the header) so header columns stay aligned
+   with body columns instead of being stretched wider by the scrollbar gap. */
+.data-grid__header-gutter {
+  min-inline-size: 0;
+}
+
+.data-grid__viewport {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  overflow-x: auto;
+  /* Virtualized rows are constantly added/removed from the DOM as the user
+     scrolls. Without this, Chrome's scroll anchoring tries to compensate for
+     those DOM changes by nudging scrollTop itself, fighting our own
+     scroll-position math and desyncing the rendered window from the actual
+     scroll position (visible as blank space you can still scroll into). */
+  overflow-anchor: none;
+}
+
+/* Both direct children of .data-grid__viewport, not of the scrolled inner
+   content (.data-grid__spacer/.data-grid__rows) — stay anchored to the
+   viewport's own box (full width, pinned to its top) instead of scrolling
+   away with the rows underneath them. */
+.data-grid__loading-indicator {
+  position: absolute;
+  inset-inline: 0;
+  top: 0;
+  z-index: 2;
+}
+
+.data-grid__loading-overlay {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  background-color: var(--md-data-grid-loading-overlay-color);
+}
+
+.data-grid__empty-state {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100%;
+  padding: 2rem 1rem;
+  color: var(--md-data-grid-empty-state-color);
+  font-family: var(--md-data-grid-empty-state-text-font);
+  font-size: var(--md-data-grid-empty-state-text-size);
+  text-align: center;
+}
+
+.data-grid__spacer {
+  position: relative;
+}
+
+.data-grid__rows {
+  position: absolute;
+  inset-block-start: 0;
+  inset-inline: 0;
+  will-change: transform;
+}
+
+.data-grid__row {
+  display: grid;
+  align-items: stretch;
+  cursor: default;
+  border-bottom: 1px solid var(--md-data-grid-row-divider-color);
+}
+
+:where(.data-grid__row:hover) {
+  background-color: var(--md-data-grid-row-hover-color);
+}
+
+:where(.data-grid__row:last-child) {
+  border-bottom: none;
+}
+
+/* :where() so both rules carry zero specificity — source order (not
+   specificity) decides, letting the hover variant below win over this one
+   whenever a selected row is also being hovered. */
+:where(.data-grid__row_selected) {
+  background-color: var(--md-data-grid-row-selected-color);
+}
+
+/* Full-width — deliberately outside the column grid `.data-grid__row` uses,
+   since detail content isn't per-column. Sized to its own content (no fixed
+   height), unlike a normal row — see VirtualizationController's `estimateSize`
+   widening and md-data-grid.js's `_measureAutoRows()` gate. */
+.data-grid__detail-row {
+  border-bottom: 1px solid var(--md-data-grid-row-divider-color);
+  background-color: var(--md-data-grid-detail-row-background);
+}
+
+.data-grid__detail-row-cell {
+  box-sizing: border-box;
+  padding: 1rem;
+}
+
+:where(.data-grid__row_selected:hover) {
+  background-color: var(--md-data-grid-row-selected-hover-color);
+}
+
+.data-grid__skeleton-cell {
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  min-inline-size: 0;
+  padding-inline: 0.55rem;
+  overflow: hidden;
+}

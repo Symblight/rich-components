@@ -1,0 +1,55 @@
+/* No wrapper div — the host itself is the positioned/interactive element,
+   centered on the column boundary. The svg's own box gives a comfortable
+   invisible hit-area around the 4px-wide rect for free, the same technique
+   a Material icon uses. */
+:host {
+  --md-data-grid-separator-color: var(--md-sys-color-outline-variant);
+  --md-data-grid-separator-active-color: var(--md-sys-color-primary);
+  --md-data-grid-separator-inline-size: 24px;
+  --md-data-grid-separator-block-size: 24px;
+
+  position: absolute;
+  inset-inline-end: -5px;
+  inline-size: var(--md-data-grid-separator-inline-size);
+  block-size: var(--md-data-grid-separator-block-size);
+  max-inline-size: 10px;
+  min-block-size: 56px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  color: var(--md-data-grid-separator-color);
+  touch-action: none;
+  z-index: 30;
+}
+
+:host([resizable]) {
+  cursor: col-resize;
+}
+
+.data-grid-column-separator__icon {
+  inline-size: 100%;
+  block-size: 100%;
+  fill: currentColor;
+  pointer-events: none;
+  font-size: 1.5rem;
+  width: 1em;
+  height: 1em;
+  display: inline-block;
+  flex-shrink: 0;
+}
+
+.data-grid-column-separator__icon rect {
+  transition:
+    width 150ms ease,
+    x 150ms ease,
+    fill 150ms ease;
+}
+
+:host([resizable]:hover) .data-grid-column-separator__icon rect,
+:host(.data-grid-column-separator_active)
+  .data-grid-column-separator__icon
+  rect {
+  fill: var(--md-data-grid-separator-active-color);
+}

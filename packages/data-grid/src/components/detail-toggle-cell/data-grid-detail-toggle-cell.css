@@ -1,0 +1,26 @@
+:host {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  vertical-align: middle;
+}
+
+/* Smaller than GRID_DETAIL_PANEL_TOGGLE_COL_DEF's 52px column/52px default
+   row height — leaves a 5px margin on every side once centered by :host's
+   own flex centering above, rather than filling the cell edge-to-edge.
+   md-icon-button's own default size (~38px, from its padding + font-size)
+   isn't exposed as a --md-icon-button-* custom property either way, so the
+   actual clickable element (::part(button), not just the host) is sized
+   directly here instead. */
+md-icon-button::part(button) {
+  inline-size: 42px;
+  block-size: 42px;
+}
+
+.data-grid-detail-toggle-cell__icon {
+  transition: transform 150ms ease;
+}
+
+.data-grid-detail-toggle-cell__icon_expanded {
+  transform: rotate(90deg);
+}

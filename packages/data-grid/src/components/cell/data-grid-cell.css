@@ -1,0 +1,56 @@
+:host {
+  --md-data-grid-cell-color: var(--md-sys-color-on-surface);
+  --md-data-grid-cell-text-font: var(
+    --md-sys-typescale-body-medium-font,
+    inherit
+  );
+  --md-data-grid-cell-text-size: var(
+    --md-sys-typescale-body-medium-size,
+    0.875rem
+  );
+  --md-data-grid-cell-focus-ring-color: var(--md-sys-color-primary);
+  --md-data-grid-cell-focus-ring-width: 1px;
+  --md-data-grid-row-span-background: var(--md-sys-color-surface);
+
+  box-sizing: border-box;
+  display: block;
+  flex: 0 0 auto;
+  height: var(--height);
+  width: var(--width);
+  line-height: calc(var(--height) - 1px);
+  min-inline-size: 0;
+  padding-inline: 0.55rem;
+  color: var(--md-data-grid-cell-color);
+  font-size: var(--md-data-grid-cell-text-size);
+  font-weight: 400;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  outline: none;
+  border: var(--md-data-grid-cell-focus-ring-width) solid transparent;
+  border-radius: 0.125rem;
+}
+
+:host(.data-grid-cell_align-right) {
+  text-align: right;
+}
+
+:host(.data-grid-cell_align-center) {
+  text-align: center;
+}
+
+:host(.data-grid-cell_highlighted) {
+  border-color: var(--md-data-grid-cell-focus-ring-color);
+}
+
+:host(.data-grid-cell_checkbox),
+:host(.data-grid-cell_detail-toggle) {
+  padding: 0px;
+}
+
+:host(.data-grid-cell_row-span) {
+  position: relative;
+  z-index: 1;
+  background-color: var(--md-data-grid-row-span-background);
+}

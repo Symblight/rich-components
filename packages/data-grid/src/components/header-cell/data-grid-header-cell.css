@@ -1,0 +1,81 @@
+:host {
+  --md-data-grid-header-label-color: var(--md-sys-color-on-surface-variant);
+  --md-data-grid-header-label-text-font: var(
+    --md-sys-typescale-label-large-font,
+    inherit
+  );
+  --md-data-grid-header-label-text-size: var(
+    --md-sys-typescale-label-large-size,
+    0.875rem
+  );
+  --md-data-grid-header-label-text-weight: 600;
+  --md-data-grid-sort-icon-color: var(--md-sys-color-on-surface-variant);
+  --md-data-grid-sort-icon-size: 1rem;
+
+  /* Containing block for md-data-grid-column-separator's position: absolute. */
+  position: relative;
+  /* The host is itself a CSS Grid item of .data-grid__header — an explicit
+     0 (not just relying on md-data-grid-column-title's own overflow: hidden)
+     stops its reported intrinsic size from being the label's unbroken
+     content width. Deliberately not overflow: hidden here — that would
+     also clip md-data-grid-column-separator, which hangs half outside this
+     box by design. Explicit min-inline-size: 0 works unconditionally,
+     independent of overflow, unlike the browser's own automatic (content-
+     based) minimum-size default. */
+  min-inline-size: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  padding-inline: 0.55rem;
+  color: var(--md-data-grid-header-label-color);
+  font-size: var(--md-data-grid-header-label-text-size);
+  font-weight: var(--md-data-grid-header-label-text-weight);
+  text-align: left;
+}
+
+:host(.data-grid-header-cell_align-right) {
+  justify-content: flex-end;
+  text-align: right;
+}
+
+:host(.data-grid-header-cell_align-center) {
+  justify-content: center;
+  text-align: center;
+}
+
+/* Set via GRID_CHECKBOX_SELECTION_COL_DEF's headerClassName — the header
+   checkbox's own centering needs the full header width to work with; the
+   default padding-inline would just eat into that instead. */
+:host(.data-grid-header-cell_checkbox) {
+  padding: 0px;
+}
+
+:host([sortable]) {
+  cursor: pointer;
+}
+
+.data-grid-header-cell__sort-icon {
+  flex: none;
+  inline-size: var(--md-data-grid-sort-icon-size);
+  block-size: var(--md-data-grid-sort-icon-size);
+  margin-inline-start: 0.25rem;
+  color: var(--md-data-grid-sort-icon-color);
+  /* Hidden until hover — a hint that the column is sortable — except when
+     it's the active sort column, where it stays visible as the indicator. */
+  opacity: 0;
+  transition:
+    transform 150ms ease,
+    opacity 150ms ease;
+}
+
+:host([sortable]:hover) .data-grid-header-cell__sort-icon,
+:host([sort="asc"]) .data-grid-header-cell__sort-icon,
+:host([sort="desc"]) .data-grid-header-cell__sort-icon {
+  opacity: 1;
+}
+
+/* Base icon is an upward arrow — desc just rotates it 180°, avoiding a
+   second svg import for what's otherwise an identical glyph. */
+:host([sort="desc"]) .data-grid-header-cell__sort-icon {
+  transform: rotate(180deg);
+}

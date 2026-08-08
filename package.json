@@ -1,0 +1,17 @@
+{
+  "name": "rich-components",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Framework-agnostic rich UI web components, published individually to npm under @symblight/*",
+  "type": "module",
+  "scripts": {
+    "build": "pnpm -r build",
+    "test": "pnpm -r test",
+    "lint": "pnpm -r lint"
+  },
+  "license": "MIT",
+  "packageManager": "pnpm@10.32.1",
+  "pnpm": {
+    "onlyBuiltDependencies": ["esbuild"]
+  }
+}

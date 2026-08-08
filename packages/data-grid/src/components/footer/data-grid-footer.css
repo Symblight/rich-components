@@ -1,0 +1,61 @@
+:host {
+  --md-data-grid-footer-color: var(--md-sys-color-on-surface-variant);
+  --md-data-grid-footer-text-font: var(
+    --md-sys-typescale-label-medium-font,
+    inherit
+  );
+  --md-data-grid-footer-text-size: var(
+    --md-sys-typescale-label-medium-size,
+    0.75rem
+  );
+  --md-data-grid-footer-border-color: var(--md-sys-color-outline-variant);
+
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.25rem;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--md-data-grid-footer-border-color);
+}
+
+.data-grid-footer__count {
+  margin-inline-end: 0.5rem;
+  color: var(--md-data-grid-footer-color);
+  font-size: var(--md-data-grid-footer-text-size);
+  white-space: nowrap;
+}
+
+.data-grid-footer__rows-per-page-label {
+  color: var(--md-data-grid-footer-color);
+  font-size: var(--md-data-grid-footer-text-size);
+  white-space: nowrap;
+}
+
+.data-grid-footer__page-size-select {
+  margin-inline-end: 1rem;
+  width: auto;
+  min-width: 2.75rem;
+}
+
+/* md-text-field's own `:host` rule declares flat literal defaults for
+   every --md-text-field-* custom property, which always wins over a value
+   merely inherited from an ancestor — setting these vars on md-select
+   itself has no effect since md-select doesn't relay them. Reaching
+   md-text-field (nested one shadow root deeper, inside md-select) requires
+   going through its exported `part="text-field"` instead. */
+.data-grid-footer__page-size-select::part(text-field) {
+  /* Invisible at rest — outlined-field.css's own focused-state rule
+     overrides --md-outlined-text-field-border-color directly (not through
+     this variable), so the focus ring still shows; this only hides the
+     resting/idle border, which is what actually reads as "a boxed text
+     field" instead of a small inline control. */
+  --md-text-field-border-color: transparent;
+  --md-text-field-top-space: 0.25rem;
+  --md-text-field-bottom-space: 0.25rem;
+  --md-text-field-inline-start-space: 0.375rem;
+  --md-text-field-inline-end-space: 0.125rem;
+  --md-text-field-font-size: var(--md-data-grid-footer-text-size);
+  --md-text-field-icon-size: 1.125rem;
+  --md-text-field-trailing-space: 0.125rem;
+}

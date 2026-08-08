@@ -1,0 +1,54 @@
+:host {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  inline-size: 100%;
+  min-inline-size: 0;
+}
+
+/* Matches GRID_DETAIL_PANEL_TOGGLE_COL_DEF's toggle button sizing — see
+   that cell's own CSS for why this is set on ::part(button) directly
+   rather than through a --md-icon-button-* custom property. */
+md-icon-button::part(button) {
+  inline-size: 32px;
+  block-size: 32px;
+}
+
+.data-grid-tree-toggle-cell__button {
+  flex: none;
+}
+
+/* Occupies the same footprint as the toggle button on a leaf row (no
+   children, nothing to expand) so a leaf's label still lines up with an
+   expandable sibling's label one level up, rather than starting flush
+   left. */
+.data-grid-tree-toggle-cell__spacer {
+  display: inline-block;
+  inline-size: 32px;
+  block-size: 32px;
+  flex: none;
+}
+
+.data-grid-tree-toggle-cell__icon {
+  transition: transform 150ms ease;
+}
+
+/* Applied for one render when this cell's DOM node gets recycled to a
+   different row by the virtualizer's slot-keyed `repeat()` (see
+   md-data-grid-tree-toggle-cell's `willUpdate()`) — without it, the rotate
+   transition above plays for the *new* row's expand state as if the user
+   had just clicked its toggle. */
+.data-grid-tree-toggle-cell__icon_no-transition {
+  transition: none;
+}
+
+.data-grid-tree-toggle-cell__icon_expanded {
+  transform: rotate(90deg);
+}
+
+.data-grid-tree-toggle-cell__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-inline-size: 0;
+}

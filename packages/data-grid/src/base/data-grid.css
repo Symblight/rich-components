@@ -16,6 +16,14 @@
     --md-sys-typescale-body-medium-size,
     0.875rem
   );
+  --md-data-grid-empty-state-text-weight: var(
+    --md-sys-typescale-body-medium-weight,
+    400
+  );
+  --md-data-grid-empty-state-text-tracking: var(
+    --md-sys-typescale-body-medium-tracking,
+    0.015625rem
+  );
   --md-data-grid-loading-overlay-color: color-mix(
     in oklch,
     white,
@@ -110,6 +118,8 @@
   color: var(--md-data-grid-empty-state-color);
   font-family: var(--md-data-grid-empty-state-text-font);
   font-size: var(--md-data-grid-empty-state-text-size);
+  font-weight: var(--md-data-grid-empty-state-text-weight);
+  letter-spacing: var(--md-data-grid-empty-state-text-tracking);
   text-align: center;
 }
 

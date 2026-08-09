@@ -9,6 +9,10 @@
     0.875rem
   );
   --md-data-grid-header-label-text-weight: 600;
+  --md-data-grid-header-label-text-tracking: var(
+    --md-sys-typescale-label-large-tracking,
+    0.00625rem
+  );
   --md-data-grid-sort-icon-color: var(--md-sys-color-on-surface-variant);
   --md-data-grid-sort-icon-size: 1rem;
 
@@ -28,8 +32,10 @@
   justify-content: flex-start;
   padding-inline: 0.55rem;
   color: var(--md-data-grid-header-label-color);
+  font-family: var(--md-data-grid-header-label-text-font);
   font-size: var(--md-data-grid-header-label-text-size);
   font-weight: var(--md-data-grid-header-label-text-weight);
+  letter-spacing: var(--md-data-grid-header-label-text-tracking);
   text-align: left;
 }
 

@@ -34,7 +34,6 @@
     "build": "vite build",
     "sb": "storybook dev -p 6006",
     "build-storybook": "storybook build",
-    "generate-theme": "md-colors --output=./theme.css",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
     "format": "prettier --write . --ignore-path .gitignore",
@@ -47,7 +46,7 @@
   "dependencies": {
     "@lit-labs/observers": "^2.1.0",
     "@lit/context": "^1.1.6",
-    "@symblight/wc-material": "^0.0.22",
+    "@symblight/wc-material": "^0.1.0",
     "@tanstack/lit-virtual": "^3.13.36"
   },
   "devDependencies": {

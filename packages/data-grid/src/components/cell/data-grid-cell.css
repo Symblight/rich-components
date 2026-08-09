@@ -8,6 +8,14 @@
     --md-sys-typescale-body-medium-size,
     0.875rem
   );
+  --md-data-grid-cell-text-weight: var(
+    --md-sys-typescale-body-medium-weight,
+    400
+  );
+  --md-data-grid-cell-text-tracking: var(
+    --md-sys-typescale-body-medium-tracking,
+    0.015625rem
+  );
   --md-data-grid-cell-focus-ring-color: var(--md-sys-color-primary);
   --md-data-grid-cell-focus-ring-width: 1px;
   --md-data-grid-row-span-background: var(--md-sys-color-surface);
@@ -21,8 +29,10 @@
   min-inline-size: 0;
   padding-inline: 0.55rem;
   color: var(--md-data-grid-cell-color);
+  font-family: var(--md-data-grid-cell-text-font);
   font-size: var(--md-data-grid-cell-text-size);
-  font-weight: 400;
+  font-weight: var(--md-data-grid-cell-text-weight);
+  letter-spacing: var(--md-data-grid-cell-text-tracking);
   text-align: left;
   overflow: hidden;
   text-overflow: ellipsis;

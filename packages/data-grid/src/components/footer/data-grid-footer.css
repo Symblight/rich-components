@@ -8,6 +8,14 @@
     --md-sys-typescale-label-medium-size,
     0.75rem
   );
+  --md-data-grid-footer-text-weight: var(
+    --md-sys-typescale-label-medium-weight,
+    500
+  );
+  --md-data-grid-footer-text-tracking: var(
+    --md-sys-typescale-label-medium-tracking,
+    0.03125rem
+  );
   --md-data-grid-footer-border-color: var(--md-sys-color-outline-variant);
 
   box-sizing: border-box;
@@ -17,6 +25,9 @@
   gap: 0.25rem;
   padding: 0.5rem 0.75rem;
   border-top: 1px solid var(--md-data-grid-footer-border-color);
+  font-family: var(--md-data-grid-footer-text-font);
+  font-weight: var(--md-data-grid-footer-text-weight);
+  letter-spacing: var(--md-data-grid-footer-text-tracking);
 }
 
 .data-grid-footer__count {

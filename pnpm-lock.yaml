@@ -8,6 +8,88 @@ importers:
 
   .: {}
 
+  packages/chat:
+    dependencies:
+      '@symblight/wc-material':
+        specifier: ^0.2.2
+        version: 0.2.2(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)
+    devDependencies:
+      '@babel/core':
+        specifier: ^7.29.7
+        version: 7.29.7
+      '@babel/plugin-proposal-decorators':
+        specifier: ^7.29.7
+        version: 7.29.7(@babel/core@7.29.7)
+      '@material-design-icons/svg':
+        specifier: ^0.14.15
+        version: 0.14.15
+      '@open-wc/testing':
+        specifier: 4.0.0
+        version: 4.0.0
+      '@storybook/addon-docs':
+        specifier: ^10.3.3
+        version: 10.5.7(@types/react@19.2.18)(esbuild@0.28.1)(rollup@4.62.4)(storybook@10.5.7(@types/react@19.2.18)(prettier@3.9.6)(react@19.2.8))(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.1))
+      '@storybook/web-components':
+        specifier: ^10.3.1
+        version: 10.5.7(lit@3.3.3)(storybook@10.5.7(@types/react@19.2.18)(prettier@3.9.6)(react@19.2.8))
+      '@storybook/web-components-vite':
+        specifier: ^10.3.1
+        version: 10.5.7(esbuild@0.28.1)(lit@3.3.3)(rollup@4.62.4)(storybook@10.5.7(@types/react@19.2.18)(prettier@3.9.6)(react@19.2.8))(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.1))
+      '@symblight/md-colors':
+        specifier: ^0.1.1
+        version: 0.1.1
+      '@types/mocha':
+        specifier: ^10.0.10
+        version: 10.0.10
+      '@types/node':
+        specifier: ^26.1.1
+        version: 26.2.0
+      '@typescript-eslint/eslint-plugin':
+        specifier: ^8.57.1
+        version: 8.66.0(@typescript-eslint/parser@8.66.0(eslint@10.8.1)(typescript@5.9.3))(eslint@10.8.1)(typescript@5.9.3)
+      '@typescript-eslint/parser':
+        specifier: ^8.57.1
+        version: 8.66.0(eslint@10.8.1)(typescript@5.9.3)
+      '@web/test-runner':
+        specifier: ^0.20.2
+        version: 0.20.2
+      '@web/test-runner-playwright':
+        specifier: ^0.11.1
+        version: 0.11.1
+      eslint:
+        specifier: ^10.8.0
+        version: 10.8.1
+      lit:
+        specifier: ^3.3.2
+        version: 3.3.3
+      playwright:
+        specifier: ^1.58.2
+        version: 1.62.1
+      prettier:
+        specifier: ^3.9.6
+        version: 3.9.6
+      rimraf:
+        specifier: ^6.1.3
+        version: 6.1.3
+      rollup-plugin-postcss-lit:
+        specifier: ^2.2.0
+        version: 2.2.0(rollup@4.62.4)
+      storybook:
+        specifier: ^10.3.1
+        version: 10.5.7(@types/react@19.2.18)(prettier@3.9.6)(react@19.2.8)
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+      vite:
+        specifier: ^8.0.1
+        version: 8.2.1(@types/node@26.2.0)(esbuild@0.28.1)
+      vite-plugin-babel:
+        specifier: ^1.7.3
+        version: 1.7.3(@babel/core@7.29.7)(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.1))
+      vite-plugin-dts:
+        specifier: ^4.5.4
+        version: 4.5.4(@types/node@26.2.0)(rollup@4.62.4)(typescript@5.9.3)(vite@8.2.1(@types/node@26.2.0)(esbuild@0.28.1))
+
   packages/data-grid:
     dependencies:
       '@lit-labs/observers':
@@ -17,8 +99,8 @@ importers:
         specifier: ^1.1.6
         version: 1.1.6
       '@symblight/wc-material':
-        specifier: ^0.1.0
-        version: 0.1.0(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)
+        specifier: ^0.2.2
+        version: 0.2.2(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)
       '@tanstack/lit-virtual':
         specifier: ^3.13.36
         version: 3.13.36(lit@3.3.3)
@@ -425,6 +507,15 @@ packages:
 
   '@esm-bundle/chai@4.3.4-fix.0':
     resolution: {integrity: sha512-26SKdM4uvDWlY8/OOOxSB1AqQWeBosCX3wRYUZO7enTAj03CtVxIiCimYVG2WpULcyV51qapK4qTovwkUr5Mlw==}
+
+  '@floating-ui/core@1.8.0':
+    resolution: {integrity: sha512-0CIZ5itps/8x7BG8dEIhs53BvCUH2PCoogtakwRTut+Arm58sJooJ0AuZhLw2HJYIR5cMLNPBSS728sPho2khQ==}
+
+  '@floating-ui/dom@1.8.0':
+    resolution: {integrity: sha512-yXSrzeHZBTZadLOlfyhCkJHNeLJnHRnRInwdZ40L7ZiaAtrBwoYlsDrX3v5zB1Utk7CLfzcOVnVVWoXEky7Ceg==}
+
+  '@floating-ui/utils@0.2.12':
+    resolution: {integrity: sha512-HpCo8tmWzLVad5s2d19EhAz5zqrrQ6s69qd6moPMQvkOuSwDT1YgRfWSVuc4ennqrgv3OHppiOGMQ7oC13yIww==}
 
   '@hapi/bourne@3.0.0':
     resolution: {integrity: sha512-Waj1cwPXJDucOib4a3bAISsKJVb15MKi9IvmTI/7ssVEm6sywXGjVJDhl6/umt1pK1ZS7PacXU3A1PmFKHEZ2w==}
@@ -1140,8 +1231,8 @@ packages:
     resolution: {integrity: sha512-xjTQwhM2mCAdm//DKfW65mxpYafnEfGv4gO8H8m23AoEf4xNn+SKQm41RuT/vqrerHC+luclY3tbF12wQTqe9Q==}
     hasBin: true
 
-  '@symblight/wc-material@0.1.0':
-    resolution: {integrity: sha512-EfjEVMx1AsYM2Xvbd7Qzx5QXVIQORvs2uHN3ua1Ad3xpAnorXQPI/BDBiSiA3KGYPY7XyyLclmBLg9sPot/Ngg==}
+  '@symblight/wc-material@0.2.2':
+    resolution: {integrity: sha512-98vOgerNTY0KCisYs19mL+JfnKXcpBfbt9e3i+hFHuyOThw+5RseoiAUI/fp7ZiAhakHhBolN5ECxkT2arapiw==}
     peerDependencies:
       '@open-wc/form-control': ^1.0.0
       '@open-wc/form-helpers': ^1.0.0
@@ -3761,6 +3852,17 @@ snapshots:
     dependencies:
       '@types/chai': 4.3.20
 
+  '@floating-ui/core@1.8.0':
+    dependencies:
+      '@floating-ui/utils': 0.2.12
+
+  '@floating-ui/dom@1.8.0':
+    dependencies:
+      '@floating-ui/core': 1.8.0
+      '@floating-ui/utils': 0.2.12
+
+  '@floating-ui/utils@0.2.12': {}
+
   '@hapi/bourne@3.0.0': {}
 
   '@humanfs/core@0.19.2':
@@ -4323,8 +4425,9 @@ snapshots:
       '@material/material-color-utilities': 0.3.0
       culori: 4.0.2
 
-  '@symblight/wc-material@0.1.0(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)':
+  '@symblight/wc-material@0.2.2(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)':
     dependencies:
+      '@floating-ui/dom': 1.8.0
       '@lit-labs/observers': 2.1.0
       '@lit/context': 1.1.6
       '@open-wc/form-control': 1.0.0

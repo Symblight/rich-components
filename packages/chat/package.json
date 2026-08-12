@@ -1,14 +1,15 @@
 {
-  "name": "@symblight/data-grid",
+  "name": "@symblight/chat",
   "version": "0.1.0",
-  "description": "A virtualized Material Design 3 data grid web component built with Lit",
+  "description": "A Material Design 3 chat web component built with Lit — scrollable message list with a composer (text field, send button, emoji picker) docked to the bottom",
   "author": "Aleksei Tkachenko <leshtkachenko@gmail.com>",
   "license": "MIT",
   "keywords": [
     "material-design",
     "material-design-3",
     "md3",
-    "data-grid",
+    "chat",
+    "messages",
     "web-components",
     "custom-elements",
     "lit",
@@ -32,7 +33,7 @@
   "scripts": {
     "dev": "vite",
     "build": "vite build",
-    "sb": "storybook dev -p 6006",
+    "sb": "storybook dev -p 6007",
     "build-storybook": "storybook build",
     "lint": "eslint .",
     "typecheck": "tsc --noEmit -p tsconfig.typecheck.json",
@@ -44,10 +45,7 @@
     "lit": ">=3.0.0"
   },
   "dependencies": {
-    "@lit-labs/observers": "^2.1.0",
-    "@lit/context": "^1.1.6",
-    "@symblight/wc-material": "^0.2.2",
-    "@tanstack/lit-virtual": "^3.13.36"
+    "@symblight/wc-material": "^0.2.2"
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",

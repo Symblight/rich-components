@@ -2,20 +2,14 @@ import path from "node:path";
 import { transformAsync } from "@babel/core";
 import { playwrightLauncher } from "@web/test-runner-playwright";
 
-const babelConfigFile = path.resolve(
-  import.meta.dirname,
-  "./babel.config.json",
-);
+const babelConfigFile = path.resolve(import.meta.dirname, "./babel.config.json");
 
 // Transforms Lit decorator syntax via Babel.
 function babelDecoratorsPlugin() {
   return {
     name: "babel-decorators",
     async transform(context) {
-      if (
-        !context.path.endsWith(".js") ||
-        context.path.includes("node_modules")
-      ) {
+      if (!context.path.endsWith(".js") || context.path.includes("node_modules")) {
         return;
       }
       const result = await transformAsync(context.body, {
@@ -57,18 +51,12 @@ function cssInlinePlugin() {
   return {
     name: "css-inline",
     resolveMimeType(context) {
-      if (
-        context.path.endsWith(".css") &&
-        context.querystring.includes("inline")
-      ) {
+      if (context.path.endsWith(".css") && context.querystring.includes("inline")) {
         return "js";
       }
     },
     async transform(context) {
-      if (
-        context.path.endsWith(".css") &&
-        context.querystring.includes("inline")
-      ) {
+      if (context.path.endsWith(".css") && context.querystring.includes("inline")) {
         const escaped = context.body
           .replace(/\\/g, "\\\\")
           .replace(/`/g, "\\`")

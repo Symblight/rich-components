@@ -1,0 +1,78 @@
+:host {
+  display: flex;
+  box-sizing: border-box;
+  align-items: end;
+  padding-block: 0.5rem;
+  --md-chat-gap: 0.5rem;
+  gap: var(--md-chat-gap);
+  max-width: 60rem;
+  width: 100%;
+}
+
+.message-composer__input {
+  width: 100%;
+  --md-filled-text-field-background-indicator: none;
+  --md-filled-text-field-shape: 1.6rem;
+  font-size: 0.875rem;
+
+  &::part(box) {
+    min-height: 64px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  &::part(wrapper) {
+    justify-content: center;
+    flex: 1 1 auto;
+    min-width: 0;
+    width: auto;
+    padding-block: 0;
+  }
+
+  &::part(content) {
+    display: flex;
+    align-items: unset;
+    padding-block: 1rem;
+    max-height: 12cqh;
+    overflow: auto;
+  }
+
+  &::part(suffix) {
+    flex: 0 0 auto;
+    align-items: flex-end;
+  }
+
+  &::part(indicator) {
+    display: none;
+  }
+}
+
+.message-composer__input-content {
+  width: 100%;
+  outline: none;
+  word-break: break-word;
+}
+
+.message-composer__form {
+  display: flex;
+  width: 100%;
+  gap: var(--md-chat-gap);
+  align-items: end;
+}
+
+.message-composer__actions-wrapper {
+  height: 100%;
+  display: flex;
+  max-height: 64px;
+  align-items: center;
+  box-sizing: border-box;
+  gap: 0.5rem;
+}
+
+.message-composer__actions {
+  display: flex;
+  flex: 0 0 auto;
+  min-height: 64px;
+  align-items: center;
+  gap: 0.4rem;
+}

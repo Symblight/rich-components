@@ -10,9 +10,12 @@ importers:
 
   packages/chat:
     dependencies:
+      '@lit/context':
+        specifier: ^1.1.6
+        version: 1.1.6
       '@symblight/wc-material':
-        specifier: ^0.2.2
-        version: 0.2.2(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)
+        specifier: ^0.2.23
+        version: 0.2.23(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)
     devDependencies:
       '@babel/core':
         specifier: ^7.29.7
@@ -99,8 +102,8 @@ importers:
         specifier: ^1.1.6
         version: 1.1.6
       '@symblight/wc-material':
-        specifier: ^0.2.2
-        version: 0.2.2(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)
+        specifier: ^0.2.21
+        version: 0.2.21(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)
       '@tanstack/lit-virtual':
         specifier: ^3.13.36
         version: 3.13.36(lit@3.3.3)
@@ -1231,8 +1234,15 @@ packages:
     resolution: {integrity: sha512-xjTQwhM2mCAdm//DKfW65mxpYafnEfGv4gO8H8m23AoEf4xNn+SKQm41RuT/vqrerHC+luclY3tbF12wQTqe9Q==}
     hasBin: true
 
-  '@symblight/wc-material@0.2.2':
-    resolution: {integrity: sha512-98vOgerNTY0KCisYs19mL+JfnKXcpBfbt9e3i+hFHuyOThw+5RseoiAUI/fp7ZiAhakHhBolN5ECxkT2arapiw==}
+  '@symblight/wc-material@0.2.21':
+    resolution: {integrity: sha512-8DJ6H7ZguY/iVg1p7bcJ5QIdoXe/NvLUMKuPs2HISz/g1OrlqaD6/qeJGLiYXV3h75MYR1kD7QX+c8Bqf20dxw==}
+    peerDependencies:
+      '@open-wc/form-control': ^1.0.0
+      '@open-wc/form-helpers': ^1.0.0
+      lit: '>=3.0.0'
+
+  '@symblight/wc-material@0.2.23':
+    resolution: {integrity: sha512-1c3NheihJ8IDIO0tAD9SHxGLl/79GX/NazxJJ6wnb+AullECWWKGRn8kJPENnLZVUG/Tcijz+f4KENqSDPXepw==}
     peerDependencies:
       '@open-wc/form-control': ^1.0.0
       '@open-wc/form-helpers': ^1.0.0
@@ -4425,7 +4435,19 @@ snapshots:
       '@material/material-color-utilities': 0.3.0
       culori: 4.0.2
 
-  '@symblight/wc-material@0.2.2(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)':
+  '@symblight/wc-material@0.2.21(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)':
+    dependencies:
+      '@floating-ui/dom': 1.8.0
+      '@lit-labs/observers': 2.1.0
+      '@lit/context': 1.1.6
+      '@open-wc/form-control': 1.0.0
+      '@open-wc/form-helpers': 1.0.0
+      lit: 3.3.3
+      rollup-plugin-postcss-lit: 2.2.0(rollup@4.62.4)
+    transitivePeerDependencies:
+      - rollup
+
+  '@symblight/wc-material@0.2.23(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)':
     dependencies:
       '@floating-ui/dom': 1.8.0
       '@lit-labs/observers': 2.1.0

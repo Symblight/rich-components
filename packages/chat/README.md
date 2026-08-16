@@ -15,7 +15,7 @@ Built on top of [`@symblight/wc-material`](https://www.npmjs.com/package/@symbli
 ## Install
 
 ```bash
-npm install @symblight/chat lit
+npm install @symblight/message-composer lit
 ```
 
 `lit` is a peer dependency. [`@symblight/wc-material`](https://www.npmjs.com/package/@symblight/wc-material) installs automatically.
@@ -37,9 +37,9 @@ npx md-colors --sourceColor="#6750A4" --scheme=light --output=./theme.css
 
 ```bash
 pnpm install
-pnpm --filter @symblight/chat sb   # Storybook dev server
-pnpm --filter @symblight/chat test
-pnpm --filter @symblight/chat build
+pnpm --filter @symblight/message-composer sb   # Storybook dev server
+pnpm --filter @symblight/message-composer test
+pnpm --filter @symblight/message-composer build
 ```
 
 ## License

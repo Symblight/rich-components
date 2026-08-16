@@ -45,7 +45,7 @@
     "lit": ">=3.0.0"
   },
   "dependencies": {
-    "@symblight/wc-material": "^0.2.2"
+    "@symblight/wc-material": "^0.2.23"
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",

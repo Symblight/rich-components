@@ -13,7 +13,6 @@
   width: 100%;
   --md-filled-text-field-background-indicator: none;
   --md-filled-text-field-shape: 1.6rem;
-  font-size: 0.875rem;
 
   &::part(box) {
     min-height: 64px;
@@ -49,9 +48,18 @@
 
 .message-composer__input-content {
   width: 100%;
+}
+
+.message-composer__input-content .ProseMirror {
   outline: none;
   word-break: break-word;
+  min-height: 20px;
 }
+
+.message-composer__input-content .ProseMirror > div {
+  line-height: 20px;
+}
+
 
 .message-composer__form {
   display: flex;

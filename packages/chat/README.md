@@ -2,20 +2,20 @@
 
 A Material Design 3 chat web component built with [Lit](https://lit.dev). Framework-agnostic — works the same in a plain HTML page, React, Vue, Svelte, or anywhere else custom elements run.
 
-> **Status:** scaffolding only. Package metadata, build tooling, and Storybook are set up; no components have been implemented yet.
+`<chx-chat>` orchestrates the layout — a scrollable message list fills the available space, a composer is docked to the bottom.
 
-## Planned layout
+## Layout
 
 - **Message list** — the main scrollable area, filling all available height. Renders the conversation as a list of messages.
-- **Composer** — docked to the bottom: a text field for the outgoing message and a send button alongside it.
-- **Emoji picker** — for reacting to messages and/or inserting emoji into the composer.
+- **Composer** — docked to the bottom: a rich-text field for the outgoing message and a send button alongside it.
+- **Commands** — an opt-in `@`/`/`-style trigger-a-menu-get-a-chip feature for the composer. See [Commands API](./src/docs/commands.md).
 
-Built on top of [`@symblight/wc-material`](https://www.npmjs.com/package/@symblight/wc-material) primitives (text-field, button, icon-button).
+Built on top of [`@symblight/wc-material`](https://www.npmjs.com/package/@symblight/wc-material) primitives (text-field, button, icon-button, menu, chips).
 
 ## Install
 
 ```bash
-npm install @symblight/message-composer lit
+npm install @symblight/chat lit
 ```
 
 `lit` is a peer dependency. [`@symblight/wc-material`](https://www.npmjs.com/package/@symblight/wc-material) installs automatically.
@@ -37,9 +37,9 @@ npx md-colors --sourceColor="#6750A4" --scheme=light --output=./theme.css
 
 ```bash
 pnpm install
-pnpm --filter @symblight/message-composer sb   # Storybook dev server
-pnpm --filter @symblight/message-composer test
-pnpm --filter @symblight/message-composer build
+pnpm --filter @symblight/chat sb   # Storybook dev server
+pnpm --filter @symblight/chat test
+pnpm --filter @symblight/chat build
 ```
 
 ## License

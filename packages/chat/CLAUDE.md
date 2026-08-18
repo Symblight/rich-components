@@ -42,13 +42,13 @@ chx-chat              (src/components/base/chat.js)
 └── chx-message-composer (src/components/message-composer/message-composer.js)
 ```
 
-`chx-chat` is the single public export (`src/index.js`). It orchestrates the layout: message list fills available space, composer is docked at the bottom. Slots (`leading`, `actions`, `flight-icon`, `mention-field`) are forwarded from `chx-chat` down into `chx-message-composer`.
+`chx-chat` is the single public export (`src/index.js`). It orchestrates the layout: message list fills available space, composer is docked at the bottom. Slots (`leading`, `actions`, `flight-icon`, `command-field`) are forwarded from `chx-chat` down into `chx-message-composer`.
 
-`chx-mention-field` (`src/components/mention-field/mention-field.js`) is a sibling component, not part of the default tree — consumers slot it in via `<slot name="mention-field">`.
+`chx-command-field` (`src/components/command-field/command-field.js`) is a sibling component, not part of the default tree — consumers slot it in via `<slot name="command-field">`. Its controller (`src/controllers/CommandFieldController.js`) is currently disconnected from the composer's input path — see "Composer input model" below.
 
 ### Composer input model
 
-The composer uses a `contenteditable` div slotted into `md-text-field` (from `@symblight/wc-material`) rather than a native `<input>` or `<textarea>`. This enables rich inline content (mentions, emoji). `ContentTextoFormatter` (`src/text-formatter/text-formatter.js`) serializes the live DOM to plain text, handling `<br>`, block tags (`DIV`, `P`), and the browser's empty-line placeholder pattern. On send, the composer dispatches a `sendMessage` CustomEvent with `{ value: string }` in `detail`.
+The composer's editable region is a [ProseMirror](https://prosemirror.net/) `EditorView`, wrapped by a small facade (`src/editor/Editor.js`) so `message-composer.js` never touches ProseMirror internals directly — schema (`src/editor/schema.js`), keymap (`src/editor/keymap.js`), and forced-plain-text paste (`src/editor/paste-plugin.js`) all live under `src/editor/`. Mounted into a **static, binding-free** `<div>` in the Lit template — the mount node must never sit inside a Lit conditional (`when()`/etc.), confirmed live to silently kill the view with no console error otherwise. On send, the composer dispatches a `sendMessage` CustomEvent with `{ value: string, html: string }` in `detail`. The pre-ProseMirror `ContentTextoFormatter` (`src/text-formatter/text-formatter.js`) and the commands feature's Range-based `CommandFieldController`/`CaretOffset` are still present but not wired into this path — commands are a not-yet-started migration onto the same engine (see `.claude/plans/commands.spec.md`).
 
 ### Styling conventions
 

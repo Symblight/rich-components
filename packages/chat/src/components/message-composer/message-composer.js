@@ -3,8 +3,7 @@ import { customElement } from "lit/decorators.js";
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 import { when } from "lit/directives/when.js";
 
-import { ContentTextoFormatter } from "../../text-formatter/text-formatter.js";
-import { MentionFieldController } from "../../controllers/MentionFieldController.js";
+import { Editor } from "../../editor/Editor.js";
 
 import styles from "./message-composer.css?inline";
 
@@ -27,6 +26,7 @@ export class ChxMessageComposer extends LitElement {
     value: { type: String, state: true },
     loading: { type: Boolean, reflect: true, attribute: true },
     label: { type: String, attribute: true },
+    commandFields: { attribute: false },
   };
 
   constructor() {
@@ -41,8 +41,11 @@ export class ChxMessageComposer extends LitElement {
     /** @type {Boolean} */
     this.loading = false;
 
-    /** @type {MentionFieldController} */
-    this.mentionFieldController = new MentionFieldController(this);
+    /** @type {Map<Element, Element>} Set by chx-chat — see its handleCommandFieldSlotchange. */
+    this.commandFields = new Map();
+
+    /** @type {Editor | undefined} */
+    this.editor = undefined;
   }
 
   /** @returns {import("lit").CSSResultGroup} */
@@ -60,6 +63,48 @@ export class ChxMessageComposer extends LitElement {
     this.removeEventListener("pointerdown", this.handleComposerPointerdown);
   }
 
+  firstUpdated() {
+    this.editor = new Editor(this.inputElement, {
+      onChange: this.handleEditorChange,
+      onSubmit: () => this.formElement?.requestSubmit(),
+      getCommandFields: () => this.commandFields,
+      onCommandSelected: (detail) => {
+        this.dispatchEvent(
+          new CustomEvent("chx-command-selected", { detail, bubbles: true, composed: true }),
+        );
+      },
+      attributes: {
+        role: "textbox",
+        dir: "ltr",
+        writingsuggestions: "false",
+        "aria-multiline": "true",
+        translate: "no",
+        tabindex: "0",
+        enterkeyhint: "enter",
+        autocorrect: "off",
+      },
+    });
+    this.editor.view.dom.setAttribute("aria-label", this.label);
+  }
+
+  /** @param {import("lit").PropertyValues} changedProperties */
+  updated(changedProperties) {
+    super.updated(changedProperties);
+    if (changedProperties.has("label") && this.editor) {
+      this.editor.view.dom.setAttribute("aria-label", this.label);
+    }
+  }
+
+  /**
+   * Forwarded from chx-chat's own insertAtCommand — see
+   * Editor.resolveCommand for the actual insertion logic.
+   * @param {string | null} target
+   * @param {Node} node
+   */
+  insertAtCommand(target, node) {
+    this.editor?.resolveCommand(target, node);
+  }
+
   /**
    * @param {PointerEvent} event
    */
@@ -69,23 +114,8 @@ export class ChxMessageComposer extends LitElement {
     if (excludedElements.some((element) => element && path.includes(element))) return;
 
     event.preventDefault();
-    this.inputElement.focus();
-    this.moveCaretToEnd();
+    this.editor?.focusEnd();
   };
-
-  moveCaretToEnd() {
-    const root = /** @type {ShadowRoot & {getSelection?: () => Selection | null}} */ (
-      this.renderRoot
-    );
-    const selection = root.getSelection ? root.getSelection() : document.getSelection();
-    if (!selection) return;
-
-    const range = document.createRange();
-    range.selectNodeContents(this.inputElement);
-    range.collapse(false);
-    selection.removeAllRanges();
-    selection.addRange(range);
-  }
 
   /** @returns {HTMLDivElement} */
   get inputElement() {
@@ -106,6 +136,13 @@ export class ChxMessageComposer extends LitElement {
     );
   }
 
+  /** @returns {HTMLFormElement} */
+  get formElement() {
+    return /** @type {HTMLFormElement} */ (
+      this.renderRoot?.querySelector(".message-composer__form")
+    );
+  }
+
   /** @returns {import("@symblight/wc-material/text-field").TextField} */
   get textFieldElement() {
     return /** @type {import("@symblight/wc-material/text-field").TextField} */ (
@@ -116,15 +153,15 @@ export class ChxMessageComposer extends LitElement {
   /** @param {SubmitEvent} event */
   handleSend(event) {
     event.preventDefault();
-    if (!this.value) return;
+    if (!this.value || !this.editor) return;
 
-    const value = this.value;
-    const html = this.inputElement.innerHTML;
-    this.inputElement.focus();
+    const value = this.editor.getValue();
+    const html = this.editor.getHTML();
+    this.editor.focus();
     this.clearValue();
 
     this.dispatchEvent(
-      new CustomEvent("sendMessage", {
+      new CustomEvent("chx-send-message", {
         detail: { value, html },
         bubbles: true,
         composed: true,
@@ -132,9 +169,9 @@ export class ChxMessageComposer extends LitElement {
     );
   }
 
-  /** Resets both the contenteditable DOM and `this.value` — they don't sync automatically. */
+  /** Resets both the editor's document and `this.value` — they don't sync automatically. */
   clearValue() {
-    this.inputElement.textContent = "";
+    this.editor?.clear();
     this.value = "";
     this.textFieldElement.setValue("");
 
@@ -147,67 +184,23 @@ export class ChxMessageComposer extends LitElement {
     );
   }
 
-  /** @param {KeyboardEvent} event */
-  handleComposerKeydown(event) {
-    if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
-    event.preventDefault();
-    const form = /** @type {HTMLElement} */ (event.target).closest("form");
-    form?.requestSubmit();
-  }
-
   /**
-   * @param {ClipboardEvent} event
+   * Bound via Editor's onChange — fires on every doc-changing transaction,
+   * direct replacement for the old native-`input`-event handleInput.
+   * @param {{value: string, html: string}} detail
    */
-  handleComposerPaste(event) {
-    event.preventDefault();
-
-    const text = event.clipboardData?.getData("text/plain");
-    if (!text) return;
-
-    const root = /** @type {ShadowRoot & {getSelection?: () => Selection | null}} */ (
-      this.renderRoot
-    );
-    const selection = root.getSelection ? root.getSelection() : document.getSelection();
-    if (!selection?.rangeCount) return;
-
-    const range = selection.getRangeAt(0);
-    range.deleteContents();
-
-    const fragment = document.createDocumentFragment();
-    /** @type {Text | undefined} */
-    let lastNode;
-    text.split("\n").forEach((line, index) => {
-      if (index > 0) fragment.appendChild(document.createElement("br"));
-      lastNode = fragment.appendChild(document.createTextNode(line));
-    });
-    if (!lastNode) return;
-    range.insertNode(fragment);
-
-    range.setStartAfter(lastNode);
-    range.collapse(true);
-    selection.removeAllRanges();
-    selection.addRange(range);
-
-    this.inputElement.dispatchEvent(new InputEvent("input", { bubbles: true, composed: true }));
-  }
-
-  handleInput() {
-    const formatter = new ContentTextoFormatter(this.inputElement);
-    const plainText = formatter.toPlainText();
-
-    this.value = plainText;
-    const html = this.inputElement.innerHTML;
-
-    this.textFieldElement.setValue(plainText);
+  handleEditorChange = (detail) => {
+    this.value = detail.value;
+    this.textFieldElement.setValue(detail.value);
 
     this.dispatchEvent(
       new CustomEvent("change", {
-        detail: { value: plainText, html },
+        detail,
         bubbles: true,
         composed: true,
       }),
     );
-  }
+  };
 
   render() {
     return html`
@@ -217,24 +210,9 @@ export class ChxMessageComposer extends LitElement {
           name="message"
           class="message-composer__input"
           placeholder="Put your text..."
-          @input=${this.handleInput}
           part="textbox"
         >
-          <div
-            slot="input"
-            role="textbox"
-            dir="ltr"
-            writingsuggestions="false"
-            aria-multiline="true"
-            contenteditable="true"
-            class="message-composer__input-content"
-            @keydown=${this.handleComposerKeydown}
-            @paste=${this.handleComposerPaste}
-            translate="no"
-            tabindex="0"
-            enterkeyhint="enter"
-            aria-label=${this.label}
-          ></div>
+          <div slot="input" class="message-composer__input-content"></div>
 
           <div slot="trailing" class="message-composer__actions-wrapper">
             <div class="message-composer__actions">
@@ -264,10 +242,6 @@ export class ChxMessageComposer extends LitElement {
           </div>
         </md-text-field>
       </form>
-      <slot
-        name="mention-field"
-        @slotchange=${this.mentionFieldController.handleConnectMentionField}
-      ></slot>
     `;
   }
 }

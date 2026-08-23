@@ -45,6 +45,7 @@
     "lit": ">=3.0.0"
   },
   "dependencies": {
+    "@open-wc/form-control": "^1.0.0",
     "@symblight/wc-material": "^0.2.24",
     "prosemirror-commands": "^1.7.2",
     "prosemirror-keymap": "^1.2.3",

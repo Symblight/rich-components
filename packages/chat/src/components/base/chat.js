@@ -39,10 +39,27 @@ export class ChxChat extends LitElement {
     return [styles];
   }
 
-  /** @returns {import("../message-composer/message-composer.js").ChxMessageComposer} */
+  connectedCallback() {
+    super.connectedCallback();
+    this.addEventListener("chx-send-message", /** @type {EventListener} */ (this.handleSend));
+    this.addEventListener("change", /** @type {EventListener} */ (this.handleChange));
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this.removeEventListener("chx-send-message", /** @type {EventListener} */ (this.handleSend));
+    this.removeEventListener("change", /** @type {EventListener} */ (this.handleChange));
+  }
+
+  /**
+   * chx-message-composer is now consumer-authored light DOM (see
+   * handleDefaultSlotchange) rather than something chx-chat renders itself,
+   * so this is a light-DOM query, not a shadow-root one.
+   * @returns {import("../message-composer/message-composer.js").ChxMessageComposer}
+   */
   get messageComposerElement() {
     return /** @type {import("../message-composer/message-composer.js").ChxMessageComposer} */ (
-      this.renderRoot?.querySelector("chx-message-composer")
+      this.querySelector("chx-message-composer")
     );
   }
 
@@ -84,22 +101,39 @@ export class ChxChat extends LitElement {
     );
   }
 
+  /**
+   * chx-message-list/chx-message-composer are consumer-authored light DOM —
+   * chx-chat only orchestrates layout (see chat.css's ::slotted() rules) and
+   * pushes its own config onto whatever composer shows up here, since it can
+   * no longer bind properties onto it via its own template.
+   */
+  handleDefaultSlotchange() {
+    this.pushComposerProperties();
+  }
+
+  pushComposerProperties() {
+    const composer = this.messageComposerElement;
+    if (!composer) return;
+    composer.label = this.label;
+    composer.loading = this.loading;
+    composer.commandFields = this.commandFields;
+  }
+
+  /** @param {import("lit").PropertyValues} changedProperties */
+  updated(changedProperties) {
+    super.updated(changedProperties);
+    if (
+      changedProperties.has("label") ||
+      changedProperties.has("loading") ||
+      changedProperties.has("commandFields")
+    ) {
+      this.pushComposerProperties();
+    }
+  }
+
   render() {
     return html`
-      <chx-message-list class="chat__message-list"></chx-message-list>
-      <section class="chat__message-composer-layout">
-        <chx-message-composer
-          .label=${this.label}
-          .commandFields=${this.commandFields}
-          @chx-send-message=${this.handleSend}
-          @change=${this.handleChange}
-          class="chat__message-composer"
-        >
-          <slot name="leading" slot="leading"></slot>
-          <slot name="actions" slot="actions"></slot>
-          <slot name="flight-icon" slot="flight-icon"></slot>
-        </chx-message-composer>
-      </section>
+      <slot @slotchange=${this.handleDefaultSlotchange}></slot>
       <slot name="command-field" @slotchange=${this.handleCommandFieldSlotchange}></slot>
     `;
   }

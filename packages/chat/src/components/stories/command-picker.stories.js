@@ -92,8 +92,10 @@ function createQueryHandler(items) {
 export const Basic = {
   render: () => html`
     <chx-chat label="Write your prompt...">
-      <md-button slot="actions" variant="text">Opus 4.8</md-button>
-      <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+      <chx-message-composer>
+        <md-button slot="actions" variant="text">Opus 4.8</md-button>
+        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+      </chx-message-composer>
       <chx-command-picker commandCharacter="@" id="picker-basic" slot="command-field">
         <md-menu-item value="index.js">index.js</md-menu-item>
         <md-menu-item value="chat.js">chat.js</md-menu-item>
@@ -107,8 +109,10 @@ export const Basic = {
 export const DynamicSearch = {
   render: () => html`
     <chx-chat label="Write your prompt...">
-      <md-button slot="actions" variant="text">Opus 4.8</md-button>
-      <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+      <chx-message-composer>
+        <md-button slot="actions" variant="text">Opus 4.8</md-button>
+        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+      </chx-message-composer>
       <chx-command-picker
         commandCharacter="@"
         id="picker-dynamic"
@@ -145,8 +149,10 @@ function createPickedHandler(templateId, iconMap) {
 export const CustomChipPerOptionIcon = {
   render: () => html`
     <chx-chat label="Write your prompt...">
-      <md-button slot="actions" variant="text">Opus 4.8</md-button>
-      <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+      <chx-message-composer>
+        <md-button slot="actions" variant="text">Opus 4.8</md-button>
+        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+      </chx-message-composer>
       <chx-command-picker
         commandCharacter="@"
         id="picker-per-option-icon"
@@ -167,15 +173,19 @@ export const CustomChipPerOptionIcon = {
 export const CustomChip = {
   render: () => html`
     <chx-chat label="Write your prompt...">
-      <md-button slot="actions" variant="text">Opus 4.8</md-button>
-      <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+      <chx-message-composer>
+        <md-button slot="actions" variant="text">Opus 4.8</md-button>
+        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+      </chx-message-composer>
       <chx-command-picker
         commandCharacter="@"
         id="picker-custom-chip"
         slot="command-field"
         @chx-command-query=${createQueryHandler(FILES)}
       >
-        <chx-chip slot="chip"><md-icon slot="icon">${unsafeSVG(descriptionIcon)}</md-icon></chx-chip>
+        <chx-chip slot="chip"
+          ><md-icon slot="icon">${unsafeSVG(descriptionIcon)}</md-icon></chx-chip
+        >
       </chx-command-picker>
     </chx-chat>
   `,
@@ -185,8 +195,10 @@ export const CustomChip = {
 export const CustomCommands = {
   render: () => html`
     <chx-chat label="Write your prompt...">
-      <md-button slot="actions" variant="text">Opus 4.8</md-button>
-      <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+      <chx-message-composer>
+        <md-button slot="actions" variant="text">Opus 4.8</md-button>
+        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+      </chx-message-composer>
       <chx-command-picker
         commandCharacter="@"
         id="files"

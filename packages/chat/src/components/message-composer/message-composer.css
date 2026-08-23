@@ -9,57 +9,9 @@
   width: 100%;
 }
 
-.message-composer__input {
-  width: 100%;
-  --md-filled-text-field-background-indicator: none;
-  --md-filled-text-field-shape: 1.6rem;
-
-  &::part(box) {
-    min-height: 64px;
-    flex-wrap: wrap;
-    justify-content: flex-end;
-  }
-
-  &::part(wrapper) {
-    justify-content: center;
-    flex: 1 1 auto;
-    min-width: 0;
-    width: auto;
-    padding-block: 0;
-  }
-
-  &::part(content) {
-    display: flex;
-    align-items: unset;
-    padding-block: 1rem;
-    max-height: 12cqh;
-    overflow: auto;
-  }
-
-  &::part(suffix) {
-    flex: 0 0 auto;
-    align-items: flex-end;
-  }
-
-  &::part(indicator) {
-    display: none;
-  }
+.message-composer__field {
+  --chx-textbox-shape: 1.6rem;
 }
-
-.message-composer__input-content {
-  width: 100%;
-}
-
-.message-composer__input-content .ProseMirror {
-  outline: none;
-  word-break: break-word;
-  min-height: 20px;
-}
-
-.message-composer__input-content .ProseMirror > div {
-  line-height: 20px;
-}
-
 
 .message-composer__form {
   display: flex;
@@ -80,7 +32,7 @@
 .message-composer__actions {
   display: flex;
   flex: 0 0 auto;
-  min-height: 64px;
+  min-height: 40px;
   align-items: center;
   gap: 0.4rem;
 }

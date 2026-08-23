@@ -3,27 +3,20 @@
   flex-direction: column;
   height: 100%;
   overflow: hidden;
+  container-type: size;
+  container-name: chat;
   --chx-chat-background-color: var(--md-sys-color-background);
   background-color: var(--chx-chat-background-color);
 }
 
-.chat__message-list {
-  border-radius: 1rem;
-  border: 1px dashed var(--md-sys-color-on-primary-container);
-
-  padding: 0 16px 0 24px;
-  position: relative;
-  overflow-anchor: unset;
+::slotted(chx-message-list) {
+  order: 1;
   width: 100%;
-  flex: 1 auto;
+  flex: 1 1 auto;
 }
 
-.chat__message-composer {
+::slotted(chx-message-composer) {
+  order: 2;
+  align-self: center;
   padding-inline: 1rem;
-}
-
-.chat__message-composer-layout {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
 }

@@ -5,6 +5,7 @@ import { ReplaceStep } from "prosemirror-transform";
 import { schema } from "./schema.js";
 import { createKeymap } from "./keymap.js";
 import { createPastePlugin } from "./paste-plugin.js";
+import { createPlaceholderPlugin } from "./placeholder-plugin.js";
 import { createCommandPlugin, commandPluginKey } from "./command-plugin.js";
 import { CommandNodeView } from "./command-node-view.js";
 import { toPlainText, toHTML } from "./serialize.js";
@@ -32,7 +33,7 @@ function fixMacDoubleSpacePeriod(tr, oldState, view) {
   return oldState.tr.insertText(inserted.replace(".", " "), step.from, step.to);
 }
 
-/** Facade over the composer's editing engine — message-composer.js never touches ProseMirror directly. */
+/** Facade over the composer's editing engine — constructed by chx-textbox (textbox.js) against its own mount div; chx-message-composer never touches ProseMirror directly. */
 export class Editor {
   /**
    * @param {HTMLElement} mount
@@ -42,9 +43,13 @@ export class Editor {
    *   getCommandFields?: () => Map<Element, Element>,
    *   onCommandSelected?: (detail: {target: string | null, id: string | undefined}) => void,
    *   attributes?: Record<string, string>,
+   *   placeholder?: string,
    * }} options
    */
-  constructor(mount, { onChange, onSubmit, getCommandFields, onCommandSelected, attributes }) {
+  constructor(
+    mount,
+    { onChange, onSubmit, getCommandFields, onCommandSelected, attributes, placeholder },
+  ) {
     this._onChange = onChange;
     this._onCommandSelected = onCommandSelected;
 
@@ -54,6 +59,7 @@ export class Editor {
         createCommandPlugin({ getCommandFields: getCommandFields ?? (() => new Map()) }),
         createKeymap({ onSubmit }),
         createPastePlugin(),
+        createPlaceholderPlugin(placeholder ?? ""),
       ],
     });
 
@@ -89,6 +95,11 @@ export class Editor {
   /** @returns {boolean} */
   isEmpty() {
     return this.view.state.doc.content.size === 0;
+  }
+
+  /** @returns {boolean} True once Shift-Enter has split the doc into more than one `line`. */
+  isMultiline() {
+    return this.view.state.doc.childCount > 1;
   }
 
   clear() {

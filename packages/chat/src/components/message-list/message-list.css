@@ -2,4 +2,12 @@
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+  position: relative;
+  overflow-anchor: unset;
+  --chx-message-list-border-radius: 1rem;
+  --chx-message-list-border-color: var(--md-sys-color-on-primary-container);
+  --chx-message-list-padding: 0 1rem 0 1.5rem;
+  border-radius: var(--chx-message-list-border-radius);
+  border: 1px dashed var(--chx-message-list-border-color);
+  padding: var(--chx-message-list-padding);
 }

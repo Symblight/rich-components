@@ -1,18 +1,10 @@
 import { html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
-import { unsafeSVG } from "lit/directives/unsafe-svg.js";
-import { when } from "lit/directives/when.js";
-
-import { Editor } from "../../editor/Editor.js";
 
 import styles from "./message-composer.css?inline";
 
-import "@symblight/wc-material/text-field";
+import "../textbox/textbox.js";
 import "@symblight/wc-material/button";
-import "@symblight/wc-material/icon-button";
-import "@symblight/wc-material/icon";
-
-import send from "@material-design-icons/svg/outlined/arrow_upward.svg?raw";
 
 /**
  * @tag chx-message-composer
@@ -26,6 +18,7 @@ export class ChxMessageComposer extends LitElement {
     value: { type: String, state: true },
     loading: { type: Boolean, reflect: true, attribute: true },
     label: { type: String, attribute: true },
+    placeholder: { type: String, attribute: true },
     commandFields: { attribute: false },
   };
 
@@ -38,14 +31,14 @@ export class ChxMessageComposer extends LitElement {
     /** @type {String} */
     this.label = "";
 
+    /** @type {String} */
+    this.placeholder = "Put your text...";
+
     /** @type {Boolean} */
     this.loading = false;
 
     /** @type {Map<Element, Element>} Set by chx-chat — see its handleCommandFieldSlotchange. */
     this.commandFields = new Map();
-
-    /** @type {Editor | undefined} */
-    this.editor = undefined;
   }
 
   /** @returns {import("lit").CSSResultGroup} */
@@ -53,87 +46,14 @@ export class ChxMessageComposer extends LitElement {
     return [styles];
   }
 
-  connectedCallback() {
-    super.connectedCallback();
-    this.addEventListener("pointerdown", this.handleComposerPointerdown);
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    this.removeEventListener("pointerdown", this.handleComposerPointerdown);
-  }
-
-  firstUpdated() {
-    this.editor = new Editor(this.inputElement, {
-      onChange: this.handleEditorChange,
-      onSubmit: () => this.formElement?.requestSubmit(),
-      getCommandFields: () => this.commandFields,
-      onCommandSelected: (detail) => {
-        this.dispatchEvent(
-          new CustomEvent("chx-command-selected", { detail, bubbles: true, composed: true }),
-        );
-      },
-      attributes: {
-        role: "textbox",
-        dir: "ltr",
-        writingsuggestions: "false",
-        "aria-multiline": "true",
-        translate: "no",
-        tabindex: "0",
-        enterkeyhint: "enter",
-        autocorrect: "off",
-      },
-    });
-    this.editor.view.dom.setAttribute("aria-label", this.label);
-  }
-
-  /** @param {import("lit").PropertyValues} changedProperties */
-  updated(changedProperties) {
-    super.updated(changedProperties);
-    if (changedProperties.has("label") && this.editor) {
-      this.editor.view.dom.setAttribute("aria-label", this.label);
-    }
-  }
-
   /**
    * Forwarded from chx-chat's own insertAtCommand — see
-   * Editor.resolveCommand for the actual insertion logic.
+   * chx-textbox.insertAtCommand for the actual insertion logic.
    * @param {string | null} target
    * @param {Node} node
    */
   insertAtCommand(target, node) {
-    this.editor?.resolveCommand(target, node);
-  }
-
-  /**
-   * @param {PointerEvent} event
-   */
-  handleComposerPointerdown = (event) => {
-    const path = event.composedPath();
-    const excludedElements = [this.attachElement, this.actionsElement, this.inputElement];
-    if (excludedElements.some((element) => element && path.includes(element))) return;
-
-    event.preventDefault();
-    this.editor?.focusEnd();
-  };
-
-  /** @returns {HTMLDivElement} */
-  get inputElement() {
-    return /** @type {HTMLDivElement} */ (
-      this.renderRoot?.querySelector(".message-composer__input-content")
-    );
-  }
-
-  /** @returns {HTMLElement} */
-  get attachElement() {
-    return /** @type {HTMLElement} */ (this.renderRoot?.querySelector(".message-composer__attach"));
-  }
-
-  /** @returns {HTMLElement} */
-  get actionsElement() {
-    return /** @type {HTMLElement} */ (
-      this.renderRoot?.querySelector(".message-composer__actions")
-    );
+    this.textboxElement?.insertAtCommand(target, node);
   }
 
   /** @returns {HTMLFormElement} */
@@ -143,21 +63,21 @@ export class ChxMessageComposer extends LitElement {
     );
   }
 
-  /** @returns {import("@symblight/wc-material/text-field").TextField} */
-  get textFieldElement() {
-    return /** @type {import("@symblight/wc-material/text-field").TextField} */ (
-      this.renderRoot?.querySelector("md-text-field")
+  /** @returns {import("../textbox/textbox.js").ChxTextbox} */
+  get textboxElement() {
+    return /** @type {import("../textbox/textbox.js").ChxTextbox} */ (
+      this.renderRoot?.querySelector("chx-textbox")
     );
   }
 
   /** @param {SubmitEvent} event */
   handleSend(event) {
     event.preventDefault();
-    if (!this.value || !this.editor) return;
+    if (!this.value || !this.textboxElement) return;
 
-    const value = this.editor.getValue();
-    const html = this.editor.getHTML();
-    this.editor.focus();
+    const value = this.textboxElement.getValue();
+    const html = this.textboxElement.getHTML();
+    this.textboxElement.focus();
     this.clearValue();
 
     this.dispatchEvent(
@@ -171,9 +91,8 @@ export class ChxMessageComposer extends LitElement {
 
   /** Resets both the editor's document and `this.value` — they don't sync automatically. */
   clearValue() {
-    this.editor?.clear();
+    this.textboxElement?.clear();
     this.value = "";
-    this.textFieldElement.setValue("");
 
     this.dispatchEvent(
       new CustomEvent("input", {
@@ -185,17 +104,17 @@ export class ChxMessageComposer extends LitElement {
   }
 
   /**
-   * Bound via Editor's onChange — fires on every doc-changing transaction,
-   * direct replacement for the old native-`input`-event handleInput.
-   * @param {{value: string, html: string}} detail
+   * Bound to chx-textbox's own chx-textbox-change — fires on every
+   * doc-changing transaction, direct replacement for the old native-`input`-
+   * event handleInput.
+   * @param {CustomEvent<{value: string, html: string}>} event
    */
-  handleEditorChange = (detail) => {
-    this.value = detail.value;
-    this.textFieldElement.setValue(detail.value);
+  handleTextboxChange = (event) => {
+    this.value = event.detail.value;
 
     this.dispatchEvent(
       new CustomEvent("change", {
-        detail,
+        detail: event.detail,
         bubbles: true,
         composed: true,
       }),
@@ -204,43 +123,27 @@ export class ChxMessageComposer extends LitElement {
 
   render() {
     return html`
-      <slot name="leading"></slot>
       <form class="message-composer__form" @submit=${this.handleSend}>
-        <md-text-field
+        <chx-textbox
           name="message"
-          class="message-composer__input"
-          placeholder="Put your text..."
+          class="message-composer__field"
           part="textbox"
+          .label=${this.label}
+          .placeholder=${this.placeholder}
+          .getCommandFields=${() => this.commandFields}
+          ?loading=${this.loading}
+          @chx-textbox-change=${this.handleTextboxChange}
         >
-          <div slot="input" class="message-composer__input-content"></div>
+          <slot name="leading" slot="leading"></slot>
+          <slot name="attachments" slot="attachments"></slot>
+          <slot name="flight-icon" slot="flight-icon"></slot>
 
           <div slot="trailing" class="message-composer__actions-wrapper">
             <div class="message-composer__actions">
               <slot name="actions"></slot>
-              ${when(
-                this.value !== "" && !this.loading,
-                () => html`
-                  <md-icon-button
-                    ?disabled=${this.value === "" || this.loading}
-                    type="submit"
-                    variant="filled"
-                    selected
-                  >
-                    <md-icon> ${unsafeSVG(send)}</md-icon>
-                  </md-icon-button>
-                `,
-              )}
-              ${when(
-                this.loading,
-                () => html`
-                  <md-icon-button type="submit" variant="tonal">
-                    <slot name="flight-icon"></slot>
-                  </md-icon-button>
-                `,
-              )}
             </div>
           </div>
-        </md-text-field>
+        </chx-textbox>
       </form>
     `;
   }

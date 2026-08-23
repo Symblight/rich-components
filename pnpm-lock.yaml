@@ -10,6 +10,9 @@ importers:
 
   packages/chat:
     dependencies:
+      '@open-wc/form-control':
+        specifier: ^1.0.0
+        version: 1.0.0
       '@symblight/wc-material':
         specifier: ^0.2.24
         version: 0.2.24(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)

@@ -39,7 +39,8 @@ export const schema = new Schema({
           getAttrs: (dom) => ({
             templateId: /** @type {HTMLElement} */ (dom).dataset.templateId,
             label: dom.textContent,
-            icon: /** @type {HTMLElement} */ (dom).querySelector('[slot="icon"]')?.innerHTML || null,
+            icon:
+              /** @type {HTMLElement} */ (dom).querySelector('[slot="icon"]')?.innerHTML || null,
           }),
         },
       ],

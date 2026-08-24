@@ -45,6 +45,8 @@
     "lit": ">=3.0.0"
   },
   "dependencies": {
+    "@atlaskit/pragmatic-drag-and-drop": "^3.0.0",
+    "@lit/context": "^1.1.6",
     "@open-wc/form-control": "^1.0.0",
     "@symblight/wc-material": "^0.2.24",
     "prosemirror-commands": "^1.7.2",

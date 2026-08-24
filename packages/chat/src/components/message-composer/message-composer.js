@@ -8,8 +8,7 @@ import "@symblight/wc-material/button";
 
 /**
  * @tag chx-message-composer
- * @summary  Message composer.
- *
+ * @summary Message composer.
  */
 @customElement("chx-message-composer")
 export class ChxMessageComposer extends LitElement {
@@ -19,6 +18,8 @@ export class ChxMessageComposer extends LitElement {
     loading: { type: Boolean, reflect: true, attribute: true },
     label: { type: String, attribute: true },
     placeholder: { type: String, attribute: true },
+    dropHint: { type: String, attribute: "drop-hint" },
+    dragging: { type: Boolean, reflect: true, attribute: true },
     commandFields: { attribute: false },
   };
 
@@ -33,6 +34,12 @@ export class ChxMessageComposer extends LitElement {
 
     /** @type {String} */
     this.placeholder = "Put your text...";
+
+    /** @type {String} Pushed down to chx-textbox — shown while an OS file drag is over the field. */
+    this.dropHint = "Release to attach";
+
+    /** @type {boolean} Pushed down by chx-chat — see its own DropTargetController. */
+    this.dragging = false;
 
     /** @type {Boolean} */
     this.loading = false;
@@ -56,6 +63,28 @@ export class ChxMessageComposer extends LitElement {
     this.textboxElement?.insertAtCommand(target, node);
   }
 
+  /**
+   * Programmatically attaches a file — same effect as picking or dropping
+   * one (fires chx-attach, still preventable by a JS-driven listener). A
+   * no-op if no <chx-attachments> is connected.
+   * @param {File} file
+   */
+  attachFile(file) {
+    this.attachmentsElement?.addFiles([file], "api");
+  }
+
+  /**
+   * Replaces the textbox's document with plain text — e.g. pre-filling a
+   * draft or a suggested reply. See chx-textbox.setText for why this isn't
+   * called `setValue` (FormControlMixin already owns that name one level
+   * down, for a different, form-value-only purpose).
+   * @param {string} text
+   */
+  setText(text) {
+    this.textboxElement?.setText(text);
+    this.value = text;
+  }
+
   /** @returns {HTMLFormElement} */
   get formElement() {
     return /** @type {HTMLFormElement} */ (
@@ -70,6 +99,19 @@ export class ChxMessageComposer extends LitElement {
     );
   }
 
+  /**
+   * chx-attachments is optional, consumer-authored light DOM (slot="attachments"
+   * on this element, forwarded into chx-textbox's own attachments slot) — a
+   * light-DOM query, same reasoning as chx-chat's messageComposerElement, not
+   * a renderRoot one like textboxElement above.
+   * @returns {(HTMLElement & {getAttachments: () => File[], clearAttachments: () => void, addFiles: (files: File[], source?: "picker" | "drop" | "api") => void}) | null}
+   */
+  get attachmentsElement() {
+    return /** @type {(HTMLElement & {getAttachments: () => File[], clearAttachments: () => void, addFiles: (files: File[], source?: "picker" | "drop" | "api") => void}) | null} */ (
+      this.querySelector("chx-attachments")
+    );
+  }
+
   /** @param {SubmitEvent} event */
   handleSend(event) {
     event.preventDefault();
@@ -77,21 +119,24 @@ export class ChxMessageComposer extends LitElement {
 
     const value = this.textboxElement.getValue();
     const html = this.textboxElement.getHTML();
+    const attachments = this.attachmentsElement?.getAttachments() ?? [];
+    const commands = this.textboxElement.getCommands();
     this.textboxElement.focus();
     this.clearValue();
 
     this.dispatchEvent(
       new CustomEvent("chx-send-message", {
-        detail: { value, html },
+        detail: { value, html, attachments, commands },
         bubbles: true,
         composed: true,
       }),
     );
   }
 
-  /** Resets both the editor's document and `this.value` — they don't sync automatically. */
+  /** Resets both the editor's document, any attached files, and `this.value` — they don't sync automatically. */
   clearValue() {
     this.textboxElement?.clear();
+    this.attachmentsElement?.clearAttachments();
     this.value = "";
 
     this.dispatchEvent(
@@ -113,8 +158,12 @@ export class ChxMessageComposer extends LitElement {
     this.value = event.detail.value;
 
     this.dispatchEvent(
-      new CustomEvent("change", {
-        detail: event.detail,
+      new CustomEvent("chx-change", {
+        detail: {
+          ...event.detail,
+          attachments: this.attachmentsElement?.getAttachments() ?? [],
+          commands: this.textboxElement?.getCommands() ?? [],
+        },
         bubbles: true,
         composed: true,
       }),
@@ -130,8 +179,10 @@ export class ChxMessageComposer extends LitElement {
           part="textbox"
           .label=${this.label}
           .placeholder=${this.placeholder}
+          .dropHint=${this.dropHint}
           .getCommandFields=${() => this.commandFields}
           ?loading=${this.loading}
+          ?dragging=${this.dragging}
           @chx-textbox-change=${this.handleTextboxChange}
         >
           <slot name="leading" slot="leading"></slot>

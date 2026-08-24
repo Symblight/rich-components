@@ -13,7 +13,7 @@ const WHITESPACE = /\s/; // matches U+00A0 too, not just a plain " "
 
 /**
  * @tag chx-command-picker
- * @summary  Command picker.
+ * @summary Command picker.
  */
 @customElement("chx-command-picker")
 export class ChxCommandPicker extends LitElement {

@@ -7,7 +7,31 @@
   --chx-message-list-border-radius: 1rem;
   --chx-message-list-border-color: var(--md-sys-color-on-primary-container);
   --chx-message-list-padding: 0 1rem 0 1.5rem;
+  --chx-message-list-dragging-color: var(--md-sys-color-primary);
+  --chx-message-list-drop-hint-background-color: var(--md-sys-color-surface);
   border-radius: var(--chx-message-list-border-radius);
   border: 1px dashed var(--chx-message-list-border-color);
   padding: var(--chx-message-list-padding);
+}
+
+:host([dragging]) {
+  border: 2px dashed var(--chx-message-list-dragging-color);
+}
+
+.message-list__drop-hint {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  background-color: color-mix(
+    in oklch,
+    var(--chx-message-list-drop-hint-background-color),
+    transparent 15%
+  );
+  color: var(--chx-message-list-dragging-color);
+  font-size: 0.875rem;
+  pointer-events: none;
 }

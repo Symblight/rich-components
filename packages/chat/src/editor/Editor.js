@@ -92,6 +92,26 @@ export class Editor {
     return toHTML(this.view.state.doc, schema);
   }
 
+  /**
+   * Each resolved command chip paired with its own live DOM node — not a
+   * clone, the exact element CommandNodeView rendered — so the app can read
+   * back whatever data it stashed on its own chip template (e.g. a
+   * data-path attribute) without the library having to standardize a
+   * "value" concept. `view.nodeDOM(pos)` returns the NodeView's own DOM for
+   * an atom node, which for `command` is exactly that element.
+   * @returns {Array<{label: string, element: HTMLElement}>}
+   */
+  getCommands() {
+    /** @type {Array<{label: string, element: HTMLElement}>} */
+    const commands = [];
+    this.view.state.doc.descendants((node, pos) => {
+      if (node.type.name !== "command") return;
+      const dom = this.view.nodeDOM(pos);
+      if (dom instanceof HTMLElement) commands.push({label: node.attrs.label, element: dom});
+    });
+    return commands;
+  }
+
   /** @returns {boolean} */
   isEmpty() {
     return this.view.state.doc.content.size === 0;
@@ -104,6 +124,12 @@ export class Editor {
 
   clear() {
     this.view.updateState(EditorState.create({ schema, plugins: this.view.state.plugins }));
+  }
+
+  /** Replaces the whole document with a single line of plain text. @param {string} text */
+  setText(text) {
+    const state = EditorState.create({ schema, plugins: this.view.state.plugins });
+    this.view.updateState(state.apply(state.tr.insertText(text)));
   }
 
   focus() {
@@ -150,10 +176,17 @@ export class Editor {
 
     const icon = chip.querySelector('[slot="icon"]')?.innerHTML || null;
 
+    // Everything else the app set on the chip's dataset (e.g. data-path) —
+    // round-tripped through the doc and reapplied onto the rendered chip by
+    // CommandNodeView, so it's still readable off getCommands()'s `element`
+    // later, without the schema having to name a specific "value" attr.
+    const { templateId: _templateId, ...data } = chip.dataset;
+
     const commandNode = this.view.state.schema.nodes.command.create({
       templateId: chip.dataset.templateId,
       label,
       icon,
+      data,
     });
 
     const { from, to, element } = pluginState;

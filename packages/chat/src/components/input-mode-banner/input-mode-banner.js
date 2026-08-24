@@ -5,8 +5,7 @@ import styles from "./input-mode-banner.css?inline";
 
 /**
  * @tag chx-input-mode-banner
- * @summary  input mode banner.
- *
+ * @summary Input mode banner.
  */
 @customElement("chx-input-mode-banner")
 export class ChxInputModeBanner extends LitElement {

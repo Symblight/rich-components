@@ -20,7 +20,9 @@ export class CommandNodeView {
       if (icon) icon.innerHTML = node.attrs.icon;
     }
     this.dom.append(node.attrs.label);
-    // Not automatic — PM doesn't set this on custom NodeView DOM by itself.
+    for (const [key, value] of Object.entries(node.attrs.data ?? {})) {
+      this.dom.dataset[key] = value;
+    }
     this.dom.setAttribute("contenteditable", "false");
   }
 }

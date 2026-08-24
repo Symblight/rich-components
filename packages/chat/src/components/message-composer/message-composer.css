@@ -3,8 +3,8 @@
   box-sizing: border-box;
   align-items: end;
   padding-block: 0.5rem;
-  --md-chat-gap: 0.5rem;
-  gap: var(--md-chat-gap);
+  --chx-message-composer-gap: 0.5rem;
+  gap: var(--chx-message-composer-gap);
   max-width: 60rem;
   width: 100%;
 }
@@ -16,7 +16,7 @@
 .message-composer__form {
   display: flex;
   width: 100%;
-  gap: var(--md-chat-gap);
+  gap: var(--chx-message-composer-gap);
   align-items: end;
 }
 

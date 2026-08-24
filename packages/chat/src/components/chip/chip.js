@@ -7,7 +7,7 @@ import styles from "./chip.css?inline";
 
 /**
  * @tag chx-chip
- * @summary  Chip.
+ * @summary Chip.
  */
 @customElement("chx-chip")
 export class ChxChip extends LitElement {

@@ -17,15 +17,8 @@ import send from "@material-design-icons/svg/outlined/arrow_upward.svg?raw";
 /**
  * @tag chx-textbox
  * @summary MD3 filled-field container that owns the ProseMirror `EditorView`
- * directly — it renders the `.message-composer__input-content` mount div
- * itself (a **static, binding-free** node, see CLAUDE.md's "Composer input
- * model": the view silently dies if that node is ever recreated) and
- * constructs the `Editor` facade (`src/editor/Editor.js`) against it in
- * `firstUpdated()`. `chx-message-composer` never touches ProseMirror or the
- * mount div — it configures this element via `label`/`placeholder`/
- * `getCommandFields` and reacts to `chx-textbox-change`/`chx-command-selected`.
- * `leading`/`trailing`/`attachments` reflow between a one-line and a stacked layout
- * purely via CSS — see textbox.css.
+ * directly, configured via `label`/`placeholder`/`getCommandFields` and
+ * reacting to `chx-textbox-change`/`chx-command-selected`.
  */
 @customElement("chx-textbox")
 export class ChxTextbox extends FormControlMixin(LitElement) {
@@ -35,6 +28,8 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
         required: {type: Boolean, attribute: true, reflect: true},
         label: {type: String, attribute: true},
         placeholder: {type: String, attribute: true},
+        dropHint: {type: String, attribute: "drop-hint"},
+        dragging: {type: Boolean, reflect: true, attribute: true},
         getCommandFields: {attribute: false},
         loading: {type: Boolean, reflect: true, attribute: true},
         simplified: {state: true},
@@ -61,11 +56,20 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
         /** @type {String} */
         this.placeholder = "";
 
+        /** @type {String} Shown in place of the placeholder while an OS file drag is over the field. */
+        this.dropHint = "Release to attach";
+
+        /** @type {boolean} Pushed down by chx-message-composer — see its own DropTargetController. */
+        this.dragging = false;
+
         /** @type {() => Map<Element, Element>} */
         this.getCommandFields = () => new Map();
 
         /** @type {Editor | undefined} */
         this.editor = undefined;
+
+        /** @type {ResizeObserver | undefined} Watches the role="textbox" div — see handleTextboxResize. */
+        this.textboxObserver = undefined;
 
         /** @type {boolean} False once Shift-Enter has split the doc and there's still content. */
         this.simplified = true;
@@ -100,6 +104,7 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     disconnectedCallback() {
         super.disconnectedCallback();
         this.removeEventListener("pointerdown", this.handlePointerdown);
+        this.textboxObserver?.disconnect();
     }
 
     firstUpdated() {
@@ -121,6 +126,9 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
             },
         });
         this.editor.view.dom.setAttribute("aria-label", this.label);
+
+        this.textboxObserver = new ResizeObserver(this.handleTextboxResize);
+        this.textboxObserver.observe(this.editor.view.dom);
     }
 
     /** @param {import("lit").PropertyValues} changedProperties */
@@ -146,6 +154,11 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
         return this.editor?.getHTML() ?? "";
     }
 
+    /** @returns {Array<{label: string, element: HTMLElement}>} */
+    getCommands() {
+        return this.editor?.getCommands() ?? [];
+    }
+
     focus() {
         this.editor?.focus();
     }
@@ -160,6 +173,20 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
         this.setValue("");
         this.simplified = true;
         this.value = "";
+    }
+
+    /**
+     * Replaces the editor's document with plain text — named `setText`, not
+     * `setValue`, to avoid colliding with FormControlMixin's own inherited
+     * `setValue(value)` (sets the *form-associated* value/runs validators,
+     * never touches the visible document — calling it directly would silently
+     * desync the form value from what's actually shown).
+     * @param {string} text
+     */
+    setText(text) {
+        this.editor?.setText(text);
+        this.setValue(text);
+        this.value = text;
     }
 
     /**
@@ -180,15 +207,50 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     handleEditorChange = (detail) => {
         this.setValue(detail.value);
         this.value = detail.value;
-        if (detail.value.length === 0) {
-            this.simplified = true;
-        } else if (this.editor?.isMultiline()) {
-            this.simplified = false;
-        }
+        if (detail.value === "") this.simplified = true;
         this.dispatchEvent(
             new CustomEvent("chx-textbox-change", {detail, bubbles: true, composed: true}),
         );
     };
+
+    /**
+     * initialHeight/lastHeight/isHandling live in this closure rather than
+     * on `this` — private to the handler, not part of the component's
+     * observable state. First call seeds initialHeight (ResizeObserver
+     * always fires once immediately on observe(), with the current size —
+     * not a real change). isHandling guards against reentrancy: a resize
+     * triggered synchronously from inside this callback (e.g. by
+     * console.log side effects growing later, or future DOM writes) would
+     * otherwise risk the "ResizeObserver loop" browser warning/recursion.
+     */
+    handleTextboxResize = (() => {
+        /** @type {number | undefined} */
+        let initialHeight;
+        /** @type {number | undefined} */
+        let lastHeight;
+        let isHandling = false;
+        /** @type {ResizeObserverCallback} */
+        return ([entry]) => {
+            if (!entry || isHandling) return;
+            isHandling = true;
+            try {
+                const height = entry.contentRect.height;
+                if (initialHeight === undefined || lastHeight === undefined) {
+                    initialHeight = height;
+                    lastHeight = height;
+                    return;
+                }
+                const grew = height > initialHeight && lastHeight <= initialHeight;
+                const backToInitial =
+                    height <= initialHeight && lastHeight > initialHeight && this.value === "";
+                if (grew) this.simplified = false;
+                if (backToInitial) this.simplified = true;
+                lastHeight = height;
+            } finally {
+                isHandling = false;
+            }
+        };
+    })();
 
     /** @param {{target: string | null, id: string | undefined}} detail */
     handleCommandSelected = (detail) => {
@@ -225,7 +287,13 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
 
     render() {
         return html`
-            <div class="textbox" part="box">
+            <div class=${classMap({textbox: true, textbox_dragging: this.dragging})} part="box">
+                ${when(
+                        this.dragging,
+                        () => html`
+                            <div class="textbox__drop-hint" part="drop-hint">${this.dropHint}</div>
+                        `,
+                )}
                 <div class="textbox__container">
                     <div
                             class=${classMap({
@@ -251,6 +319,7 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
                                         <md-icon-button
                                                 ?disabled=${this.value === "" || this.loading}
                                                 type="submit"
+                                                .form=${this.closest("form")}
                                                 variant="filled"
                                                 class="textbox__submit"
                                                 selected
@@ -265,6 +334,7 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
                                         <md-icon-button
                                                 class="textbox__submit"
                                                 type="submit"
+                                                .form=${this.closest("form")}
                                                 variant="tonal"
                                         >
                                             <slot name="flight-icon"></slot>

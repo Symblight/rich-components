@@ -1,17 +1,19 @@
 import { html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
+import { ContextProvider } from "@lit/context";
 
 import "../message-composer/message-composer.js";
 import "../message-list/message-list.js";
+import { DropTargetController } from "../../controllers/DropTargetController.js";
+import { attachmentsContext } from "../../context/attachments-context.js";
+import { commandsContext } from "../../context/commands-context.js";
 
 import styles from "./chat.css?inline";
 
 /**
  * @tag chx-chat
- * @summary  Chat.
- *
+ * @summary Chat.
  */
-
 @customElement("chx-chat")
 export class ChxChat extends LitElement {
   /** @type {import("lit").PropertyDeclarations} */
@@ -32,6 +34,52 @@ export class ChxChat extends LitElement {
 
     /** @type {Map<Element, Element>} */
     this.commandFields = new Map();
+
+    /**
+     * Registered on chx-chat itself, not chx-message-composer — chx-chat is
+     * the common light-DOM ancestor of both chx-message-list and
+     * chx-message-composer, so a drag entering anywhere over either (not
+     * just the composer) is caught here. `canDrop` gates the whole thing on
+     * a <chx-attachments> actually being connected — if there's nowhere to
+     * put a dropped file, the rest of the chat isn't a dropzone either. See
+     * .claude/plans/attachments.spec.md's "Drop target ownership".
+     * @type {DropTargetController}
+     */
+    this._dropTarget = new DropTargetController(this, {
+      canDrop: () => !!this.messageComposerElement?.attachmentsElement,
+      onDrop: (files) => this.messageComposerElement?.attachmentsElement?.addFiles(files, "drop"),
+    });
+
+    /**
+     * Provides the currently attached files to any descendant regardless of
+     * shadow nesting depth — kept in sync via `chx-attachments-change`
+     * (below), not by chx-chat computing anything itself. Chosen over the
+     * manual per-level property-push pattern already used for
+     * label/loading/commandFields specifically because chx-textbox (the
+     * consumer that needs this, for its `textbox_attached` row-gap) sits
+     * two shadow levels down (chx-chat → chx-message-composer's shadow →
+     * chx-textbox) — context crosses that in one hop, no relay through
+     * chx-message-composer needed. See
+     * .claude/plans/attachments.spec.md.
+     * @type {ContextProvider<typeof attachmentsContext>}
+     */
+    this._attachmentsProvider = new ContextProvider(this, {
+      context: attachmentsContext,
+      initialValue: [],
+    });
+
+    /**
+     * Same pattern as _attachmentsProvider above, kept in sync via
+     * handleChange's own `chx-change` listener (its `commands` detail) instead
+     * of a dedicated change event — resolved command chips live inside the
+     * ProseMirror doc, not as light-DOM children, so there's no separate
+     * slotchange-driven signal to hook the way chx-attachments has one.
+     * @type {ContextProvider<typeof commandsContext>}
+     */
+    this._commandsProvider = new ContextProvider(this, {
+      context: commandsContext,
+      initialValue: [],
+    });
   }
 
   /** @returns {import("lit").CSSResultGroup} */
@@ -42,13 +90,21 @@ export class ChxChat extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this.addEventListener("chx-send-message", /** @type {EventListener} */ (this.handleSend));
-    this.addEventListener("change", /** @type {EventListener} */ (this.handleChange));
+    this.addEventListener("chx-change", /** @type {EventListener} */ (this.handleChange));
+    this.addEventListener(
+      "chx-attachments-change",
+      /** @type {EventListener} */ (this.handleAttachmentsChange),
+    );
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     this.removeEventListener("chx-send-message", /** @type {EventListener} */ (this.handleSend));
-    this.removeEventListener("change", /** @type {EventListener} */ (this.handleChange));
+    this.removeEventListener("chx-change", /** @type {EventListener} */ (this.handleChange));
+    this.removeEventListener(
+      "chx-attachments-change",
+      /** @type {EventListener} */ (this.handleAttachmentsChange),
+    );
   }
 
   /**
@@ -64,6 +120,17 @@ export class ChxChat extends LitElement {
   }
 
   /**
+   * Same status as messageComposerElement above — consumer-authored,
+   * optional light DOM.
+   * @returns {import("../message-list/message-list.js").ChxMessageList}
+   */
+  get messageListElement() {
+    return /** @type {import("../message-list/message-list.js").ChxMessageList} */ (
+      this.querySelector("chx-message-list")
+    );
+  }
+
+  /**
    * Resolves the command search identified by `target` (the token handed to
    * the app via command-query's detail) by replacing its tracked range with
    * `node` — see Editor.resolveCommand for the actual insertion logic.
@@ -75,15 +142,46 @@ export class ChxChat extends LitElement {
     this.messageComposerElement?.insertAtCommand(target, node);
   }
 
-  /** @param {CustomEvent} event */
-  handleSend(event) {
-    console.log(event.detail);
+  /**
+   * Programmatically attaches a file — same effect as picking or dropping
+   * one. A no-op if no <chx-attachments> is connected anywhere in the
+   * composer. See .claude/plans/attachments.spec.md.
+   * @param {File} file
+   */
+  attachFile(file) {
+    this.messageComposerElement?.attachFile(file);
+  }
+
+  /**
+   * Replaces the composer's document with plain text — e.g. pre-filling a
+   * draft or a suggested reply.
+   * @param {string} text
+   */
+  setText(text) {
+    this.messageComposerElement?.setText(text);
+  }
+
+  /** True while an OS file drag carrying files is over the chat (message list included) — driven by `_dropTarget`, pushed down to the composer/textbox for the dashed-border/hint visual. @returns {boolean} */
+  get dragging() {
+    return this._dropTarget.dragging;
   }
 
   /** @param {CustomEvent} event */
+  handleSend(event) {
+    console.log(event.detail);
+    this._commandsProvider.setValue([]);
+  }
+
+  /** @param {CustomEvent<{commands: Array<{label: string, element: HTMLElement}>}>} event */
   handleChange(event) {
     console.log(event.detail);
+    this._commandsProvider.setValue(event.detail.commands ?? []);
   }
+
+  /** @param {CustomEvent<{attachments: File[]}>} event */
+  handleAttachmentsChange = (event) => {
+    this._attachmentsProvider.setValue(event.detail.attachments);
+  };
 
   /**
    * Sole discovery point for <chx-command-field> — chx-chat is the direct
@@ -104,11 +202,12 @@ export class ChxChat extends LitElement {
   /**
    * chx-message-list/chx-message-composer are consumer-authored light DOM —
    * chx-chat only orchestrates layout (see chat.css's ::slotted() rules) and
-   * pushes its own config onto whatever composer shows up here, since it can
-   * no longer bind properties onto it via its own template.
+   * pushes its own config onto whatever composer/list shows up here, since
+   * it can no longer bind properties onto them via its own template.
    */
   handleDefaultSlotchange() {
     this.pushComposerProperties();
+    this.pushMessageListProperties();
   }
 
   pushComposerProperties() {
@@ -117,18 +216,32 @@ export class ChxChat extends LitElement {
     composer.label = this.label;
     composer.loading = this.loading;
     composer.commandFields = this.commandFields;
+    composer.dragging = this.dragging;
   }
 
-  /** @param {import("lit").PropertyValues} changedProperties */
+  /**
+   * The message list only needs the drag-overlay state (see
+   * message-list.js's own `dragging`/`dropHint`) — it has no
+   * label/loading/commandFields concept of its own.
+   */
+  pushMessageListProperties() {
+    const list = this.messageListElement;
+    if (!list) return;
+    list.dragging = this.dragging;
+  }
+
+  /**
+   * Runs on every update, not gated to specific changedProperties keys —
+   * `dragging` is controller-driven (DropTargetController calls
+   * requestUpdate() directly, not through a declared reactive property), so
+   * it never shows up in changedProperties the way label/loading/
+   * commandFields do. Cheap enough to just always re-push.
+   * @param {import("lit").PropertyValues} changedProperties
+   */
   updated(changedProperties) {
     super.updated(changedProperties);
-    if (
-      changedProperties.has("label") ||
-      changedProperties.has("loading") ||
-      changedProperties.has("commandFields")
-    ) {
-      this.pushComposerProperties();
-    }
+    this.pushComposerProperties();
+    this.pushMessageListProperties();
   }
 
   render() {

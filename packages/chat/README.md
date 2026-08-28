@@ -21,25 +21,25 @@ either yourself.
 
 ### Properties
 
-| Property | Type | Notes |
-|---|---|---|
-| `label` | `string` | Applied as the composer's textbox `aria-label`. |
+| Property  | Type      | Notes                                                                                       |
+| --------- | --------- | ------------------------------------------------------------------------------------------- |
+| `label`   | `string`  | Applied as the composer's textbox `aria-label`.                                             |
 | `loading` | `boolean` | Reflected attribute — switches the composer's send button to its loading/flight-icon state. |
 
 ### Methods
 
-| Method | Signature | Notes |
-|---|---|---|
-| `setText` | `(text: string): void` | Replaces the composer's document with plain text — e.g. pre-filling a draft or a suggested reply. Not called `setValue`: `chx-textbox` is form-associated and already inherits a `setValue` with an unrelated, form-value-only meaning (see its own doc comment). |
-| `attachFile` | `(file: File): void` | Attaches a file programmatically — same effect as picking or dropping one. A no-op if no `<chx-attachments>` is connected. See [Attachments API](./src/docs/attachments.md). |
-| `insertAtCommand` | `(target: string \| null, node: Node): void` | Resolves an in-progress command search. See [Commands API](./src/docs/commands.md). |
+| Method            | Signature                                    | Notes                                                                                                                                                                                                                                                             |
+| ----------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `setText`         | `(text: string): void`                       | Replaces the composer's document with plain text — e.g. pre-filling a draft or a suggested reply. Not called `setValue`: `chx-textbox` is form-associated and already inherits a `setValue` with an unrelated, form-value-only meaning (see its own doc comment). |
+| `attachFile`      | `(file: File): void`                         | Attaches a file programmatically — same effect as picking or dropping one. A no-op if no `<chx-attachments>` is connected. See [Attachments API](./src/docs/attachments.md).                                                                                      |
+| `insertAtCommand` | `(target: string \| null, node: Node): void` | Resolves an in-progress command search. See [Commands API](./src/docs/commands.md).                                                                                                                                                                               |
 
 ### Events
 
-| Event | `detail` | Notes |
-|---|---|---|
+| Event              | `detail`                                               | Notes                                                                                                                                          |
+| ------------------ | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
 | `chx-send-message` | `{ value: string, html: string, attachments: File[] }` | Fired when the user sends — `value`/`html` are the composed text, `attachments` is whatever's currently in the attachments row at that moment. |
-| `chx-change` | `{ value: string, html: string, attachments: File[] }` | Fired on every edit — same shape as `chx-send-message`, kept live while composing. |
+| `chx-change`       | `{ value: string, html: string, attachments: File[] }` | Fired on every edit — same shape as `chx-send-message`, kept live while composing.                                                             |
 
 Commands (`chx-command-query`/`chx-command-confirm`/`chx-command-navigate`/`chx-command-selected`)
 and attachments (`chx-attach`/`chx-attachment-remove`) each have their own event contract, covered

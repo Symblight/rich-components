@@ -22,6 +22,9 @@ importers:
       '@symblight/wc-material':
         specifier: ^0.2.24
         version: 0.2.24(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)
+      '@tanstack/lit-virtual':
+        specifier: ^3.13.36
+        version: 3.13.36(lit@3.3.3)
       prosemirror-commands:
         specifier: ^1.7.2
         version: 1.7.2

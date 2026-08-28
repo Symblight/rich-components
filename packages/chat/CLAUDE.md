@@ -78,6 +78,13 @@ Schema (`src/editor/schema.js`), keymap (`src/editor/keymap.js`), forced-plain-t
 
 Vite builds with `preserveModules: true` — each source file maps 1-to-1 to a `dist/` file. `lit` and all `@symblight/wc-material` subpaths are external. `vite-plugin-dts` generates `.d.ts` files and prepends a `/// <reference path="...elements.d.ts" />` triple-slash reference to each output file. `src/elements.d.ts` extends `HTMLElementTagNameMap` with the registered tag names.
 
+### Code comments
+
+Keep JSDoc and comments minimal. A custom element's class-level JSDoc is just `@tag`/`@summary`, one
+short line each (see any component under `src/components/`) — no prose paragraphs, no `@param`/
+`@returns` walkthroughs above every method, no restating what the code already says. Comment only what
+isn't obvious from reading the code itself (a non-obvious constraint, a workaround, a gotcha).
+
 ### Storybook
 
 Storybook runs on port 6007. The preview (`storybook/preview.js`) injects a floating theme tool (color picker + light/dark select) that drives `@symblight/md-colors/client`'s `generateTheme()` to inject `--md-sys-color-*` tokens live.

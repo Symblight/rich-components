@@ -85,11 +85,21 @@ export class ChxMessageComposer extends LitElement {
     this.value = text;
   }
 
+  /** Focuses the underlying chx-textbox — see chx-textbox.focus for the ProseMirror-side behavior. */
+  focus() {
+    this.textboxElement?.focus();
+  }
+
   /** @returns {HTMLFormElement} */
   get formElement() {
     return /** @type {HTMLFormElement} */ (
       this.renderRoot?.querySelector(".message-composer__form")
     );
+  }
+
+  /** The ProseMirror facade owned by chx-textbox — see chx-textbox's `editor` field. @returns {import("../../editor/Editor.js").Editor | undefined} */
+  get editor() {
+    return this.textboxElement?.editor;
   }
 
   /** @returns {import("../textbox/textbox.js").ChxTextbox} */

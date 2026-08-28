@@ -13,6 +13,8 @@
   order: 1;
   width: 100%;
   flex: 1 1 auto;
+  min-height: 0; /* without this, an "auto" min-height on a flex item can silently stop it from
+    shrinking below its content's height, which stops its own internal scroller from ever engaging */
 }
 
 ::slotted(chx-message-composer) {

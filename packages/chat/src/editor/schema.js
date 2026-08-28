@@ -79,8 +79,7 @@ export const schema = new Schema({
               templateId,
               label: dom.textContent,
               icon:
-                /** @type {HTMLElement} */ (dom).querySelector('[slot="icon"]')?.innerHTML ||
-                null,
+                /** @type {HTMLElement} */ (dom).querySelector('[slot="icon"]')?.innerHTML || null,
               data,
             };
           },

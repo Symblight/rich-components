@@ -5,8 +5,7 @@ import { createContext } from "@lit/context";
  * kept in sync with `chx-attachments`' own slotted children via the
  * bubbling `chx-attachments-change` event), consumed by `chx-textbox` (a
  * `ContextConsumer`) to drive its `textbox_attached` row-gap without
- * depending on `:has()`/`::slotted()` support. See
- * .claude/plans/attachments.spec.md.
+ * depending on `:has()`/`::slotted()` support.
  * @type {import("@lit/context").Context<symbol, File[]>}
  */
 export const attachmentsContext = createContext(Symbol("chx-attachments"));

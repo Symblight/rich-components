@@ -67,18 +67,22 @@
 
 .textbox__row_simplified {
   display: grid;
-  grid-template: "attachments attachments attachments" auto "leading-actions text-input trailing-actions" 1fr / minmax(0, auto) 1fr auto;
+  grid-template: "attachments attachments attachments" auto "leading-actions text-input trailing-actions" 1fr / minmax(
+      0,
+      auto
+    ) 1fr auto;
   row-gap: 0;
 }
 
 .textbox__row {
   display: grid;
-  grid-template: "attachments attachments attachments" auto "text-input text-input text-input" auto "leading-actions leading-actions trailing-actions" 1fr / minmax(
+  grid-template:
+    "attachments attachments attachments" auto "text-input text-input text-input" auto "leading-actions leading-actions trailing-actions" 1fr / minmax(
       0,
       auto
-    ) 1fr auto;
+    )
+    1fr auto;
   row-gap: 0.5rem;
-
 }
 
 .textbox__trailing {

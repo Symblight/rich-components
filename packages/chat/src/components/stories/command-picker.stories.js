@@ -158,18 +158,17 @@ function createFilePickedHandler(templateId) {
  * @param {Event} event
  */
 function logCommands(event) {
-  const { commands } = /** @type {CustomEvent<{commands: Array<{label: string, element: HTMLElement}>}>} */ (
-    event
-  ).detail;
+  const { commands } =
+    /** @type {CustomEvent<{commands: Array<{label: string, element: HTMLElement}>}>} */ (event)
+      .detail;
   console.log(
     commands.map((command) => ({ label: command.label, path: command.element.dataset.path })),
   );
 }
 
 /**
- * Builds a `<template>` of `<md-menu-item>`s from a plain string list — see
- * .claude/plans/command-picker.spec.md's Usage section for why a `<template>`
- * (parsed from an HTML string) rather than `document.createElement` per item.
+ * Builds a `<template>` of `<md-menu-item>`s from a plain string list — a `<template>` (parsed from
+ * an HTML string) rather than `document.createElement` per item.
  * @param {string[]} matches
  * @returns {HTMLTemplateElement}
  */

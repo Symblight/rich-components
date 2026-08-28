@@ -42,7 +42,7 @@ array property. Unlike the picker's options, though, a card can only ever come f
 tag `<chx-attachments>` accepts as a child is `<chx-attachment slot="attachment">`, and
 `<chx-attachment>` itself only has one meaningful input, `.file` (a real `File`) — there's no
 declarative `name`/`size`/`type` markup path, since a card with nothing actually attached has
-nothing meaningful to show. Static markup only makes sense as the *output* of JS (see below), not
+nothing meaningful to show. Static markup only makes sense as the _output_ of JS (see below), not
 something you hand-author with made-up data.
 
 ## JS-driven — validation, uploads, a loading placeholder
@@ -111,10 +111,10 @@ attachmentsEl.addEventListener("chx-attach", (event) => {
 });
 ```
 
-Note what this can't do: the card's own *box* (the icon-over-label square) isn't restylable into,
+Note what this can't do: the card's own _box_ (the icon-over-label square) isn't restylable into,
 say, a horizontal row from outside — the flex container that arranges icon/content/actions lives
 inside `<chx-attachment>`'s internal `<md-card>`, one shadow level past what a single `::part()`
-hop from your own CSS can reach. Customization here is scoped to *content*, not layout.
+hop from your own CSS can reach. Customization here is scoped to _content_, not layout.
 
 ## Overriding the default auto-created card
 
@@ -159,42 +159,42 @@ substituting a different element — see "Custom card content" above.
 
 ### Methods
 
-| Method            | Signature                                                     | Notes                                                                                                                                                                                             |
-| ----------------- | -------------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `open`             | `(): void`                                                     | Opens the native file picker via an internal hidden `<input type="file" multiple>`. Wire your own upload button's click to this.                                                                 |
+| Method             | Signature                                                                 | Notes                                                                                                                                                                                                                                                                                        |
+| ------------------ | ------------------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `open`             | `(): void`                                                                | Opens the native file picker via an internal hidden `<input type="file" multiple>`. Wire your own upload button's click to this.                                                                                                                                                             |
 | `addFiles`         | `(files: FileList \| File[], source?: "picker" \| "drop" \| "api"): void` | Converts each `File` into a card — the default `<chx-attachment>` unless `slot="card"` overrides it — after firing `chx-attach` (see Events). Called internally by the file input and by `chx-textbox`'s drop handling; call it yourself only if you're building a custom drop/pick trigger. |
-| `addAttachments`   | `(container: Element \| DocumentFragment): void`               | JS-driven escape hatch — appends each of `container`'s children as a card, bypassing the File → default-card conversion. See "Custom card shape".                                               |
-| `removeAttachment` | `(element: Element): void`                                     | Removes one card without going through `chx-attachment-remove` — for programmatic cleanup, e.g. after a failed upload.                                                                            |
-| `clearAttachments` | `(): void`                                                     | Removes all current cards.                                                                                                                                                                        |
-| `getAttachments`   | `(): File[]`                                                   | Reads `.file` off every current card, in DOM order, skipping any that don't expose one. Backs `chx-send-message`/`chx-change`'s `attachments` field.                                                 |
+| `addAttachments`   | `(container: Element \| DocumentFragment): void`                          | JS-driven escape hatch — appends each of `container`'s children as a card, bypassing the File → default-card conversion. See "Custom card shape".                                                                                                                                            |
+| `removeAttachment` | `(element: Element): void`                                                | Removes one card without going through `chx-attachment-remove` — for programmatic cleanup, e.g. after a failed upload.                                                                                                                                                                       |
+| `clearAttachments` | `(): void`                                                                | Removes all current cards.                                                                                                                                                                                                                                                                   |
+| `getAttachments`   | `(): File[]`                                                              | Reads `.file` off every current card, in DOM order, skipping any that don't expose one. Backs `chx-send-message`/`chx-change`'s `attachments` field.                                                                                                                                         |
 
 ### Slots
 
-| Slot        | Purpose                                                                                                                       |
-| ----------- | ------------------------------------------------------------------------------------------------------------------------------ |
-| `attachment` | The cards themselves — `<chx-attachment>` only, see Children above.                                                          |
-| `card`      | Optional `<template>` (or plain element) overriding the shell used for every auto-created default card — see "Overriding the default auto-created card". |
+| Slot         | Purpose                                                                                                                                                  |
+| ------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `attachment` | The cards themselves — `<chx-attachment>` only, see Children above.                                                                                      |
+| `card`       | Optional `<template>` (or plain element) overriding the shell used for every auto-created default card — see "Overriding the default auto-created card". |
 
 ### Events
 
-| Event                | Direction                                    | `detail`                             | Notes                                                                                                                                                                                     |
-| --------------------- | --------------------------------------------- | ------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `chx-attach`           | out, bubbles, composed, **cancelable**        | `{ files: File[], source: "picker" \| "drop" \| "api" }` | Fired before the default card is created, whether from the file picker or a drop. `preventDefault()` suppresses the default-card creation entirely — see "JS-driven".                     |
-| `chx-attachment-remove` | in (also observable, bubbles past this element) | `{ file: File \| undefined, element: Element }` | Fired by a card's own remove button (see `<chx-attachment>` below). `chx-attachments` removes the matching card from itself automatically.                                                |
+| Event                   | Direction                                       | `detail`                                                 | Notes                                                                                                                                                                 |
+| ----------------------- | ----------------------------------------------- | -------------------------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chx-attach`            | out, bubbles, composed, **cancelable**          | `{ files: File[], source: "picker" \| "drop" \| "api" }` | Fired before the default card is created, whether from the file picker or a drop. `preventDefault()` suppresses the default-card creation entirely — see "JS-driven". |
+| `chx-attachment-remove` | in (also observable, bubbles past this element) | `{ file: File \| undefined, element: Element }`          | Fired by a card's own remove button (see `<chx-attachment>` below). `chx-attachments` removes the matching card from itself automatically.                            |
 
 ## `<chx-attachment>` reference
 
 ### Properties
 
-| Property       | Type                | Notes                                                                                     |
-| -------------- | ------------------- | ------------------------------------------------------------------------------------------- |
-| `file`         | `File \| undefined`  | The attached file — name/size/icon all derive from this. Required for `getAttachments()` to see this card. |
-| `loading`      | `boolean`            | Shows `loadingLabel` (and a spinner) in place of the icon/name — set this while an upload is in flight. |
-| `loadingLabel` | `string`             | Defaults to `"Uploading…"`.                                                                  |
+| Property       | Type                | Notes                                                                                                      |
+| -------------- | ------------------- | ---------------------------------------------------------------------------------------------------------- |
+| `file`         | `File \| undefined` | The attached file — name/size/icon all derive from this. Required for `getAttachments()` to see this card. |
+| `loading`      | `boolean`           | Shows `loadingLabel` (and a spinner) in place of the icon/name — set this while an upload is in flight.    |
+| `loadingLabel` | `string`            | Defaults to `"Uploading…"`.                                                                                |
 
 ### Slots
 
-| Slot        | Purpose                                                                                     |
+| Slot        | Purpose                                                                                       |
 | ----------- | --------------------------------------------------------------------------------------------- |
 | _(unnamed)_ | Override the card's main content entirely.                                                    |
 | `icon`      | Custom leading icon/thumbnail — default is a generic file icon.                               |
@@ -202,13 +202,13 @@ substituting a different element — see "Custom card content" above.
 
 ### Events
 
-| Event                  | Direction               | `detail`                                     | Notes                                                                                          |
-| ------------------------ | ------------------------ | ---------------------------------------------- | -------------------------------------------------------------------------------------------------- |
+| Event                   | Direction              | `detail`                                     | Notes                                                                                                                                                                                    |
+| ----------------------- | ---------------------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `chx-attachment-remove` | out, bubbles, composed | `{ file: File \| undefined, element: this }` | Fired by the default remove button. A custom `actions` slot control should fire this itself (or call `chx-attachments.removeAttachment(this)`) to stay inside the same removal contract. |
 
 ## Drag-and-drop
 
-Dropping files works anywhere in `<chx-chat>` — the composer's field *and* the message list, not
+Dropping files works anywhere in `<chx-chat>` — the composer's field _and_ the message list, not
 just the attachments row (which is empty/zero-height before the first attachment exists). This is
 gated on a `<chx-attachments>` actually being connected: if you never slot one in, the rest of the
 chat isn't a dropzone either, dropping a file just does nothing.
@@ -247,5 +247,5 @@ if you're working one level down.
   only ever renders a generic icon + name, no size/type text.
 - A max-file-count/total-size guard built into `chx-attachments` itself — validate in your own
   `chx-attach` listener (see "JS-driven") for now.
-- Any prescribed shape for what an *uploaded* attachment looks like once it has a URL/id —
+- Any prescribed shape for what an _uploaded_ attachment looks like once it has a URL/id —
   `attachments` on `chx-send-message`/`chx-change` is the raw `File[]` at that moment, nothing more.

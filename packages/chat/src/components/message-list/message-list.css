@@ -4,13 +4,10 @@
   box-sizing: border-box;
   position: relative;
   overflow-anchor: unset;
-  --chx-message-list-border-radius: 1rem;
   --chx-message-list-border-color: var(--md-sys-color-on-primary-container);
   --chx-message-list-padding: 0 1rem 0 1.5rem;
   --chx-message-list-dragging-color: var(--md-sys-color-primary);
   --chx-message-list-drop-hint-background-color: var(--md-sys-color-surface);
-  border-radius: var(--chx-message-list-border-radius);
-  border: 1px dashed var(--chx-message-list-border-color);
   padding: var(--chx-message-list-padding);
 }
 
@@ -34,4 +31,22 @@
   color: var(--chx-message-list-dragging-color);
   font-size: 0.875rem;
   pointer-events: none;
+}
+
+.message-list__infinity-scroll {
+  flex: 1 1 auto;
+  min-height: 0; /* the classic flexbox gotcha: without this, an "auto" min-height on a flex item
+    can silently stop it from shrinking/scrolling at all inside :host's own column layout */
+}
+
+.message-list__status {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
 }

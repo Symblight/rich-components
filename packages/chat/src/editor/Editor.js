@@ -107,7 +107,7 @@ export class Editor {
     this.view.state.doc.descendants((node, pos) => {
       if (node.type.name !== "command") return;
       const dom = this.view.nodeDOM(pos);
-      if (dom instanceof HTMLElement) commands.push({label: node.attrs.label, element: dom});
+      if (dom instanceof HTMLElement) commands.push({ label: node.attrs.label, element: dom });
     });
     return commands;
   }

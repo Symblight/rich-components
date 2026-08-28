@@ -28,9 +28,7 @@ export default meta;
  * Page-level CSS for the leading upload trigger — chx-textbox's own
  * ::slotted() rule can only cover the font-size custom property (inherits
  * through the slot into the slotted md-icon-button's own shadow DOM),
- * ::part(button) padding parity has to come from here instead. See
- * .claude/plans/attachments.spec.md's "Button styling parity with the
- * submit button".
+ * ::part(button) padding parity has to come from here instead.
  */
 const triggerStyles = html`
   <style>
@@ -61,8 +59,7 @@ function createOpenHandler(selector) {
  * included here (not just the composer) to make the drop zone's real extent
  * visible — dropping a file anywhere over the message list works too, not
  * just over the input field, since chx-chat is what registers the drop
- * target once a <chx-attachments> is connected. See attachments.spec.md's
- * "Drop target ownership".
+ * target once a <chx-attachments> is connected.
  */
 /** @type {Story} */
 export const Basic = {
@@ -96,16 +93,18 @@ async function handleValidatedAttach(event) {
   const customEvent = /** @type {CustomEvent<{files: File[], source: string}>} */ (event);
   customEvent.preventDefault();
 
-  const attachments = /** @type {HTMLElement & { addAttachments: (c: DocumentFragment) => void }} */ (
-    customEvent.target
-  );
+  const attachments =
+    /** @type {HTMLElement & { addAttachments: (c: DocumentFragment) => void }} */ (
+      customEvent.target
+    );
   const MAX_SIZE = 2 * 1024 * 1024;
 
   const fragment = document.createDocumentFragment();
   const cards = customEvent.detail.files.map((file) => {
-    const card = /** @type {HTMLElement & {file: File, loading: boolean, error: boolean, errorLabel: string}} */ (
-      document.createElement("chx-attachment")
-    );
+    const card =
+      /** @type {HTMLElement & {file: File, loading: boolean, error: boolean, errorLabel: string}} */ (
+        document.createElement("chx-attachment")
+      );
     card.file = file;
     if (file.size > MAX_SIZE) {
       card.error = true;
@@ -155,9 +154,9 @@ const TYPE_ICONS = {
 /**
  * A richer card content (custom per-type icon, name + type/size on two
  * lines instead of the default's name-only) — still always a
- * <chx-attachment> (only that tag is ever accepted as a card, see
- * attachments.spec.md's "Design direction"), populated through its own
- * `icon` and default slots rather than substituting a foreign element.
+ * <chx-attachment> (only that tag is ever accepted as a card), populated
+ * through its own `icon` and default slots rather than substituting a
+ * foreign element.
  * Reshaping the card's own box (e.g. into a row layout) isn't possible from
  * outside it — the flex container that arranges icon/content/actions lives
  * inside chx-attachment's internal <md-card>, one shadow level past what a
@@ -169,9 +168,10 @@ function handleCustomCardAttach(event) {
   const customEvent = /** @type {CustomEvent<{files: File[]}>} */ (event);
   customEvent.preventDefault();
 
-  const attachments = /** @type {HTMLElement & { addAttachments: (c: DocumentFragment) => void }} */ (
-    customEvent.target
-  );
+  const attachments =
+    /** @type {HTMLElement & { addAttachments: (c: DocumentFragment) => void }} */ (
+      customEvent.target
+    );
   const fragment = document.createDocumentFragment();
   for (const file of customEvent.detail.files) {
     const card = /** @type {HTMLElement & {file?: File}} */ (

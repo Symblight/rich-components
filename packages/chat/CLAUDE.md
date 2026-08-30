@@ -37,10 +37,14 @@ This is a pnpm workspace package (`packages/chat`). Source is **JavaScript with 
 ### Component tree
 
 ```
-chx-chat                   (src/components/base/chat.js)
-├── chx-message-list       (src/components/message-list/message-list.js)      — consumer-authored, optional
-└── chx-message-composer   (src/components/message-composer/message-composer.js) — consumer-authored, required
-    └── chx-textbox        (src/components/textbox/textbox.js)
+chx-chat                    (src/components/base/chat.js)
+├── chx-message-list        (src/components/message-list/message-list.js)      — consumer-authored, optional
+│   ├── chx-infinity-scroll (src/components/infinity-scroll/infinity-scroll.js) — generic virtualized list, see below
+│   │   └── chx-message      (src/components/message/message.js)               — built-in, or swap via `messageElement`
+│   ├── chx-typing-indicator    (src/components/typing-indicator/…)            — standalone, consumer slots it in, see below
+│   └── chx-streaming-indicator (src/components/streaming-indicator/…)         — standalone, consumer slots it in, see below
+└── chx-message-composer    (src/components/message-composer/message-composer.js) — consumer-authored, required
+    └── chx-textbox         (src/components/textbox/textbox.js)
 ```
 
 `chx-chat` is the single public export (`src/index.js`); `chx-message-list`/`chx-message-composer` still register globally the moment `chx-chat`'s module loads (`chat.js` keeps side-effect-importing both purely for `customElements.define()`), but **`chx-chat` no longer renders either itself** — they're plain light-DOM children the consumer places directly inside `<chx-chat>`, same as `chx-command-field` already was:
@@ -67,12 +71,33 @@ chx-chat                   (src/components/base/chat.js)
 
 Schema (`src/editor/schema.js`), keymap (`src/editor/keymap.js`), forced-plain-text paste (`src/editor/paste-plugin.js`), and the placeholder decoration plugin (`src/editor/placeholder-plugin.js`) all live under `src/editor/`, consumed only by `Editor.js`/`textbox.js` now. The mount node must never sit inside a Lit conditional (`when()`/etc.) or carry a dynamic binding (e.g. a reactive `class`), confirmed live to silently kill the view with no console error otherwise. On send, the composer dispatches a `chx-send-message` CustomEvent with `{ value: string, html: string }` in `detail`. The pre-ProseMirror `ContentTextoFormatter` (`src/text-formatter/text-formatter.js`) is still present but not wired into this path — commands are a not-yet-started migration onto the same engine (see `.claude/plans/commands.spec.md`).
 
+### Message list internals — virtualization moved out to `chx-infinity-scroll`
+
+`chx-message-list` no longer owns virtualization, scroll-position management, or load-more detection itself — that's `chx-infinity-scroll`, a generic, message-agnostic component (`.data`/`.itemKey`/`.renderItem`/`.scrollBehavior` in, `chx-load-more` event out, `scrollToIndex()`/`scrollToBottom()` methods). `chx-message-list`'s own `#renderItem` builds a `<chx-message>` (or calls the consumer's `messageElement`) and hands it to infinity-scroll's `.renderItem` — infinity-scroll never knows what a "message" is. `ScrollBehaviorController` (stick-to-bottom + history-anchor preservation across a pagination prepend, *and* the sentinel-watching/`IntersectionObserver` load-more trigger — merged into one controller, directly requested) and `IntersectionController`/`ResizeController` all live under `src/components/infinity-scroll/`, not `src/controllers/` — they're infinity-scroll's own concern now, not shared chx-chat-level controllers. `chx-message-list`'s `scroll-behavior="auto" | "smooth"` attribute (forwarded straight through to infinity-scroll) governs `scrollToBottom()`'s animation, for both the explicit public method and the automatic stick-to-bottom follow.
+
+`FocusBehaviorController` (roving tabindex over messages) stayed in `src/controllers/` — it's message-specific UI, not generic list mechanics — but a real cross-component update-cascade bug was found and fixed live: calling `this.#host.requestUpdate()` (host = `chx-message-list`) does **not** re-render `chx-infinity-scroll`, since none of the properties passed to it change by reference on a plain host re-render — Lit's `PropertyPart` skips re-setting them. `FocusBehaviorController` now takes an injected `requestRerender` callback that also calls `infinityScrollElement.requestUpdate()` directly. Likewise, focus-follow after `scrollToIndex()` can't rely on the host's own `hostUpdated()` firing again once the scrolled-to item mounts (infinity-scroll's own internal settling renders never cascade back up) — it polls via a capped `requestAnimationFrame` loop instead.
+
+### Typing / streaming indicators — opt-in, no default content, ever
+
+`chx-message-list` exposes two slots, `typing` and `streaming`, each gated by a boolean property (`typing`/`streaming`) pushed down from `chx-chat`. **Neither has default/fallback content, and `chx-message-list` does not import or auto-register the components that fill them** — same connection as `<chx-command-field>`/`<chx-command-picker>` already establish: a standalone component the app imports and slots in itself (`<chx-typing-indicator slot="typing">` inside `<chx-message-list>`), or nothing renders, full stop, regardless of what the boolean says. An earlier pass of this bundled a default `<chx-typing-indicator>` as the slot's native fallback content — reverted, directly requested, to match the command-field precedent exactly rather than half-matching it.
+
+- **`typing`** — `chx-chat.setTyping(isTyping)` (public method) or `adapter.subscribe`'s optional `onTyping` handler, both funnel into `TypingController` (`src/controllers/TypingController.js`, a plain stateful helper, not a real `ReactiveController` — no lifecycle hook to hang off). A plain boolean, not per-conversation/per-user — this package has neither concept. Fires `chx-typing-change` when the value actually changes (latched, no re-fire for a repeated call with the same value).
+- **`streaming`** — fully automatic, no public method: `chx-chat`'s `#isWaitingForReply()` derives it fresh each render from `#activeDeliveries` (a delivery is in flight) vs. whether `#internalMessages` already has a reply shell for it (`replyToId` match) — true from the instant a send starts until the first chunk lands, `false` once a message exists even while its parts are still `state: "streaming"` (that in-message case is a deliberately different, unimplemented concern, see below).
+- `chx-typing-indicator` (text label, `value` prop, default `"Typing…"`, `aria-live="polite"`) and `chx-streaming-indicator` (a decorative dots bubble, `aria-hidden`, styled like an incoming not-own message) are deliberately different shapes — grounded in MUI X Chat's own real `TypingIndicator`/`StreamingIndicator` split (their real source was read, not guessed): presence gets an announced label, "response in flight" gets silent decorative dots because streaming start/finish is already announced by `chx-message-list`'s own `role="status"` region. MUI's in-message "dots inside the streaming bubble" phase (their `StreamingIndicator` mounted *inside* a message) has no equivalent here — would need a per-message/per-part hook, not a list-level slot; not built.
+
+### `chx-message` — avatar / meta / content / actions slots
+
+`chx-message` (`src/components/message/message.js`) exposes four slots: `avatar`, the default slot (message content/parts), `meta` (author label, timestamp, etc.), and `actions` (per-message actions like copy/retry). `:host([own])` now also sets `flex-direction: row-reverse` (on top of its existing `align-self: flex-end`) so avatar/body order flips for own messages too. `--chx-message-*` custom properties (`padding`, `border-radius`, `background-color`, `own-background-color`, `avatar-gap`, `meta-gap`, `actions-gap`) are the public theming surface, defaulting to `--md-sys-color-*` tokens.
+
+`avatar`/`meta`/`actions` cost zero space when nothing's slotted — via `.message__avatar ::slotted(*) { margin-inline-end: … }` etc., **not** a `:has(::slotted(*))` gate on the wrapper. `:has()` combined with `::slotted()` was tried first and confirmed live, in isolation, to never match in this package's tested Chromium build — not a syntax mistake, an actual unsupported combination right now. `::slotted(*)` alone doesn't need the `:has()` gate at all: it only ever matches when something is genuinely assigned, so the margin naturally costs nothing when the slot is empty.
+
 ### Styling conventions
 
 - CSS files are co-located with their component and imported with `?inline` (`import styles from "./chat.css?inline"`). Vite and the test runner each have a plugin to handle this transform into a Lit `CSSResult`.
 - SVG icons (`@material-design-icons/svg`) are imported with `?raw` and rendered via `unsafeSVG()`.
 - Theming: components consume `--md-sys-color-*` tokens (MD3 system color scale) and expose component-level overrides as `--chx-<component>-*` custom properties.
 - Custom elements are registered with the `@customElement` Lit decorator (using the 2023-11 decorator spec, transformed by Babel in both build and test).
+- **`::part()` only forwards one shadow level.** A page-level (or even a grandparent component's) `::part()` rule cannot reach an element nested two-or-more shadow roots deep — e.g. `<chx-message>`, which lives inside `chx-infinity-scroll`'s shadow root, itself inside `chx-message-list`'s — without an `exportparts` chain at *every* intermediate host. Confirmed live: a page-level `chx-message::part(actions)` rule silently matches nothing at that depth. **The same is true for a CSS custom property set via a selector**, not `element.style.setProperty()` — a page-level `chx-message { --chx-message-background-color: … }` rule doesn't reach that deep either, for the same "a rule is scoped to the tree it's defined in" reason; only the initial assumption that custom properties are somehow exempt from this was wrong. For deeply-nested customization (see `chat.stories.js`'s `renderCustomMessage`, and its hover/focus action-button reveal), the reliable mechanism is setting properties directly on the actual DOM node via `element.style.setProperty(...)`/plain DOM event listeners, or writing the CSS inside the target component's own shadow-scoped stylesheet.
 
 ### Build output
 

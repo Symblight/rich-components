@@ -5,13 +5,11 @@ Framework-agnostic rich UI web components, built with [Lit](https://lit.dev)
 
 ### [`@symblight/data-grid`](./packages/data-grid)
 
-A virtualized Material Design 3 data grid. Sortable, resizable, paginated columns; row selection; master-detail rows; tree/grouped data — all backed by `@tanstack/lit-virtual` so only visible rows touch the DOM. See the [package README](./packages/data-grid/README.md) for the full API.
+A virtualized Material Design 3 data grid. Sortable, resizable, paginated columns; row selection; master-detail rows; tree/grouped data — only visible rows ever touch the DOM, however large the underlying dataset. See the [package README](./packages/data-grid/README.md) for the full API.
 
 ### [`@symblight/chat`](./packages/chat)
 
-A Material Design 3 chat component. Layout is a scrollable list of messages filling the available space, with a composer docked to the bottom — a text field, send button, and emoji picker for reacting to or composing messages. Built from `@symblight/wc-material` primitives (text-field, button, icon-button).
-
-This package is currently scaffolding only: build tooling, Storybook, and package metadata are in place, but no components have been implemented yet.
+A Material Design 3 chat component. Layout is a virtualized, scrollable list of messages filling the available space, with a composer docked to the bottom — a rich text field, send button, attachments, and slash commands. Supports streaming replies, typing/"other side is composing" indicators, customizable message rendering (avatar, author label, actions), and pagination for loading older history.
 
 ## Development
 
@@ -21,7 +19,7 @@ This is a [pnpm](https://pnpm.io) workspace (`packages/*`). Each package builds,
 pnpm install
 
 pnpm --filter @symblight/data-grid sb     # Storybook for data-grid
-pnpm --filter @symblight/message-composer sb          # Storybook for message-composer
+pnpm --filter @symblight/chat sb          # Storybook for chat
 
 pnpm build   # build all packages
 pnpm test    # test all packages

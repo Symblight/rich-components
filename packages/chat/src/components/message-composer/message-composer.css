@@ -1,0 +1,38 @@
+:host {
+  display: flex;
+  box-sizing: border-box;
+  align-items: end;
+  padding-block: 0.5rem;
+  --chx-message-composer-gap: 0.5rem;
+  gap: var(--chx-message-composer-gap);
+  max-width: 60rem;
+  width: 100%;
+}
+
+.message-composer__field {
+  --chx-textbox-shape: 1.6rem;
+}
+
+.message-composer__form {
+  display: flex;
+  width: 100%;
+  gap: var(--chx-message-composer-gap);
+  align-items: end;
+}
+
+.message-composer__actions-wrapper {
+  height: 100%;
+  display: flex;
+  max-height: 64px;
+  align-items: center;
+  box-sizing: border-box;
+  gap: 0.5rem;
+}
+
+.message-composer__actions {
+  display: flex;
+  flex: 0 0 auto;
+  min-height: 40px;
+  align-items: center;
+  gap: 0.4rem;
+}

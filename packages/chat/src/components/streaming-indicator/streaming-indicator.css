@@ -1,0 +1,45 @@
+:host {
+  display: flex;
+  align-self: flex-start;
+  --chx-streaming-indicator-background-color: var(--md-sys-color-surface-container-high);
+  --chx-streaming-indicator-dot-color: var(--md-sys-color-on-surface-variant);
+  --chx-streaming-indicator-border-radius: 1rem;
+}
+
+.streaming-indicator__bubble {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.625rem 0.875rem;
+  border-radius: var(--chx-streaming-indicator-border-radius);
+  background-color: var(--chx-streaming-indicator-background-color);
+}
+
+.streaming-indicator__dot {
+  width: 0.375rem;
+  height: 0.375rem;
+  border-radius: 50%;
+  background-color: var(--chx-streaming-indicator-dot-color);
+  animation: chx-streaming-indicator-bounce 1.2s infinite ease-in-out both;
+}
+
+.streaming-indicator__dot_delay-1 {
+  animation-delay: -0.32s;
+}
+
+.streaming-indicator__dot_delay-2 {
+  animation-delay: -0.16s;
+}
+
+@keyframes chx-streaming-indicator-bounce {
+  0%,
+  80%,
+  100% {
+    transform: scale(0.6);
+    opacity: 0.5;
+  }
+  40% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}

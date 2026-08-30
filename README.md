@@ -21,7 +21,7 @@ This is a [pnpm](https://pnpm.io) workspace (`packages/*`). Each package builds,
 pnpm install
 
 pnpm --filter @symblight/data-grid sb     # Storybook for data-grid
-pnpm --filter @symblight/chat sb          # Storybook for chat
+pnpm --filter @symblight/message-composer sb          # Storybook for message-composer
 
 pnpm build   # build all packages
 pnpm test    # test all packages

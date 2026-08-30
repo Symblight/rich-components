@@ -1,0 +1,163 @@
+:host {
+  display: flex;
+  width: 100%;
+  --chx-textbox-background-color: var(--md-sys-color-surface-container-highest);
+  --chx-textbox-foreground-color: var(--md-sys-color-on-surface-variant);
+  --chx-textbox-placeholder-color: var(--md-sys-color-on-surface-variant);
+  --chx-textbox-shape: 1.6rem;
+  --chx-textbox-padding: 0.5rem 1rem;
+  --chx-textbox-min-height: 64px;
+  --chx-textbox-hover-color: var(--md-sys-color-on-surface);
+  --chx-textbox-dragging-color: var(--md-sys-color-primary);
+  --chx-textbox-action-size: 1.45rem;
+  --chx-textbox-scrollbar-color: var(--md-sys-color-outline);
+}
+
+.textbox {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  min-height: var(--chx-textbox-min-height);
+  box-sizing: border-box;
+  padding: var(--chx-textbox-padding);
+  border-radius: var(--chx-textbox-shape);
+  background-color: var(--chx-textbox-background-color);
+  transition: background-color 0.15s;
+
+  &:hover {
+    background-color: color-mix(in oklch, var(--chx-textbox-hover-color), transparent 88%);
+  }
+
+  &:has(.textbox__attachments ::slotted(*)) .textbox__content {
+    order: 1;
+    flex-basis: 100%;
+  }
+}
+
+.textbox_dragging {
+  outline: 2px dashed var(--chx-textbox-dragging-color);
+  outline-offset: -2px;
+}
+
+.textbox__drop-hint {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: inherit;
+  background-color: color-mix(in oklch, var(--chx-textbox-background-color), transparent 15%);
+  color: var(--chx-textbox-dragging-color);
+  font-size: 0.875rem;
+  pointer-events: none;
+}
+
+.textbox__attachments {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  grid-area: attachments;
+
+  &:has(::slotted(*)) {
+    padding-block-end: 0.5rem;
+  }
+}
+
+.textbox__row_simplified {
+  display: grid;
+  grid-template: "attachments attachments attachments" auto "leading-actions text-input trailing-actions" 1fr / minmax(
+      0,
+      auto
+    ) 1fr auto;
+  row-gap: 0;
+}
+
+.textbox__row {
+  display: grid;
+  grid-template:
+    "attachments attachments attachments" auto "text-input text-input text-input" auto "leading-actions leading-actions trailing-actions" 1fr / minmax(
+      0,
+      auto
+    )
+    1fr auto;
+  row-gap: 0.5rem;
+}
+
+.textbox__trailing {
+  align-items: center;
+  display: flex;
+  min-height: 48px;
+  grid-area: trailing-actions;
+  gap: 0.5rem;
+}
+
+.textbox__leading {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  grid-area: leading-actions;
+
+  & ::slotted(md-icon-button) {
+    --md-icon-button-font-size: var(--chx-textbox-action-size);
+  }
+}
+
+.textbox__submit {
+  --md-icon-button-font-size: var(--chx-textbox-action-size);
+
+  &::part(button) {
+    padding: 0.237rem;
+  }
+}
+
+.textbox__container {
+  display: flex;
+  flex-direction: column;
+}
+
+.textbox__box {
+  display: flex;
+  grid-area: text-input;
+  align-self: auto;
+  align-items: center;
+  box-sizing: border-box;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.textbox__content {
+  max-height: 25cqh;
+  overflow-y: auto;
+  width: 100%;
+
+  @media (pointer: fine) {
+    scrollbar-color: transparent transparent;
+    scrollbar-gutter: auto;
+    scrollbar-width: thin;
+
+    &:hover {
+      scrollbar-color: var(--chx-textbox-scrollbar-color) transparent;
+    }
+  }
+
+  & .ProseMirror {
+    outline: none;
+    word-break: break-word;
+    white-space: pre-wrap;
+    min-height: 20px;
+    color: var(--chx-textbox-foreground-color);
+    padding: 12px 0.5rem;
+
+    & > div {
+      line-height: 20px;
+    }
+  }
+}
+
+.textbox__placeholder {
+  color: var(--chx-textbox-placeholder-color);
+  pointer-events: none;
+  user-select: none;
+}

@@ -1,0 +1,53 @@
+:host {
+  display: flex;
+  align-items: flex-start;
+  --chx-message-max-width: 480px;
+  --chx-message-padding: 0.5rem 0.75rem;
+  --chx-message-border-radius: 1rem;
+  --chx-message-background-color: var(--md-sys-color-surface-container-high);
+  --chx-message-own-background-color: var(--md-sys-color-primary-container);
+  --chx-message-avatar-gap: 0.5rem;
+  --chx-message-meta-gap: 0.25rem;
+  --chx-message-actions-gap: 0.25rem;
+  max-width: var(--chx-message-max-width);
+}
+
+:host([own]) {
+  align-self: flex-end;
+  flex-direction: row-reverse;
+}
+
+.message__avatar {
+  display: flex;
+  flex: none;
+}
+
+.message__avatar ::slotted(*) {
+  margin-inline-end: var(--chx-message-avatar-gap);
+}
+
+.message__body {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.message__meta ::slotted(*) {
+  margin-block-end: var(--chx-message-meta-gap);
+}
+
+.message__content {
+  display: block;
+  padding: var(--chx-message-padding);
+  border-radius: var(--chx-message-border-radius);
+  background-color: var(--chx-message-background-color);
+}
+
+:host([own]) .message__content {
+  background-color: var(--chx-message-own-background-color);
+}
+
+.message__actions ::slotted(*) {
+  margin-block-start: var(--chx-message-actions-gap);
+}

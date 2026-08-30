@@ -9,8 +9,7 @@ const DEFAULT_SCHEME = "light";
 const themeToolDecorator = (story) => {
   if (!document.getElementById("md-theme-tool")) {
     const savedColor = localStorage.getItem(STORAGE_KEY_COLOR) ?? DEFAULT_COLOR;
-    const savedScheme =
-      localStorage.getItem(STORAGE_KEY_SCHEME) ?? DEFAULT_SCHEME;
+    const savedScheme = localStorage.getItem(STORAGE_KEY_SCHEME) ?? DEFAULT_SCHEME;
 
     const panel = document.createElement("div");
     panel.id = "md-theme-tool";
@@ -55,23 +54,23 @@ const themeToolDecorator = (story) => {
     generateTheme({ sourceColor: savedColor, scheme: savedScheme });
 
     const applyTheme = () => {
-      const color = /** @type {HTMLInputElement} */ (
-        document.getElementById("md-color-input")
-      ).value;
-      const scheme = /** @type {HTMLSelectElement} */ (
-        document.getElementById("md-scheme-select")
-      ).value;
+      const color = /** @type {HTMLInputElement} */ (document.getElementById("md-color-input"))
+        .value;
+      const scheme = /** @type {HTMLSelectElement} */ (document.getElementById("md-scheme-select"))
+        .value;
       localStorage.setItem(STORAGE_KEY_COLOR, color);
       localStorage.setItem(STORAGE_KEY_SCHEME, scheme);
       generateTheme({ sourceColor: color, scheme });
     };
 
-    /** @type {HTMLElement} */ (
-      document.getElementById("md-color-input")
-    ).addEventListener("input", applyTheme);
-    /** @type {HTMLElement} */ (
-      document.getElementById("md-scheme-select")
-    ).addEventListener("change", applyTheme);
+    /** @type {HTMLElement} */ (document.getElementById("md-color-input")).addEventListener(
+      "input",
+      applyTheme,
+    );
+    /** @type {HTMLElement} */ (document.getElementById("md-scheme-select")).addEventListener(
+      "change",
+      applyTheme,
+    );
   }
 
   return story();

@@ -1,0 +1,76 @@
+:host {
+  display: inline-flex;
+  position: relative;
+  --chx-attachment-background-color: var(--md-sys-color-surface-container-high);
+  --chx-attachment-foreground-color: var(--md-sys-color-on-surface-variant);
+  --chx-attachment-icon-color: var(--md-sys-color-primary);
+  --chx-attachment-error-color: var(--md-sys-color-error);
+  --chx-attachment-remove-background-color: var(--md-sys-color-surface-container-highest);
+  --chx-attachment-size: 4.5rem;
+  --chx-attachment-shape: 0.75rem;
+  --chx-attachment-remove-size: 0.9rem;
+}
+
+.attachment {
+  box-sizing: border-box;
+  display: block;
+  width: var(--chx-attachment-size);
+  height: var(--chx-attachment-size);
+  color: var(--chx-attachment-foreground-color);
+  --md-card-container-color: var(--chx-attachment-background-color);
+  --md-card-shape: var(--chx-attachment-shape);
+}
+
+.attachment_error {
+  color: var(--chx-attachment-error-color);
+
+  & .attachment__icon {
+    color: var(--chx-attachment-error-color);
+  }
+}
+
+.attachment::part(content) {
+  box-sizing: border-box;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  width: 100%;
+  height: 100%;
+  padding: 0.5rem;
+}
+
+.attachment__icon {
+  display: flex;
+  color: var(--chx-attachment-icon-color);
+
+  & md-progress-circular {
+    --md-progress-circular-size: 1.25rem;
+  }
+}
+
+.attachment__content {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 0.7rem;
+  line-height: 1;
+  text-align: center;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment__actions {
+  position: absolute;
+  top: -0.35rem;
+  right: -0.35rem;
+}
+
+.attachment__remove {
+  --md-icon-button-font-size: var(--chx-attachment-remove-size);
+  --md-icon-button-background-color: var(--chx-attachment-remove-background-color);
+
+  &::part(button) {
+    padding: 0.15rem;
+  }
+}

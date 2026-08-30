@@ -1,0 +1,24 @@
+:host {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+  container-type: size;
+  container-name: chat;
+  --chx-chat-background-color: var(--md-sys-color-background);
+  background-color: var(--chx-chat-background-color);
+}
+
+::slotted(chx-message-list) {
+  order: 1;
+  width: 100%;
+  flex: 1 1 auto;
+  min-height: 0; /* without this, an "auto" min-height on a flex item can silently stop it from
+    shrinking below its content's height, which stops its own internal scroller from ever engaging */
+}
+
+::slotted(chx-message-composer) {
+  order: 2;
+  align-self: center;
+  padding-inline: 1rem;
+}

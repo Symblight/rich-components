@@ -1,0 +1,11 @@
+:host {
+  display: block;
+  --chx-typing-indicator-color: var(--md-sys-color-on-surface-variant);
+  --chx-typing-indicator-font-size: 0.875rem;
+}
+
+.typing-indicator__label {
+  color: var(--chx-typing-indicator-color);
+  font-size: var(--chx-typing-indicator-font-size);
+  padding: 0.25rem 1.5rem;
+}

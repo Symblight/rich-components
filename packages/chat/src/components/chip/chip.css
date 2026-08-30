@@ -1,0 +1,22 @@
+:host {
+  display: inline-flex;
+  box-sizing: content-box;
+  text-wrap: nowrap;
+  vertical-align: middle;
+
+  --md-chip-container-color: var(
+    --chx-chip-container-color,
+    var(--md-sys-color-surface-container-low)
+  );
+  --md-chip-label-color: var(--chx-chip-label-color, var(--md-sys-color-on-surface-variant));
+  --md-chip-icon-color: var(--chx-chip-icon-color, var(--md-sys-color-primary));
+}
+
+.chip {
+  --md-chip-height: 20px;
+}
+
+.chip::part(chip) {
+  padding-inline: 0.4rem;
+  gap: 0.2rem;
+}

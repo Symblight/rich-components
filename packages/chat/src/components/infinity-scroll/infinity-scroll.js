@@ -1,0 +1,196 @@
+import { html, LitElement, nothing } from "lit";
+import { customElement } from "lit/decorators.js";
+import { repeat } from "lit/directives/repeat.js";
+import { ref } from "lit/directives/ref.js";
+import { VirtualizerController } from "@tanstack/lit-virtual";
+
+import { ScrollBehaviorController } from "./ScrollBehaviorController.js";
+import styles from "./infinity-scroll.css?inline";
+
+/**
+ * @tag chx-infinity-scroll
+ * @summary Virtualized, load-more-aware scroll container. Generic — knows nothing about "messages".
+ */
+@customElement("chx-infinity-scroll")
+export class ChxInfinityScroll extends LitElement {
+  /** @type {import("lit").PropertyDeclarations} */
+  static properties = {
+    data: { attribute: false },
+    itemKey: { attribute: false },
+    renderItem: { attribute: false },
+    estimateItemSize: { attribute: false },
+    overscan: { type: Number },
+    scrollBehavior: { type: String, attribute: "scroll-behavior" },
+    onScrollerKeydown: { attribute: false },
+    onScrollerFocusin: { attribute: false },
+  };
+
+  /** @type {VirtualizerController<HTMLElement, HTMLElement>} */
+  #virtualizer; // assigned in the constructor, below
+  /** @type {HTMLElement | undefined} */
+  #scrollElement; // the .infinity-scroll__scroller node — set via a ref() directive in render()
+  /** @type {Element | undefined} */
+  #viewportElement; // the .infinity-scroll__viewport node — set via a ref() directive in render()
+  /** @type {ScrollBehaviorController} */
+  #scrollBehavior;
+
+  constructor() {
+    super();
+
+    /** @type {unknown[]} */
+    this.data = [];
+
+    /** @type {(item: unknown, index: number) => string | number} */
+    this.itemKey = (_item, index) => index;
+
+    /** @type {(item: unknown, index: number) => unknown} */
+    this.renderItem = () => nothing;
+
+    /** @type {(index: number) => number} */
+    this.estimateItemSize = () => 80;
+
+    /** @type {number} */
+    this.overscan = 5;
+
+    /** Governs `scrollToBottom()` only — see ScrollBehaviorController.scrollToBottom's own doc. @type {"auto" | "smooth"} */
+    this.scrollBehavior = "auto";
+
+    /**
+     * Bound directly on `.infinity-scroll__scroller`, inside this shadow root — not left for a
+     * consumer to bind on the host element itself via a template `@keydown`. A composed event
+     * crossing a shadow boundary gets `event.target` *retargeted* to the host, so a listener
+     * outside this shadow root can never see which slotted/rendered child actually dispatched it
+     * (`target.closest(...)` on the retargeted host always finds nothing) — found live, chasing a
+     * roving-tabindex keydown handler that silently never fired once rendering moved in here.
+     * @type {(event: KeyboardEvent) => void}
+     */
+    this.onScrollerKeydown = () => {};
+
+    /** @type {(event: FocusEvent) => void} */
+    this.onScrollerFocusin = () => {};
+
+    this.#virtualizer = new VirtualizerController(this, {
+      count: this.data.length, // a snapshot, not a live getter — confirmed against the
+      //   installed package's own source; kept in sync on every render() via willUpdate(), below
+      getScrollElement: () => this.#scrollElement ?? null,
+      estimateSize: (index) => this.estimateItemSize(index),
+      overscan: this.overscan,
+      getItemKey: (index) => this.itemKey(this.data[index], index),
+    });
+
+    this.#scrollBehavior = new ScrollBehaviorController(this, {
+      getScrollElement: () => this.#scrollElement,
+      getViewportElement: () => this.#viewportElement,
+      getSentinel: () => this.renderRoot?.querySelector(".infinity-scroll__load-more-sentinel"),
+      getData: () => this.data,
+      itemKey: (item, index) => this.itemKey(item, index),
+      scrollToIndex: (index, options) => this.scrollToIndex(index, options),
+      getScrollBehavior: () => this.scrollBehavior,
+    });
+  }
+
+  /** @returns {import("lit").CSSResultGroup} */
+  static get styles() {
+    return [styles];
+  }
+
+  /**
+   * Forwards to the underlying virtualizer's own `scrollToIndex` — public so a consumer (or
+   * `chx-message-list`'s own roving-focus controller) can force an off-screen item into view.
+   * @param {number} index
+   * @param {{align?: "auto" | "start" | "center" | "end", behavior?: "auto" | "smooth"}} [options]
+   */
+  scrollToIndex(index, options) {
+    this.#virtualizer.getVirtualizer().scrollToIndex(index, options);
+  }
+
+  /** Scrolls to the last item. See ScrollBehaviorController.scrollToBottom, this just forwards. */
+  scrollToBottom() {
+    this.#scrollBehavior.scrollToBottom();
+  }
+
+  /**
+   * Stable across the component's whole lifetime — passed as the `ref()` callback for every
+   * rendered item, every render. `measureElement` reads the index it needs off the element's own
+   * `data-index` attribute, not from closure state, so one shared function works for every item;
+   * a fresh inline arrow here instead would make `ref()` treat each render as a brand-new callback
+   * and re-fire disconnect/reconnect (and re-measure) on every item on every pass, even though the
+   * underlying `repeat()`-keyed node never actually changed.
+   * @param {Element | undefined} el
+   */
+  #measureItem = (el) => {
+    if (el) this.#virtualizer.getVirtualizer().measureElement(/** @type {HTMLElement} */ (el));
+  };
+
+  /** @param {Element | undefined} el */
+  #setScrollElement = (el) => {
+    this.#scrollElement = /** @type {HTMLElement | undefined} */ (el);
+  };
+
+  /** @param {Element | undefined} el */
+  #setViewportElement = (el) => {
+    this.#viewportElement = el;
+  };
+
+  /**
+   * `count`/`overscan` are plain snapshots, not live getters — synced here, right before `render()`
+   * reads `getVirtualItems()`/`getTotalSize()`. Guarded so a render pass that changed neither (the
+   * common case while just scrolling) skips `setOptions()` entirely. `estimateSize`/`getItemKey`
+   * don't need this treatment — their constructor closures already read `this.estimateItemSize`/
+   * `this.itemKey` dynamically on every call, so they're already live. Re-passing *new* closures for
+   * them here on every render was tried and found to confuse TanStack Virtual's own internal scroll-
+   * adjustment tracking (resizeItem's own compensation kept firing long after settling, racing a
+   * manual scroll away from the bottom) — count/overscan are the only fields that need this at all.
+   */
+  willUpdate() {
+    const virtualizer = this.#virtualizer.getVirtualizer();
+    if (virtualizer.options.count !== this.data.length || virtualizer.options.overscan !== this.overscan) {
+      virtualizer.setOptions({ ...virtualizer.options, count: this.data.length, overscan: this.overscan });
+    }
+  }
+
+  render() {
+    const virtualizer = this.#virtualizer.getVirtualizer();
+    const items = virtualizer.getVirtualItems(); // only the visible+overscan window
+
+    return html`
+      <div
+        class="infinity-scroll__scroller"
+        part="scroller"
+        @keydown=${this.onScrollerKeydown}
+        @focusin=${this.onScrollerFocusin}
+        ${ref(this.#setScrollElement)}
+      >
+        <div class="infinity-scroll__load-more-sentinel" part="load-more-sentinel"></div>
+        <div class="infinity-scroll__spacer" part="spacer"></div>
+        <div
+          class="infinity-scroll__viewport"
+          part="viewport"
+          style="height: ${virtualizer.getTotalSize()}px;"
+          ${ref(this.#setViewportElement)}
+        >
+          ${repeat(
+            items,
+            (item) => item.key,
+            (item) => {
+              const value = this.data[item.index];
+              if (value === undefined) return nothing;
+              return html`
+                <div
+                  class="infinity-scroll__virtual-item"
+                  part="item"
+                  data-item-key=${item.key}
+                  data-index=${item.index}
+                  style="transform: translateY(${item.start}px);"
+                  ${ref(this.#measureItem)}
+                >
+                  ${this.renderItem(value, item.index)}
+                </div>
+              `;
+            },
+          )}
+        </div>
+      </div>
+    `;
+  }
+}

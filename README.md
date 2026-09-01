@@ -11,6 +11,10 @@ A virtualized Material Design 3 data grid. Sortable, resizable, paginated column
 
 A Material Design 3 chat component. Layout is a virtualized, scrollable list of messages filling the available space, with a composer docked to the bottom — a rich text field, send button, attachments, and slash commands. Supports streaming replies, typing/"other side is composing" indicators, customizable message rendering (avatar, author label, actions), and pagination for loading older history.
 
+### [`@symblight/tree-view`](./packages/tree-view)
+
+A Material Design 3 hierarchical tree view, following the WAI-ARIA APG tree pattern — expandable/collapsible nodes, single- or checkbox-based multi-select, roving-tabindex keyboard navigation, typeahead, and async-loaded branches. Data-driven (`.items`) or fully declarative (`<tvx-tree-item>` markup). See the [design spec](./.claude/plans/tree-view.spec.md) and the [package README](./packages/tree-view/README.md).
+
 ## Development
 
 This is a [pnpm](https://pnpm.io) workspace (`packages/*`). Each package builds, tests, and documents itself independently:
@@ -20,6 +24,7 @@ pnpm install
 
 pnpm --filter @symblight/data-grid sb     # Storybook for data-grid
 pnpm --filter @symblight/chat sb          # Storybook for chat
+pnpm --filter @symblight/tree-view sb     # Storybook for tree-view
 
 pnpm build   # build all packages
 pnpm test    # test all packages

@@ -1,0 +1,14 @@
+:host {
+  display: block;
+  --_tvx-item-sub-tree-guide-color: var(--tvx-tree-item-guide-color, transparent);
+  --_tvx-item-sub-tree-inset: calc(
+    var(--tvx-tree-item-padding, 0.5rem) + (var(--_tvx-tree-item-depth, 1) - 1) *
+      var(--tvx-tree-item-indent, 1.25rem) + 0.625rem
+  );
+  border-inline-start: 1px solid var(--_tvx-item-sub-tree-guide-color);
+  margin-inline-start: var(--_tvx-item-sub-tree-inset);
+}
+
+:host([hidden]) {
+  display: none;
+}

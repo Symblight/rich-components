@@ -1,0 +1,182 @@
+:host {
+  display: block;
+  outline: none;
+
+  --_tvx-tree-item-depth: calc(var(--_tvx-tree-item-depth, 0) + 1);
+  --_tvx-tree-item-gap: var(--tvx-tree-item-gap, 0.2rem);
+  --_tvx-tree-item-row-height: var(--tvx-tree-item-row-height, 2.25rem);
+  --_tvx-tree-item-padding: var(--tvx-tree-item-padding, 0.5rem);
+  --_tvx-tree-item-indent: var(--tvx-tree-item-indent, 1.25rem);
+  --_tvx-tree-item-shape: var(--tvx-tree-item-shape, 1.125rem);
+  --_tvx-tree-item-color: var(--tvx-tree-item-color, var(--md-sys-color-on-surface));
+  --_tvx-tree-item-hover-background-color: var(
+    --tvx-tree-item-hover-background-color,
+    var(--md-sys-color-surface-container-high)
+  );
+  --_tvx-tree-item-focus-outline-color: var(
+    --tvx-tree-item-focus-outline-color,
+    var(--md-sys-color-primary)
+  );
+  --_tvx-tree-item-selected-background-color: var(
+    --tvx-tree-item-selected-background-color,
+    var(--md-sys-color-secondary-container)
+  );
+  --_tvx-tree-item-selected-color: var(
+    --tvx-tree-item-selected-color,
+    var(--md-sys-color-on-secondary-container)
+  );
+  --_tvx-tree-item-loading-color: var(
+    --tvx-tree-item-loading-color,
+    var(--md-sys-color-on-surface-variant)
+  );
+  --_tvx-tree-item-chevron-color: var(
+    --tvx-tree-item-chevron-color,
+    var(--md-sys-color-on-surface-variant)
+  );
+  --_tvx-tree-item-label-font: var(
+    --tvx-tree-item-label-font,
+    0.875rem / 1.25rem system-ui,
+    sans-serif
+  );
+  --_tvx-tree-item-drop-target-background-color: var(
+    --tvx-tree-item-drop-target-background-color,
+    var(--md-sys-color-secondary-container)
+  );
+  --_tvx-tree-item-drop-indicator-color: var(
+    --tvx-tree-item-drop-indicator-color,
+    var(--md-sys-color-primary)
+  );
+}
+
+/* `:host([state]) &`-style nesting can't live *inside* this `:host {}` block itself — verified
+   empirically that `:host` can't be re-entered via `&` from within its own rule — so host-level
+   modifiers (this one included) stay as their own top-level rules; only element rules below nest
+   their own `:host([state]) &` variants. */
+:host([disabled]) {
+  opacity: 0.38;
+  pointer-events: none;
+}
+
+.tree-item__row {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: var(--_tvx-tree-item-gap);
+  min-height: var(--_tvx-tree-item-row-height);
+  padding-inline: var(--_tvx-tree-item-padding);
+  padding-inline-start: calc(
+    var(--_tvx-tree-item-padding) + (var(--_tvx-tree-item-depth, 1) - 1) *
+      var(--_tvx-tree-item-indent)
+  );
+  border-radius: var(--_tvx-tree-item-shape);
+  color: var(--_tvx-tree-item-color);
+  cursor: pointer;
+
+  :host(:not([loading])) &:hover {
+    background-color: var(--_tvx-tree-item-hover-background-color);
+  }
+
+  :host(:focus-visible) & {
+    outline: 2px solid var(--_tvx-tree-item-focus-outline-color);
+    outline-offset: -2px;
+  }
+
+  :host([selected]) & {
+    background-color: var(--_tvx-tree-item-selected-background-color);
+    color: var(--_tvx-tree-item-selected-color);
+  }
+
+  :host([loading]) & {
+    cursor: default;
+    color: var(--_tvx-tree-item-loading-color);
+  }
+
+  /* `drop-target`/`data-drop-edge` are set by the item itself during a drag (see
+     `#applyDropInstruction()`), never by an app. */
+  :host([drop-target]) & {
+    background-color: var(--_tvx-tree-item-drop-target-background-color);
+  }
+
+  :host([data-drop-edge="top"]) &::before,
+  :host([data-drop-edge="bottom"]) &::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    block-size: 2px;
+    border-radius: 9999px;
+    background-color: var(--_tvx-tree-item-drop-indicator-color);
+  }
+
+  :host([data-drop-edge="top"]) &::before {
+    inset-block-start: 0;
+  }
+
+  :host([data-drop-edge="bottom"]) &::after {
+    inset-block-end: 0;
+  }
+}
+
+.tree-item__spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+  flex: none;
+  margin-inline-end: var(--_tvx-tree-item-gap);
+  font-size: 1.125rem;
+}
+
+.tree-item__chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  flex: none;
+  color: var(--_tvx-tree-item-chevron-color);
+  transition: transform 0.15s ease;
+
+  :host([expanded]) & {
+    transform: rotate(90deg);
+  }
+}
+
+.tree-item__chevron-icon {
+  inline-size: 100%;
+  block-size: 100%;
+}
+
+.tree-item__checkbox {
+  display: flex;
+  flex: none;
+}
+
+.tree-item__checkbox-control {
+  width: 1.02rem;
+  height: 1.02rem;
+  padding: 0.32rem;
+}
+
+.tree-item__leading {
+  ::slotted(*) {
+    display: flex;
+    margin-inline-end: 0.25rem;
+  }
+}
+
+.tree-item__label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--_tvx-tree-item-label-font);
+}
+
+.tree-item__trailing {
+  flex: none;
+
+  ::slotted(*) {
+    margin-inline-start: 0.25rem;
+  }
+}

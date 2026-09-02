@@ -1,0 +1,20 @@
+:host {
+  display: block;
+  --_tvx-tree-view-row-gap: var(--tvx-tree-view-row-gap, 0.125rem);
+}
+
+.tree-view {
+  display: flex;
+  flex-direction: column;
+  gap: var(--_tvx-tree-view-row-gap);
+}
+
+.tree-view__live-region {
+  position: absolute;
+  inline-size: 1px;
+  block-size: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}

@@ -1,0 +1,30 @@
+:host {
+  display: block;
+}
+
+.tree-skeleton__row {
+  display: flex;
+  align-items: center;
+  min-height: var(--_tvx-tree-item-row-height, 2.25rem);
+  padding-inline: var(--_tvx-tree-item-padding, 0.5rem);
+  /* Matches a real sibling `<tvx-tree-item>` row's indent — `--_tvx-tree-item-depth` is inherited
+     from the branch host being expanded, already incremented once by that host's own `:host{}`,
+     which is exactly the multiplier a real child row computes for itself. */
+  padding-inline-start: calc(
+    var(--_tvx-tree-item-padding, 0.5rem) +
+      var(--_tvx-tree-item-depth, 0) * var(--_tvx-tree-item-indent, 1.25rem)
+  );
+}
+
+.tree-skeleton__bar {
+  --md-skeleton-height: 1em;
+  width: 60%;
+}
+
+.tree-skeleton__row:nth-child(3n + 2) .tree-skeleton__bar {
+  width: 45%;
+}
+
+.tree-skeleton__row:nth-child(3n) .tree-skeleton__bar {
+  width: 72%;
+}

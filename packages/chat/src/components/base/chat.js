@@ -50,6 +50,12 @@ export class ChxChat extends LitElement {
   #unsubscribe; // adapter.subscribe's returned unsubscribe fn, assigned in connectedCallback
   #pagination; // PaginationController, assigned in the constructor
   #typing; // TypingController, assigned in the constructor
+  /** @type {DropTargetController} */
+  #dropTarget;
+  /** @type {ContextProvider<typeof attachmentsContext>} */
+  #attachmentsProvider;
+  /** @type {ContextProvider<typeof commandsContext>} */
+  #commandsProvider;
 
   constructor() {
     super();
@@ -108,9 +114,8 @@ export class ChxChat extends LitElement {
      * just the composer) is caught here. `canDrop` gates the whole thing on
      * a <chx-attachments> actually being connected — if there's nowhere to
      * put a dropped file, the rest of the chat isn't a dropzone either.
-     * @type {DropTargetController}
      */
-    this._dropTarget = new DropTargetController(this, {
+    this.#dropTarget = new DropTargetController(this, {
       canDrop: () => !!this.messageComposerElement?.attachmentsElement,
       onDrop: (files) => this.messageComposerElement?.attachmentsElement?.addFiles(files, "drop"),
     });
@@ -125,22 +130,20 @@ export class ChxChat extends LitElement {
      * two shadow levels down (chx-chat → chx-message-composer's shadow →
      * chx-textbox) — context crosses that in one hop, no relay through
      * chx-message-composer needed.
-     * @type {ContextProvider<typeof attachmentsContext>}
      */
-    this._attachmentsProvider = new ContextProvider(this, {
+    this.#attachmentsProvider = new ContextProvider(this, {
       context: attachmentsContext,
       initialValue: [],
     });
 
     /**
-     * Same pattern as _attachmentsProvider above, kept in sync via
+     * Same pattern as #attachmentsProvider above, kept in sync via
      * handleChange's own `chx-change` listener (its `commands` detail) instead
      * of a dedicated change event — resolved command chips live inside the
      * ProseMirror doc, not as light-DOM children, so there's no separate
      * slotchange-driven signal to hook the way chx-attachments has one.
-     * @type {ContextProvider<typeof commandsContext>}
      */
-    this._commandsProvider = new ContextProvider(this, {
+    this.#commandsProvider = new ContextProvider(this, {
       context: commandsContext,
       initialValue: [],
     });
@@ -292,9 +295,9 @@ export class ChxChat extends LitElement {
     return this.messageComposerElement?.editor;
   }
 
-  /** True while an OS file drag carrying files is over the chat (message list included) — driven by `_dropTarget`, pushed down to the composer/textbox for the dashed-border/hint visual. @returns {boolean} */
+  /** True while an OS file drag carrying files is over the chat (message list included) — driven by `#dropTarget`, pushed down to the composer/textbox for the dashed-border/hint visual. @returns {boolean} */
   get dragging() {
-    return this._dropTarget.dragging;
+    return this.#dropTarget.dragging;
   }
 
   /** @param {CustomEvent<{value: string, html: string, attachments: File[], commands: unknown[]}>} event */
@@ -319,7 +322,7 @@ export class ChxChat extends LitElement {
     };
 
     this.#applyMessages(reconcileMessages(this.#internalMessages, message, this.userId));
-    this._commandsProvider.setValue([]);
+    this.#commandsProvider.setValue([]);
     this.#deliver(message); // not awaited — see #deliver's own doc for what this does
   }
 
@@ -476,12 +479,12 @@ export class ChxChat extends LitElement {
   /** @param {CustomEvent<{commands: Array<{label: string, element: HTMLElement}>}>} event */
   handleChange(event) {
     console.log(event.detail);
-    this._commandsProvider.setValue(event.detail.commands ?? []);
+    this.#commandsProvider.setValue(event.detail.commands ?? []);
   }
 
   /** @param {CustomEvent<{attachments: File[]}>} event */
   handleAttachmentsChange = (event) => {
-    this._attachmentsProvider.setValue(event.detail.attachments);
+    this.#attachmentsProvider.setValue(event.detail.attachments);
   };
 
   /**

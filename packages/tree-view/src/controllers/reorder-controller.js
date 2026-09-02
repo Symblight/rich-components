@@ -40,7 +40,7 @@ export class ReorderController {
     const moved = this.#requestMove(item.key, target.key, direction < 0 ? "before" : "after", {
       defer: false,
     });
-    if (moved) this.host._focus.focusNode(item);
+    if (moved) this.host.focusItem(item);
   }
 
   /** Direct `tvx-tree-item` children of `parent`, or the tree's root items when `parent` is `null`.
@@ -125,6 +125,6 @@ export class ReorderController {
     for (const item of [sourceItem, ...this.host.allItems(sourceItem)]) {
       item.level = item._computeLevel();
     }
-    this.host._selection.refresh();
+    this.host.refreshSelection();
   }
 }

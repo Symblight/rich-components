@@ -12,13 +12,14 @@ import { findIndexTree } from "../core/index-tree.js";
  * `treeData` mode.
  */
 export class SelectionController {
+  /** @type {PropertyKey | null} item shift-range is measured from */
+  #anchor = null;
+
   /** @param {import("../base/tree-view.js").TvxTreeView} host */
   constructor(host) {
     this.host = host;
     /** @type {Set<PropertyKey>} */
     this.selected = new Set();
-    /** @private @type {PropertyKey | null} item shift-range is measured from */
-    this._anchor = null;
   }
 
   /** @param {PropertyKey} key */
@@ -30,7 +31,7 @@ export class SelectionController {
    * by key in current visible order on every shift-click, so it can't go stale — but available for
    * parity with `RowSelectionController.resetAnchor()` should a caller want to force a fresh start. */
   resetAnchor() {
-    this._anchor = null;
+    this.#anchor = null;
   }
 
   /** Row activation (click or Enter/Space). `modifiers` are ignored outside multi-select.
@@ -42,17 +43,17 @@ export class SelectionController {
 
     /** @type {Set<PropertyKey> | null} */
     let next;
-    if (shiftKey && this._anchor !== null) {
+    if (shiftKey && this.#anchor !== null) {
       next = this.#shiftRange(item);
       if (!next) return; // no-op — see #shiftRange()
     } else if (ctrlKey || metaKey) {
       next = new Set(this.selected);
       if (next.has(item.key)) next.delete(item.key);
       else next.add(item.key);
-      this._anchor = item.key;
+      this.#anchor = item.key;
     } else {
       next = new Set([item.key]);
-      this._anchor = item.key;
+      this.#anchor = item.key;
     }
     this.#commit(next);
   }
@@ -81,7 +82,7 @@ export class SelectionController {
    * @returns {Set<PropertyKey> | null} `null` means no-op, nothing to apply */
   #shiftRange(targetItem) {
     const order = [...this.host.visibleItems()];
-    const anchorIndex = order.findIndex((candidate) => candidate.key === this._anchor);
+    const anchorIndex = order.findIndex((candidate) => candidate.key === this.#anchor);
     const targetIndex = order.indexOf(targetItem);
     if (anchorIndex === -1 || targetIndex === -1) return null;
 
@@ -103,7 +104,7 @@ export class SelectionController {
       if (growing) next.add(candidate.key);
       else next.delete(candidate.key);
     }
-    this._anchor = targetItem.key;
+    this.#anchor = targetItem.key;
     return next;
   }
 
@@ -118,7 +119,7 @@ export class SelectionController {
     const next = new Set(this.selected);
     if (selected) next.add(item.key);
     else next.delete(item.key);
-    this._anchor = item.key;
+    this.#anchor = item.key;
     this.#commit(next);
   }
 
@@ -127,7 +128,7 @@ export class SelectionController {
     if (selected) this.selected = new Set([item.key]);
     else if (this.selected.has(item.key)) this.selected = new Set();
     else return; // already not selected — nothing changed
-    this._anchor = item.key;
+    this.#anchor = item.key;
     this.#apply();
     this.#notify();
   }
@@ -157,15 +158,29 @@ export class SelectionController {
     const node = findIndexTree(indexTree, key);
     if (!node) return new Set(this.selected);
 
+    const next = new Set(this.selected);
+    this.#toggleSubtree(node, next);
+    this.#cascadeAncestors(node, next);
+    return next;
+  }
+
+  /** Adds/removes every id in `node`'s subtree (itself included) together — all-selected? shrink : grow.
+   * @param {import("../core/index-tree.js").IndexTree<unknown>} node
+   * @param {Set<PropertyKey>} next mutated in place */
+  #toggleSubtree(node, next) {
     const ids = [...node].map((n) => /** @type {PropertyKey} */ (n.key));
     const allSelected = ids.length > 0 && ids.every((id) => this.selected.has(id));
-    const next = new Set(this.selected);
     for (const id of ids) {
       if (allSelected) next.delete(id);
       else next.add(id);
     }
+  }
 
-    // Stops one level short of the synthetic root (its own `.parent` is `null`) — never a real key.
+  /** From `node`'s parent up to (not including) the synthetic root, adds an ancestor once every one
+   * of its direct children is in `next`, removes it otherwise.
+   * @param {import("../core/index-tree.js").IndexTree<unknown>} node
+   * @param {Set<PropertyKey>} next mutated in place */
+  #cascadeAncestors(node, next) {
     let ancestor = node.parent;
     while (ancestor && ancestor.parent) {
       const childKeys = [...ancestor.children.values()].map(
@@ -177,8 +192,6 @@ export class SelectionController {
       else next.delete(ancestorKey);
       ancestor = ancestor.parent;
     }
-
-    return next;
   }
 
   /** Checkbox-driven cascading select/deselect for a branch item — the checkbox-click counterpart
@@ -254,7 +267,7 @@ export class SelectionController {
    * @param {Iterable<PropertyKey>} keys */
   syncFromExternal(keys) {
     this.selected = new Set(keys);
-    this._anchor = null;
+    this.#anchor = null;
     this.#apply();
     this.#notify();
   }

@@ -3,6 +3,9 @@ import { toggledItemsContext } from "../base/toggled-items-context.js";
 
 /** Orchestrates expand/collapse; mirrors state into a context `Map` for light-DOM content that can't see attribute changes directly. */
 export class ExpansionController {
+  /** @type {import("@lit/context").ContextProvider<typeof toggledItemsContext>} */
+  #provider;
+
   /**
    * @param {import("../base/tree-view.js").TvxTreeView} host
    * @param {import("./data-source-controller.js").DataSourceController} loading
@@ -10,7 +13,7 @@ export class ExpansionController {
   constructor(host, loading) {
     this.host = host;
     this.loading = loading;
-    this._provider = new ContextProvider(host, {
+    this.#provider = new ContextProvider(host, {
       context: toggledItemsContext,
       initialValue: new Map(),
     });
@@ -104,9 +107,9 @@ export class ExpansionController {
    * @param {boolean} expanded
    */
   #setToggled(key, expanded) {
-    const map = new Map(this._provider.value);
+    const map = new Map(this.#provider.value);
     map.set(key, expanded);
-    this._provider.setValue(map);
+    this.#provider.setValue(map);
   }
 
   /** @param {import("../components/tree-item/tree-item.js").TvxTreeItem} item */

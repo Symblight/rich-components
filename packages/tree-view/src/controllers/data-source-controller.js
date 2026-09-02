@@ -45,8 +45,11 @@ export class DataSourceController {
     let items;
     try {
       items = await this.host.dataSource.getTreeItems();
-    } catch {
-      if (!controller.signal.aborted) this.#status.set(ROOT_KEY, STATUS_ERROR);
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        this.#status.set(ROOT_KEY, STATUS_ERROR);
+        this.#notifyLoadError(null, error);
+      }
       placeholder.remove();
       return;
     } finally {
@@ -117,8 +120,11 @@ export class DataSourceController {
     let children;
     try {
       children = await this.host.dataSource?.getTreeItems(item);
-    } catch {
-      if (!controller.signal.aborted) this.#status.set(item.key, STATUS_ERROR);
+    } catch (error) {
+      if (!controller.signal.aborted) {
+        this.#status.set(item.key, STATUS_ERROR);
+        this.#notifyLoadError(item, error);
+      }
       placeholder.remove();
       return;
     } finally {
@@ -159,6 +165,19 @@ export class DataSourceController {
     this.host.dispatchEvent(
       new CustomEvent("tvx-children-loaded", {
         detail: { key: item.key, node: item, items: children },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  /** A `getTreeItems()` rejection — surfaces the failure so the app can show an error state or retry.
+   * @param {import("../components/tree-item/tree-item.js").TvxTreeItem | null} item `null` for a root-level failure.
+   * @param {unknown} error */
+  #notifyLoadError(item, error) {
+    this.host.dispatchEvent(
+      new CustomEvent("tvx-load-error", {
+        detail: { key: item?.key ?? null, node: item, error },
         bubbles: true,
         composed: true,
       }),

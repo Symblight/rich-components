@@ -16,9 +16,13 @@ or collapsed to reveal/hide their children. Follows the
 / `role="treeitem"` / `role="group"`, roving `tabindex`, full arrow-key navigation, typeahead, and
 `aria-current` for deep-linked selection.
 
-- **Data-driven** — set `.items` (an array of `{ id, label, children? }`) and the tree renders
-  itself.
-- **Declarative** — or hand-author nested `<tvx-tree-item>` elements directly, no `.items` needed.
+- **Data-driven** — set `.items` to an array of `<tvx-tree-item>` elements (nest a
+  `<tvx-item-sub-tree>` inside one for its children) and the tree renders itself. There's no
+  plain-object shorthand — `.items` calls `replaceChildren()` under the hood, so it expects real
+  elements; build them from your own data with a small helper (see `buildItem()` in
+  `src/stories/shared.js` for a full example).
+- **Declarative** — or hand-author nested `<tvx-tree-item>` elements directly in markup, no
+  `.items` needed.
 - **Selection** — single-select by default (`aria-current` on the selected row). Opt into
   `multiSelect` for MUI-style multi-select: a plain click still replaces the selection, Ctrl/Cmd+
   click toggles an item independently, and Shift+click (or Shift+↑/↓) merges a contiguous range
@@ -38,10 +42,23 @@ or collapsed to reveal/hide their children. Follows the
 ```js
 import "@symblight/tree-view";
 
+/** @param {{ key: PropertyKey, label: string, children?: object[] }} data */
+function buildItem({ key, label, children = [] }) {
+  const item = document.createElement("tvx-tree-item");
+  item.key = key;
+  item.label = label;
+  if (children.length) {
+    const subTree = document.createElement("tvx-item-sub-tree");
+    subTree.append(...children.map(buildItem));
+    item.append(subTree);
+  }
+  return item;
+}
+
 const tree = document.querySelector("tvx-tree-view");
 tree.items = [
-  { id: "src", label: "src/", children: [{ id: "index", label: "index.js" }] },
-  { id: "readme", label: "README.md" },
+  buildItem({ key: "src", label: "src/", children: [{ key: "index", label: "index.js" }] }),
+  buildItem({ key: "readme", label: "README.md" }),
 ];
 tree.addEventListener("tvx-selection-change", (event) => {
   console.log(event.detail.selectedItems); // Set<PropertyKey>
@@ -56,6 +73,7 @@ tree.addEventListener("tvx-selection-change", (event) => {
 | `tvx-expansion-change` | `{ expandedItems: Set<PropertyKey> }` | Whole-tree snapshot, fires on any expand/collapse. |
 | `tvx-expand-change` | `{ key, expanded }` | Per-item, fires when a single item's expansion toggles. |
 | `tvx-item-position-change` | `{ key, oldPosition, newPosition }` | Fires when reordering moves an item (drag-and-drop or `Alt+↑`/`Alt+↓`). **Cancelable** — fires *before* the move, `preventDefault()` blocks it. A position is `{ parentId: PropertyKey \| null, index: number }`, `parentId` is `null` for a root-level item. |
+| `tvx-load-error` | `{ key, node, error }` | Fires when `dataSource.getTreeItems()` rejects — root load (`key`/`node` both `null`) or a branch's children on expand. |
 
 ```js
 tree.reordering = true;

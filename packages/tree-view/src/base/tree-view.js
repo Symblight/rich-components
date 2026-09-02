@@ -40,11 +40,34 @@ export class TvxTreeView extends LitElement {
     return [styles];
   }
 
+  /** @type {import("../components/tree-item/tree-item.js").TvxTreeItem[] | undefined} */
+  #items;
+  #defaultsApplied = false;
+  /** @type {import("../controllers/roving-focus-controller.js").RovingFocusController} */
+  #focus;
+  /** @type {import("../controllers/data-source-controller.js").DataSourceController} */
+  #dataSource;
+  /** @type {import("../controllers/expansion-controller.js").ExpansionController} */
+  #expansion;
+  /** @type {import("../controllers/selection-controller.js").SelectionController} */
+  #selection;
+  /** @type {import("../controllers/typeahead-controller.js").TypeaheadController} */
+  #typeahead;
+  /** @type {import("../controllers/open-controller.js").OpenController} */
+  #open;
+  /** @type {import("../controllers/reorder-controller.js").ReorderController} */
+  #reorder;
+  /** @type {import("../controllers/keyboard-nav-controller.js").KeyboardNavController} */
+  #keyboardNav;
+  /** @type {import("lit/directives/ref.js").Ref<HTMLElement>} */
+  #liveRegionRef = createRef();
+  /** @type {number | null} */
+  #pendingScrollFrame = null;
+  /** @type {import("@lit/context").ContextProvider<typeof treeViewContext>} */
+  #contextProvider;
+
   constructor() {
     super();
-
-    /** @type {import("../components/tree-item/tree-item.js").TvxTreeItem[] | undefined} */
-    this._items = undefined;
 
     /** Opt into ctrl/cmd+click (toggle) and shift+click/shift+arrow (contiguous range) multi-select.
      * Off by default — a plain click then selects exactly one item. */
@@ -67,51 +90,38 @@ export class TvxTreeView extends LitElement {
     /** @see defaultExpandedItems
      * @type {Iterable<PropertyKey> | undefined} */
     this.defaultSelectedItems = undefined;
-    this._defaultsApplied = false;
 
-    this._focus = new RovingFocusController(this);
-    this._dataSource = new DataSourceController(this, this._focus);
-    this._expansion = new ExpansionController(this, this._dataSource);
-    this._selection = new SelectionController(this);
-    this._typeahead = new TypeaheadController(this, this._focus);
-    this._open = new OpenController(this);
-    this._reorder = new ReorderController(this);
-    /** @type {import("lit/directives/ref.js").Ref<HTMLElement>} */
-    this._liveRegionRef = createRef();
-    /** @type {number | null} */
-    this._pendingScrollFrame = null;
-    this._keyboardNav = new KeyboardNavController(this, {
-      expansion: this._expansion,
-      focus: this._focus,
-      selection: this._selection,
-      typeahead: this._typeahead,
-      open: this._open,
-      reorder: this._reorder,
+    this.#focus = new RovingFocusController(this);
+    this.#dataSource = new DataSourceController(this, this.#focus);
+    this.#expansion = new ExpansionController(this, this.#dataSource);
+    this.#selection = new SelectionController(this);
+    this.#typeahead = new TypeaheadController(this, this.#focus);
+    this.#open = new OpenController(this);
+    this.#reorder = new ReorderController(this);
+    this.#keyboardNav = new KeyboardNavController(this, {
+      expansion: this.#expansion,
+      focus: this.#focus,
+      selection: this.#selection,
+      typeahead: this.#typeahead,
+      open: this.#open,
+      reorder: this.#reorder,
     });
 
-    /** @private */
-    this._contextProvider = new ContextProvider(this, {
+    this.#contextProvider = new ContextProvider(this, {
       context: treeViewContext,
-      initialValue: {
-        multiSelect: this.multiSelect,
-        disableSelection: this.disableSelection,
-        checkboxSelection: this.checkboxSelection,
-        getHref: this.getHref,
-        reordering: this.reordering,
-        isItemReorderable: this.isItemReorderable,
-      },
+      initialValue: this.#contextValue(),
     });
 
-    this.addEventListener("keydown", (event) => this._keyboardNav.onKeydown(event));
-    this.addEventListener("auxclick", (event) => this._open.handleAuxClick(event));
+    this.addEventListener("keydown", (event) => this.#keyboardNav.onKeydown(event));
+    this.addEventListener("auxclick", (event) => this.#open.handleAuxClick(event));
     this.addEventListener("tvx-tree-item-toggle", (event) =>
-      this._onItemToggle(/** @type {CustomEvent} */ (event)),
+      this.#onItemToggle(/** @type {CustomEvent} */ (event)),
     );
     this.addEventListener("tvx-tree-item-activate", (event) =>
-      this._onItemActivate(/** @type {CustomEvent} */ (event)),
+      this.#onItemActivate(/** @type {CustomEvent} */ (event)),
     );
     this.addEventListener("tvx-tree-item-reorder-drop", (event) =>
-      this._reorder.handleDrop(/** @type {CustomEvent} */ (event).detail),
+      this.#reorder.handleDrop(/** @type {CustomEvent} */ (event).detail),
     );
   }
 
@@ -122,19 +132,19 @@ export class TvxTreeView extends LitElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    this._dataSource.dispose();
-    if (this._pendingScrollFrame !== null) {
-      cancelAnimationFrame(this._pendingScrollFrame);
-      this._pendingScrollFrame = null;
+    this.#dataSource.dispose();
+    if (this.#pendingScrollFrame !== null) {
+      cancelAnimationFrame(this.#pendingScrollFrame);
+      this.#pendingScrollFrame = null;
     }
   }
 
   firstUpdated() {
-    this._focus.ensureInitialFocusable();
+    this.#focus.ensureInitialFocusable();
     // Covers declarative markup and a dataSource resolving its own root fetch (which itself
     // assigns `.items`, see below) — `.items` being assigned *after* connection (e.g. a framework
     // wrapper setting properties post-mount) is the other case, covered by the `items` setter below.
-    this._dataSource.loadRoot().then(() => this.#applyDefaultsOnce());
+    this.#dataSource.loadRoot().then(() => this.#applyDefaultsOnce());
   }
 
   /** Applies `defaultExpandedItems`/`defaultSelectedItems` exactly once, the first time the root
@@ -143,15 +153,15 @@ export class TvxTreeView extends LitElement {
    * `hasChildren` isn't computed yet — see `TvxTreeItem#claimSubTree()` — so `defaultExpandedItems`
    * would silently no-op on it), defers rather than consuming the one shot. */
   #applyDefaultsOnce() {
-    if (this._defaultsApplied || !this.isConnected || this.allItems().next().done) return;
-    this._defaultsApplied = true;
-    if (this.defaultExpandedItems) this._expansion.syncFromExternal(this.defaultExpandedItems);
-    if (this.defaultSelectedItems) this._selection.syncFromExternal(this.defaultSelectedItems);
+    if (this.#defaultsApplied || !this.isConnected || this.allItems().next().done) return;
+    this.#defaultsApplied = true;
+    if (this.defaultExpandedItems) this.#expansion.syncFromExternal(this.defaultExpandedItems);
+    if (this.defaultSelectedItems) this.#selection.syncFromExternal(this.defaultSelectedItems);
   }
 
   /** @param {import("lit").PropertyValues} changed */
   updated(changed) {
-    if (changed.has("dataSource")) this._dataSource.handleDataSourceChange();
+    if (changed.has("dataSource")) this.#dataSource.handleDataSourceChange();
 
     if (
       changed.has("multiSelect") ||
@@ -161,28 +171,33 @@ export class TvxTreeView extends LitElement {
       changed.has("reordering") ||
       changed.has("isItemReorderable")
     ) {
-      this._contextProvider.setValue({
-        multiSelect: this.multiSelect,
-        disableSelection: this.disableSelection,
-        checkboxSelection: this.checkboxSelection,
-        getHref: this.getHref,
-        reordering: this.reordering,
-        isItemReorderable: this.isItemReorderable,
-      });
+      this.#contextProvider.setValue(this.#contextValue());
     }
+  }
+
+  /** @returns {import("./tree-view-context.js").TreeViewContextValue} */
+  #contextValue() {
+    return {
+      multiSelect: this.multiSelect,
+      disableSelection: this.disableSelection,
+      checkboxSelection: this.checkboxSelection,
+      getHref: this.getHref,
+      reordering: this.reordering,
+      isItemReorderable: this.isItemReorderable,
+    };
   }
 
   /** Real `<tvx-tree-item>` elements; setting this is a `replaceChildren()` convenience.
    * @returns {import("../components/tree-item/tree-item.js").TvxTreeItem[] | undefined} */
   get items() {
-    return this._items;
+    return this.#items;
   }
 
   /** @param {import("../components/tree-item/tree-item.js").TvxTreeItem[] | undefined} value */
   set items(value) {
-    this._items = value;
+    this.#items = value;
     if (value) this.replaceChildren(...value);
-    this._focus.ensureInitialFocusable();
+    this.#focus.ensureInitialFocusable();
     this.requestUpdate("items");
     this.#applyDefaultsOnce();
   }
@@ -191,24 +206,24 @@ export class TvxTreeView extends LitElement {
    * (uncontrolled-with-sync, like `items`) — the tree still manages selection on its own, this is optional.
    * @returns {Set<PropertyKey>} */
   get selectedItems() {
-    return new Set(this._selection.selected);
+    return new Set(this.#selection.selected);
   }
 
   /** @param {Iterable<PropertyKey>} value */
   set selectedItems(value) {
-    this._selection.syncFromExternal(value);
+    this.#selection.syncFromExternal(value);
     this.requestUpdate("selectedItems");
   }
 
   /** Live snapshot of expanded keys; assigning a new Set re-syncs internal expansion state to match.
    * @returns {Set<PropertyKey>} */
   get expandedItems() {
-    return this._expansion.getExpandedKeys();
+    return this.#expansion.getExpandedKeys();
   }
 
   /** @param {Iterable<PropertyKey>} value */
   set expandedItems(value) {
-    this._expansion.syncFromExternal(value);
+    this.#expansion.syncFromExternal(value);
     this.requestUpdate("expandedItems");
   }
 
@@ -278,8 +293,8 @@ export class TvxTreeView extends LitElement {
   setItemExpansion({ id, expand }) {
     const item = this.getItemByKey(id);
     if (!item) return;
-    if (expand) this._expansion.expand(item);
-    else this._expansion.collapse(item);
+    if (expand) this.#expansion.expand(item);
+    else this.#expansion.collapse(item);
   }
 
   /** @param {PropertyKey} id
@@ -294,15 +309,15 @@ export class TvxTreeView extends LitElement {
   setItemSelection({ id, selected }) {
     const item = this.getItemByKey(id);
     if (!item) return;
-    this._selection.setSelected(item, selected);
+    this.#selection.setSelected(item, selected);
   }
 
   expandAll() {
-    this._expansion.expandAll();
+    this.#expansion.expandAll();
   }
 
   collapseAll() {
-    this._expansion.collapseAll();
+    this.#expansion.collapseAll();
   }
 
   /** Direct child `tvx-tree-item`s of `root`, resolving through `tvx-item-sub-tree` wrappers.
@@ -330,7 +345,7 @@ export class TvxTreeView extends LitElement {
   /** Writes an announcement into the visually-hidden live region, clearing it first so repeated identical strings still get announced.
    * @param {string} message */
   announce(message) {
-    const region = this._liveRegionRef.value;
+    const region = this.#liveRegionRef.value;
     if (!region) return;
     region.textContent = "";
     requestAnimationFrame(() => {
@@ -342,30 +357,49 @@ export class TvxTreeView extends LitElement {
    * @param {Element | null | undefined} element */
   scrollElementIntoView(element) {
     if (!element) return;
-    if (this._pendingScrollFrame !== null) cancelAnimationFrame(this._pendingScrollFrame);
-    this._pendingScrollFrame = requestAnimationFrame(() => {
-      this._pendingScrollFrame = null;
+    if (this.#pendingScrollFrame !== null) cancelAnimationFrame(this.#pendingScrollFrame);
+    this.#pendingScrollFrame = requestAnimationFrame(() => {
+      this.#pendingScrollFrame = null;
       if (!element.isConnected) return;
       element.scrollIntoView({ block: "nearest", inline: "nearest" });
     });
   }
 
+  /** Moves the tree's Tab stop to `item` and focuses it — the one piece of focus API a controller
+   * outside this file (`ReorderController`, after a keyboard-driven move) needs to reach.
+   * @param {import("../components/tree-item/tree-item.js").TvxTreeItem | null} item */
+  focusItem(item) {
+    this.#focus.focusNode(item);
+  }
+
+  /** The key of the item currently holding the tree's Tab stop.
+   * @returns {PropertyKey | null} */
+  get focusedKey() {
+    return this.#focus.focusedKey;
+  }
+
+  /** Re-syncs selection state onto the DOM after a tree-shape change (e.g. a reorder) without
+   * changing which keys are selected. */
+  refreshSelection() {
+    this.#selection.refresh();
+  }
+
   /** @param {CustomEvent<{ item: import("../components/tree-item/tree-item.js").TvxTreeItem }>} event */
-  _onItemToggle(event) {
-    this._expansion.toggle(event.detail.item);
-    this._focus.focusNode(event.detail.item);
+  #onItemToggle(event) {
+    this.#expansion.toggle(event.detail.item);
+    this.#focus.focusNode(event.detail.item);
   }
 
   /** @param {CustomEvent<{ item: import("../components/tree-item/tree-item.js").TvxTreeItem, ctrlKey: boolean, metaKey: boolean, shiftKey: boolean, checkbox: boolean }>} event */
-  _onItemActivate(event) {
+  #onItemActivate(event) {
     const { item, ctrlKey, metaKey, shiftKey, checkbox } = event.detail;
     // A checkbox click always bypasses the ctrl/shift-click modifier semantics a plain row click
     // uses in multi-select mode, and always cascades (see `SelectionController
     // .selectCascading()`) — a leaf's "subtree" is just itself, but the upward half still runs, so
     // checking every leaf under a branch individually ends up selecting that branch too.
-    if (checkbox) this._selection.selectCascading(item, this.buildIndexTree());
-    else this._selection.activate(item, { ctrlKey, metaKey, shiftKey });
-    this._focus.focusNode(item);
+    if (checkbox) this.#selection.selectCascading(item, this.buildIndexTree());
+    else this.#selection.activate(item, { ctrlKey, metaKey, shiftKey });
+    this.#focus.focusNode(item);
   }
 
   render() {
@@ -377,7 +411,7 @@ export class TvxTreeView extends LitElement {
         class="tree-view__live-region"
         aria-live="polite"
         aria-atomic="true"
-        ${ref(this._liveRegionRef)}
+        ${ref(this.#liveRegionRef)}
       ></div>
     `;
   }

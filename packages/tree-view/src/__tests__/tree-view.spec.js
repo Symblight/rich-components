@@ -563,7 +563,7 @@ describe("tvx-tree-view — checkboxSelection", () => {
     const src = el.getItemByKey("src");
     const index = el.getItemByKey("index");
     const utils = el.getItemByKey("utils");
-    el._focus.focusNode(src);
+    el.focusItem(src);
 
     src.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, composed: true }));
     await el.updateComplete;
@@ -584,52 +584,52 @@ describe("tvx-tree-view — roving tabindex & keyboard nav", () => {
     const el = await treeFixture(buildSampleItems());
     const src = el.getItemByKey("src");
     const readme = el.getItemByKey("readme");
-    el._focus.focusNode(src);
+    el.focusItem(src);
 
     src.dispatchEvent(
       new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, composed: true }),
     );
-    expect(el._focus.focusedKey).to.equal("readme");
+    expect(el.focusedKey).to.equal("readme");
     expect(readme.tabIndex).to.equal(0);
     expect(src.tabIndex).to.equal(-1);
 
     readme.dispatchEvent(
       new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, composed: true }),
     );
-    expect(el._focus.focusedKey).to.equal("src");
+    expect(el.focusedKey).to.equal("src");
   });
 
   it("Home/End jump to the first/last visible item", async () => {
     const el = await treeFixture(buildSampleItems());
     const src = el.getItemByKey("src");
     const readme = el.getItemByKey("readme");
-    el._focus.focusNode(src);
+    el.focusItem(src);
 
     src.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, composed: true }));
-    expect(el._focus.focusedKey).to.equal("readme");
+    expect(el.focusedKey).to.equal("readme");
 
     readme.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Home", bubbles: true, composed: true }),
     );
-    expect(el._focus.focusedKey).to.equal("src");
+    expect(el.focusedKey).to.equal("src");
   });
 
   it("ArrowRight expands a collapsed branch without moving focus, then moves into its first child", async () => {
     const el = await treeFixture(buildSampleItems());
     const src = el.getItemByKey("src");
-    el._focus.focusNode(src);
+    el.focusItem(src);
 
     src.dispatchEvent(
       new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, composed: true }),
     );
     await el.updateComplete;
     expect(src.expanded).to.equal(true);
-    expect(el._focus.focusedKey).to.equal("src");
+    expect(el.focusedKey).to.equal("src");
 
     src.dispatchEvent(
       new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, composed: true }),
     );
-    expect(el._focus.focusedKey).to.equal("index");
+    expect(el.focusedKey).to.equal("index");
   });
 
   it("ArrowLeft collapses an expanded branch without moving focus, then moves focus to the parent", async () => {
@@ -639,20 +639,20 @@ describe("tvx-tree-view — roving tabindex & keyboard nav", () => {
     const src = el.getItemByKey("src");
     const index = el.getItemByKey("index");
 
-    el._focus.focusNode(src);
+    el.focusItem(src);
     src.dispatchEvent(
       new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, composed: true }),
     );
     expect(src.expanded).to.equal(false);
-    expect(el._focus.focusedKey).to.equal("src");
+    expect(el.focusedKey).to.equal("src");
 
     el.setItemExpansion({ id: "src", expand: true });
     await el.updateComplete;
-    el._focus.focusNode(index);
+    el.focusItem(index);
     index.dispatchEvent(
       new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, composed: true }),
     );
-    expect(el._focus.focusedKey).to.equal("src");
+    expect(el.focusedKey).to.equal("src");
   });
 
   it("typeahead jumps focus to the next visible item whose label starts with the typed text", async () => {
@@ -662,16 +662,16 @@ describe("tvx-tree-view — roving tabindex & keyboard nav", () => {
       buildItem({ id: "c", label: "Cherry" }),
     ]);
     const alpha = el.getItemByKey("a");
-    el._focus.focusNode(alpha);
+    el.focusItem(alpha);
 
     alpha.dispatchEvent(new KeyboardEvent("keydown", { key: "c", bubbles: true, composed: true }));
-    expect(el._focus.focusedKey).to.equal("c");
+    expect(el.focusedKey).to.equal("c");
   });
 
   it("Enter toggles a branch's expansion rather than selecting it", async () => {
     const el = await treeFixture(buildSampleItems());
     const src = el.getItemByKey("src");
-    el._focus.focusNode(src);
+    el.focusItem(src);
 
     src.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Enter", bubbles: true, composed: true }),
@@ -688,7 +688,7 @@ describe("tvx-tree-view — roving tabindex & keyboard nav", () => {
   it("Enter is a no-op on a leaf item (nothing to expand)", async () => {
     const el = await treeFixture(buildSampleItems());
     const readme = el.getItemByKey("readme");
-    el._focus.focusNode(readme);
+    el.focusItem(readme);
 
     readme.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Enter", bubbles: true, composed: true }),
@@ -699,7 +699,7 @@ describe("tvx-tree-view — roving tabindex & keyboard nav", () => {
   it("Space activates in single-select mode too (previously gated to multiSelect)", async () => {
     const el = await treeFixture(buildSampleItems());
     const readme = el.getItemByKey("readme");
-    el._focus.focusNode(readme);
+    el.focusItem(readme);
 
     readme.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, composed: true }));
     expect(readme.selected).to.equal(true);
@@ -708,7 +708,7 @@ describe("tvx-tree-view — roving tabindex & keyboard nav", () => {
   it("Space selects a branch without touching its expansion", async () => {
     const el = await treeFixture(buildSampleItems());
     const src = el.getItemByKey("src");
-    el._focus.focusNode(src);
+    el.focusItem(src);
 
     src.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, composed: true }));
     expect(src.selected).to.equal(true);
@@ -720,7 +720,7 @@ describe("tvx-tree-view — roving tabindex & keyboard nav", () => {
     el.disableSelection = true;
     await el.updateComplete;
     const src = el.getItemByKey("src");
-    el._focus.focusNode(src);
+    el.focusItem(src);
 
     src.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Enter", bubbles: true, composed: true }),
@@ -749,12 +749,12 @@ describe("tvx-tree-view — roving tabindex & keyboard nav", () => {
     el.setItemExpansion({ id: "src", expand: true });
     await el.updateComplete;
     const index = el.getItemByKey("index");
-    el._focus.focusNode(index);
+    el.focusItem(index);
 
     index.dispatchEvent(
       new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, composed: true }),
     );
-    expect(el._focus.focusedKey).to.equal("src");
+    expect(el.focusedKey).to.equal("src");
   });
 
   it("PageDown/PageUp jump by an estimated page within the nearest scroll container", async () => {
@@ -767,12 +767,12 @@ describe("tvx-tree-view — roving tabindex & keyboard nav", () => {
     await el.updateComplete;
 
     const first = el.getItemByKey("n0");
-    el._focus.focusNode(first);
+    el.focusItem(first);
 
     first.dispatchEvent(
       new KeyboardEvent("keydown", { key: "PageDown", bubbles: true, composed: true }),
     );
-    const afterPageDown = el._focus.focusedKey;
+    const afterPageDown = el.focusedKey;
     // A 150px container can't fit all 20 rows — PageDown should land short of the end.
     expect(afterPageDown).to.not.equal("n0");
     expect(afterPageDown).to.not.equal("n19");
@@ -783,7 +783,7 @@ describe("tvx-tree-view — roving tabindex & keyboard nav", () => {
     landed.dispatchEvent(
       new KeyboardEvent("keydown", { key: "PageUp", bubbles: true, composed: true }),
     );
-    expect(el._focus.focusedKey).to.equal("n0");
+    expect(el.focusedKey).to.equal("n0");
   });
 
   it("focusNode coalesces scroll-into-view onto the most recently focused item", async () => {
@@ -799,9 +799,9 @@ describe("tvx-tree-view — roving tabindex & keyboard nav", () => {
       readmeCalls++;
     };
 
-    el._focus.focusNode(src);
-    el._focus.focusNode(readme);
-    el._focus.focusNode(readme);
+    el.focusItem(src);
+    el.focusItem(readme);
+    el.focusItem(readme);
 
     await new Promise((resolve) => requestAnimationFrame(resolve));
     expect(srcCalls).to.equal(0);
@@ -823,20 +823,20 @@ describe("tvx-tree-view — Shift+ArrowUp/Down range selection (multi-select)", 
 
     a.shadowRoot.querySelector(".tree-item__row").click();
     await el.updateComplete;
-    el._focus.focusNode(a);
+    el.focusItem(a);
 
     a.dispatchEvent(
       new KeyboardEvent("keydown", { key: "ArrowDown", shiftKey: true, bubbles: true, composed: true }),
     );
     await el.updateComplete;
-    expect(el._focus.focusedKey).to.equal("b");
+    expect(el.focusedKey).to.equal("b");
     expect(el.selectedItems).to.deep.equal(new Set(["a", "b"]));
 
     b.dispatchEvent(
       new KeyboardEvent("keydown", { key: "ArrowDown", shiftKey: true, bubbles: true, composed: true }),
     );
     await el.updateComplete;
-    expect(el._focus.focusedKey).to.equal("c");
+    expect(el.focusedKey).to.equal("c");
     expect(el.selectedItems).to.deep.equal(new Set(["a", "b", "c"]));
   });
 
@@ -851,13 +851,13 @@ describe("tvx-tree-view — Shift+ArrowUp/Down range selection (multi-select)", 
 
     a.shadowRoot.querySelector(".tree-item__row").click();
     await el.updateComplete;
-    el._focus.focusNode(a);
+    el.focusItem(a);
 
     a.dispatchEvent(
       new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, composed: true }),
     );
     await el.updateComplete;
-    expect(el._focus.focusedKey).to.equal("b");
+    expect(el.focusedKey).to.equal("b");
     expect(el.selectedItems).to.deep.equal(new Set(["a"]));
   });
 });
@@ -1026,14 +1026,14 @@ describe("tvx-tree-view — async loading (dataSource)", () => {
     const placeholder = /** @type {TvxTreeItem} */ (src.querySelector("[loading]"));
     expect(placeholder).to.exist;
     expect(src.querySelector("tvx-tree-skeleton")).to.equal(null);
-    el._focus.focusNode(placeholder);
+    el.focusItem(placeholder);
 
     resolveLoad([buildItem({ id: "a", label: "a.js" })]);
     await aTimeout(20);
     await el.updateComplete;
 
     expect(src.querySelector("[loading]")).to.equal(null);
-    expect(el._focus.focusedKey).to.equal("a");
+    expect(el.focusedKey).to.equal("a");
   });
 
   it("applies getChildrenCount to a branch's newly-loaded children too, so a nested group gets its chevron before it's ever expanded", async () => {
@@ -1104,7 +1104,7 @@ describe("tvx-tree-view — async loading (dataSource)", () => {
     el.setItemExpansion({ id: "empty", expand: true });
     await el.updateComplete;
     const placeholder = /** @type {TvxTreeItem} */ (branch.querySelector("[loading]"));
-    el._focus.focusNode(placeholder);
+    el.focusItem(placeholder);
 
     await aTimeout(20);
     await el.updateComplete;
@@ -1113,7 +1113,7 @@ describe("tvx-tree-view — async loading (dataSource)", () => {
     expect(region.textContent).to.equal("empty/ is empty.");
     expect(branch.hasChildren).to.equal(false);
     expect(branch.hasAttribute("aria-expanded")).to.equal(false);
-    expect(el._focus.focusedKey).to.equal("empty");
+    expect(el.focusedKey).to.equal("empty");
   });
 
   it("a leaf item (getChildrenCount returned 0) never calls getTreeItems on expand", async () => {
@@ -1185,7 +1185,7 @@ describe("tvx-tree-view — async loading (dataSource)", () => {
     await el.updateComplete;
     const placeholder = /** @type {TvxTreeItem} */ (branch.querySelector("[loading]"));
     expect(placeholder).to.exist;
-    el._focus.focusNode(placeholder);
+    el.focusItem(placeholder);
 
     const region = el.shadowRoot.querySelector(".tree-view__live-region");
     await aTimeout(20);
@@ -1310,7 +1310,7 @@ describe("tvx-tree-view — reordering", () => {
     el.reordering = true;
     await el.updateComplete;
     const src = el.getItemByKey("src");
-    el._focus.focusNode(src);
+    el.focusItem(src);
 
     src.dispatchEvent(
       new KeyboardEvent("keydown", {
@@ -1323,7 +1323,7 @@ describe("tvx-tree-view — reordering", () => {
     await el.updateComplete;
 
     expect([...el.children].map((c) => c.key)).to.deep.equal(["readme", "src"]);
-    expect(el._focus.focusedKey).to.equal("src");
+    expect(el.focusedKey).to.equal("src");
 
     // "src" is now second (index 1) in [readme, src] — Alt+ArrowUp on it swaps it back before
     // "readme". Alt+ArrowUp on "readme" itself would be a no-op: it's already first, nothing to
@@ -1343,7 +1343,7 @@ describe("tvx-tree-view — reordering", () => {
   it("Alt+Arrow does nothing when reordering is off", async () => {
     const el = await treeFixture(buildSampleItems());
     const src = el.getItemByKey("src");
-    el._focus.focusNode(src);
+    el.focusItem(src);
     src.dispatchEvent(
       new KeyboardEvent("keydown", {
         key: "ArrowDown",

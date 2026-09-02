@@ -4,10 +4,6 @@ A Material Design 3 hierarchical tree view web component built with [Lit](https:
 Framework-agnostic — works the same in a plain HTML page, React, Vue, Svelte, or anywhere else
 custom elements run.
 
-The full design — data model, controllers, ARIA mapping, keyboard behavior, public API, more usage
-examples — lives in [`tree-view.spec.md`](../../.claude/plans/tree-view.spec.md) at the monorepo
-root.
-
 ## Overview
 
 `<tvx-tree-view>` renders a hierarchical list of `<tvx-tree-item>` nodes — parents can be expanded
@@ -16,13 +12,11 @@ or collapsed to reveal/hide their children. Follows the
 / `role="treeitem"` / `role="group"`, roving `tabindex`, full arrow-key navigation, typeahead, and
 `aria-current` for deep-linked selection.
 
-- **Data-driven** — set `.items` to an array of `<tvx-tree-item>` elements (nest a
-  `<tvx-item-sub-tree>` inside one for its children) and the tree renders itself. There's no
-  plain-object shorthand — `.items` calls `replaceChildren()` under the hood, so it expects real
-  elements; build them from your own data with a small helper (see `buildItem()` in
-  `src/stories/shared.js` for a full example).
-- **Declarative** — or hand-author nested `<tvx-tree-item>` elements directly in markup, no
-  `.items` needed.
+- **Declarative** — hand-author nested `<tvx-tree-item>` elements directly in markup, or build
+  them programmatically and assign the array to `.items` (nest a `<tvx-item-sub-tree>` inside an
+  item for its children). `.items` calls `replaceChildren()` under the hood, so it expects real
+  elements, not plain data — see `buildItem()` in `src/stories/shared.js` for a small helper that
+  builds them from `{ id, label, children }`-shaped data.
 - **Selection** — single-select by default (`aria-current` on the selected row). Opt into
   `multiSelect` for MUI-style multi-select: a plain click still replaces the selection, Ctrl/Cmd+
   click toggles an item independently, and Shift+click (or Shift+↑/↓) merges a contiguous range
@@ -83,9 +77,6 @@ tree.addEventListener("tvx-item-position-change", (event) => {
   // event.preventDefault(); // veto this specific move
 });
 ```
-
-See the spec doc linked above for the full public API, the keyboard table, and more usage
-examples.
 
 ## Install
 

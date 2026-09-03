@@ -2,7 +2,6 @@
   display: flex;
   box-sizing: border-box;
   align-items: end;
-  padding-block: 0.5rem;
   --chx-message-composer-gap: 0.5rem;
   gap: var(--chx-message-composer-gap);
   max-width: 60rem;

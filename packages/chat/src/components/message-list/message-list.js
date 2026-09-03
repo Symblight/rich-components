@@ -27,6 +27,8 @@ export class ChxMessageList extends LitElement {
     partElements: { attribute: false },
     messagesLabel: { type: String, attribute: "messages-label" },
     scrollBehavior: { type: String, attribute: "scroll-behavior" },
+    contentAlign: { type: String, attribute: "content-align" },
+    buffer: { type: Number },
     typing: { type: Boolean, reflect: true, attribute: true },
     streaming: { type: Boolean, reflect: true, attribute: true },
   };
@@ -59,6 +61,10 @@ export class ChxMessageList extends LitElement {
   #infinityScrollElement; // set via a ref() directive in render()
   /** @type {FocusBehaviorController} */
   #focusBehavior; // roving tabindex — assigned in the constructor, below
+  // gates the scroll-to-bottom slot — flipped by infinity-scroll's onAwayFromBottomChange callback,
+  // not a public property: unlike typing/streaming this is intrinsic to scroll position, not
+  // something the app drives
+  #awayFromBottom = false;
   // stable bound reference (not an inline arrow) — passed as chx-infinity-scroll's .itemKey, so it
   // doesn't see a "changed" property on every render
   #itemKey = (/** @type {ChxMessage} */ message, /** @type {number} */ index) => message?.id ?? index;
@@ -87,6 +93,16 @@ export class ChxMessageList extends LitElement {
     /** Governs `scrollToBottom()` only. @type {"auto" | "smooth"} */
     this.scrollBehavior = "auto";
 
+    /** Forwarded straight through to chx-infinity-scroll. @type {"start" | "end"} */
+    this.contentAlign = "end";
+
+    /**
+     * Forwarded straight through to chx-infinity-scroll — distance (px) from the bottom within
+     * which the list still counts as "at the bottom", for both the auto-scroll-pause threshold and
+     * the scroll-to-bottom slot's own visibility gate. @type {number}
+     */
+    this.buffer = 150;
+
     /**
      * Whether the other side is currently typing — gates the `typing` slot in render(). No default
      * content: unlike `messageElement`/`partElements`, an unslotted `typing`/`streaming` renders
@@ -114,6 +130,36 @@ export class ChxMessageList extends LitElement {
   static get styles() {
     return [styles];
   }
+
+  connectedCallback() {
+    super.connectedCallback();
+    // chx-scroll-to-bottom-affordance is a light-DOM child (slotted), not part of this component's
+    // own render() template, so it's caught the same way chx-chat catches chx-send-message — a
+    // plain addEventListener on the host, not a template event binding
+    this.addEventListener(
+      "chx-scroll-to-bottom-click",
+      /** @type {EventListener} */ (this.#handleScrollToBottomClick),
+    );
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this.removeEventListener(
+      "chx-scroll-to-bottom-click",
+      /** @type {EventListener} */ (this.#handleScrollToBottomClick),
+    );
+  }
+
+  /** @param {CustomEvent<{behavior: "auto" | "smooth" | "instant"}>} event */
+  #handleScrollToBottomClick = (event) => {
+    this.scrollToBottom(event.detail.behavior);
+  };
+
+  /** @param {boolean} away */
+  #handleAwayFromBottomChange = (away) => {
+    this.#awayFromBottom = away;
+    this.requestUpdate();
+  };
 
   /**
    * Passed to `chx-infinity-scroll` as `.renderItem` — called once per currently-visible message,
@@ -246,9 +292,12 @@ export class ChxMessageList extends LitElement {
     return this.#infinityScrollElement;
   }
 
-  /** Scrolls to the newest message — see chx-infinity-scroll.scrollToBottom, this forwards to it. */
-  scrollToBottom() {
-    this.#infinityScrollElement?.scrollToBottom();
+  /**
+   * Scrolls to the newest message — see chx-infinity-scroll.scrollToBottom, this forwards to it.
+   * @param {"auto" | "smooth" | "instant"} [behavior]
+   */
+  scrollToBottom(behavior) {
+    this.#infinityScrollElement?.scrollToBottom(behavior);
   }
 
   render() {
@@ -270,12 +319,17 @@ export class ChxMessageList extends LitElement {
         .itemKey=${this.#itemKey}
         .renderItem=${this.#renderItem}
         .scrollBehavior=${this.scrollBehavior}
+        .contentAlign=${this.contentAlign}
+        .buffer=${this.buffer}
         .onScrollerKeydown=${this.#focusBehavior.handleKeyDown}
         .onScrollerFocusin=${this.#focusBehavior.handleFocusIn}
+        .onAwayFromBottomChange=${this.#handleAwayFromBottomChange}
         ${ref((el) => (this.#infinityScrollElement = /** @type {ChxInfinityScroll | undefined} */ (el)))}
-      ></chx-infinity-scroll>
-      ${when(this.streaming, () => html`<slot name="streaming"></slot>`)}
-      ${when(this.typing, () => html`<slot name="typing"></slot>`)}
+      >
+        ${when(this.streaming, () => html`<slot name="streaming" slot="footer"></slot>`)}
+        ${when(this.typing, () => html`<slot name="typing" slot="footer"></slot>`)}
+      </chx-infinity-scroll>
+      ${when(this.#awayFromBottom, () => html`<slot name="scroll-to-bottom" slot="footer"></slot>`)}
     `;
   }
 }

@@ -13,6 +13,7 @@ import "@symblight/wc-material/avatar";
 import "../../index.js";
 import "../typing-indicator/typing-indicator.js";
 import "../streaming-indicator/streaming-indicator.js";
+import "../scroll-to-bottom-affordance/scroll-to-bottom-affordance.js";
 
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
@@ -310,6 +311,63 @@ export const Streaming = {
   `,
 };
 
+/**
+ * Demonstrates `chx-message-list`'s `scroll-to-bottom` slot on its own. Like `streaming` above,
+ * becoming *eligible* to show is fully automatic — `chx-infinity-scroll` tracks scroll position
+ * itself and flips a boolean once the list has scrolled more than `buffer` px away from the bottom
+ * (150px here, the default, set explicitly to make the story's own point) — but what actually
+ * renders still needs `<chx-scroll-to-bottom-affordance slot="scroll-to-bottom">` slotted in
+ * explicitly, same "no default content" posture `typing`/`streaming` have. The button below jumps
+ * the list to the top so the affordance appears without having to scroll manually first; scrolling
+ * back down past the buffer on your own makes it disappear again, same as scrolling up does the
+ * reverse. The affordance's own `scroll-behavior="instant"` governs only the scroll *its* click
+ * triggers — independent of `chx-message-list`'s own `scroll-behavior` (which only governs the
+ * automatic stick-to-bottom follow and the public `scrollToBottom()` method).
+ */
+/** @type {Story} */
+export const ScrollToBottomAffordance = {
+  render: () => {
+    /** @type {import("../base/chat.js").ChxChat | undefined} */
+    let chatEl;
+    return html`
+      <div
+        class="scroll-to-bottom-story"
+        style="height: 500px; display: flex; flex-direction: column; gap: 0.5rem;"
+        @click=${(/** @type {MouseEvent} */ event) => {
+          if (!(/** @type {HTMLElement} */ (event.target).closest(".scroll-to-bottom-story__scroll-up"))) return;
+          chatEl?.messageListElement?.list?.scrollToIndex(0, { align: "start" });
+        }}
+      >
+        <md-button
+          class="scroll-to-bottom-story__scroll-up"
+          variant="outlined"
+          style="align-self: flex-start;"
+        >
+          Scroll away from bottom
+        </md-button>
+        <chx-chat
+          label="Write your prompt..."
+          .userId=${"me"}
+          .messages=${makeMessages(40)}
+          style="flex: 1; min-height: 0;"
+          ${ref((el) => (chatEl = /** @type {import("../base/chat.js").ChxChat} */ (el)))}
+        >
+          <chx-message-list buffer="150">
+            <chx-scroll-to-bottom-affordance
+              slot="scroll-to-bottom"
+              scroll-behavior="instant"
+            ></chx-scroll-to-bottom-affordance>
+          </chx-message-list>
+          <chx-message-composer>
+            <md-button slot="actions" variant="text">Opus 4.8</md-button>
+            <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+          </chx-message-composer>
+        </chx-chat>
+      </div>
+    `;
+  },
+};
+
 const PAGINATION_TOTAL_HISTORY = 1000;
 const PAGINATION_PAGE_SIZE = 40;
 
@@ -384,6 +442,12 @@ function createPaginatedAdapter() {
  * directly, the same public method, for a way to
  * trigger it without scrolling. Scroll position is preserved across a load — the messages visible
  * before the load stay in place rather than jumping.
+ *
+ * Also demonstrates `chx-message-list`'s `scroll-to-bottom` slot: with 1000 history messages there's
+ * plenty of room to scroll up and away from the bottom — past the list's `buffer` (150px default) —
+ * at which point the slotted `<chx-scroll-to-bottom-affordance slot="scroll-to-bottom">` appears on
+ * its own, no story-level wiring needed (same automatic-eligibility, opt-in-content posture as
+ * `streaming` above). Click it to jump back to the newest message.
  */
 /** @type {Story} */
 export const Pagination = {
@@ -408,13 +472,43 @@ export const Pagination = {
         .adapter=${createPaginatedAdapter()}
         style="flex: 1; min-height: 0;"
       >
-        <chx-message-list></chx-message-list>
+        <chx-message-list>
+          <chx-scroll-to-bottom-affordance slot="scroll-to-bottom"></chx-scroll-to-bottom-affordance>
+        </chx-message-list>
         <chx-message-composer>
           <md-button slot="actions" variant="text">Opus 4.8</md-button>
           <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
         </chx-message-composer>
       </chx-chat>
     </div>
+  `,
+};
+
+/**
+ * `chx-message-list`'s `content-align` attribute — with only a couple of messages inside a tall
+ * container, `"end"` (the default, see `WithMessages` above) pushes them to the bottom like a real
+ * chat; `"start"` here leaves them at the top instead, with the leftover space falling below. Only
+ * affects the idle/under-full case — scroll to the bottom of `WithMessages` and this behaves
+ * identically either way once there's enough content to actually scroll.
+ */
+/** @type {Story} */
+export const ContentAlignStart = {
+  render: () => html`
+    <chx-chat
+      label="Write your prompt..."
+      .userId=${"me"}
+      .messages=${makeMessages(2)}
+      .adapter=${createSlowReplyAdapter()}
+      style="height: 500px;"
+    >
+      <chx-message-list content-align="start">
+        <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
+      </chx-message-list>
+      <chx-message-composer>
+        <md-button slot="actions" variant="text">Opus 4.8</md-button>
+        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+      </chx-message-composer>
+    </chx-chat>
   `,
 };
 

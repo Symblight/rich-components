@@ -207,6 +207,7 @@ function createQueryHandler(items) {
 export const Basic = {
   render: () => html`
     <chx-chat label="Write your prompt...">
+      <chx-message-list></chx-message-list>
       <chx-message-composer>
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
         <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
@@ -238,6 +239,7 @@ export const DynamicSearch = {
       @chx-change=${logCommands}
       @chx-send-message=${logCommands}
     >
+      <chx-message-list></chx-message-list>
       <chx-message-composer>
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
         <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
@@ -284,6 +286,7 @@ function createPickedHandler(templateId, iconMap) {
 export const CustomChipPerOptionIcon = {
   render: () => html`
     <chx-chat label="Write your prompt...">
+      <chx-message-list></chx-message-list>
       <chx-message-composer>
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
         <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
@@ -308,6 +311,7 @@ export const CustomChipPerOptionIcon = {
 export const CustomChip = {
   render: () => html`
     <chx-chat label="Write your prompt...">
+      <chx-message-list></chx-message-list>
       <chx-message-composer>
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
         <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
@@ -330,6 +334,7 @@ export const CustomChip = {
 export const CustomCommands = {
   render: () => html`
     <chx-chat label="Write your prompt...">
+      <chx-message-list></chx-message-list>
       <chx-message-composer>
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
         <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>

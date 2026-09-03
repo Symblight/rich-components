@@ -10,6 +10,9 @@ import styles from "./infinity-scroll.css?inline";
 /**
  * @tag chx-infinity-scroll
  * @summary Virtualized, load-more-aware scroll container. Generic — knows nothing about "messages".
+ *   Exposes a `footer` slot, placed after the viewport inside the same flex column as the spacer —
+ *   so footer content follows `content-align` (sits right under the last item on "start", pinned to
+ *   the bottom with the content on "end") instead of always sitting at the container's own bottom edge.
  */
 @customElement("chx-infinity-scroll")
 export class ChxInfinityScroll extends LitElement {
@@ -21,8 +24,11 @@ export class ChxInfinityScroll extends LitElement {
     estimateItemSize: { attribute: false },
     overscan: { type: Number },
     scrollBehavior: { type: String, attribute: "scroll-behavior" },
+    contentAlign: { type: String, attribute: "content-align", reflect: true },
+    buffer: { type: Number },
     onScrollerKeydown: { attribute: false },
     onScrollerFocusin: { attribute: false },
+    onAwayFromBottomChange: { attribute: false },
   };
 
   /** @type {VirtualizerController<HTMLElement, HTMLElement>} */
@@ -55,6 +61,16 @@ export class ChxInfinityScroll extends LitElement {
     /** Governs `scrollToBottom()` only — see ScrollBehaviorController.scrollToBottom's own doc. @type {"auto" | "smooth"} */
     this.scrollBehavior = "auto";
 
+    /** Reflected — see infinity-scroll.css's `.infinity-scroll__spacer` rule. @type {"start" | "end"} */
+    this.contentAlign = "end";
+
+    /**
+     * Distance (px) from the bottom edge within which the list still counts as "at the bottom" —
+     * governs both the stick-to-bottom auto-follow threshold and the away-from-bottom state fed to
+     * `onAwayFromBottomChange`. @type {number}
+     */
+    this.buffer = 150;
+
     /**
      * Bound directly on `.infinity-scroll__scroller`, inside this shadow root — not left for a
      * consumer to bind on the host element itself via a template `@keydown`. A composed event
@@ -68,6 +84,9 @@ export class ChxInfinityScroll extends LitElement {
 
     /** @type {(event: FocusEvent) => void} */
     this.onScrollerFocusin = () => {};
+
+    /** Fires only on an actual flip of the away-from-bottom boolean. @type {(awayFromBottom: boolean) => void} */
+    this.onAwayFromBottomChange = () => {};
 
     this.#virtualizer = new VirtualizerController(this, {
       count: this.data.length, // a snapshot, not a live getter — confirmed against the
@@ -86,6 +105,8 @@ export class ChxInfinityScroll extends LitElement {
       itemKey: (item, index) => this.itemKey(item, index),
       scrollToIndex: (index, options) => this.scrollToIndex(index, options),
       getScrollBehavior: () => this.scrollBehavior,
+      getBuffer: () => this.buffer,
+      onAwayFromBottomChange: (away) => this.onAwayFromBottomChange(away),
     });
   }
 
@@ -98,15 +119,19 @@ export class ChxInfinityScroll extends LitElement {
    * Forwards to the underlying virtualizer's own `scrollToIndex` — public so a consumer (or
    * `chx-message-list`'s own roving-focus controller) can force an off-screen item into view.
    * @param {number} index
-   * @param {{align?: "auto" | "start" | "center" | "end", behavior?: "auto" | "smooth"}} [options]
+   * @param {{align?: "auto" | "start" | "center" | "end", behavior?: "auto" | "smooth" | "instant"}} [options]
    */
   scrollToIndex(index, options) {
     this.#virtualizer.getVirtualizer().scrollToIndex(index, options);
   }
 
-  /** Scrolls to the last item. See ScrollBehaviorController.scrollToBottom, this just forwards. */
-  scrollToBottom() {
-    this.#scrollBehavior.scrollToBottom();
+  /**
+   * Scrolls to the last item. See ScrollBehaviorController.scrollToBottom, this just forwards.
+   * `behavior`, if passed, overrides the `scrollBehavior` property for this one call.
+   * @param {"auto" | "smooth" | "instant"} [behavior]
+   */
+  scrollToBottom(behavior) {
+    this.#scrollBehavior.scrollToBottom(behavior);
   }
 
   /**
@@ -190,6 +215,7 @@ export class ChxInfinityScroll extends LitElement {
             },
           )}
         </div>
+        <slot name="footer"></slot>
       </div>
     `;
   }

@@ -21,15 +21,16 @@ export const LOAD_MORE_EVENT = "chx-load-more";
  * @implements {ReactiveController}
  */
 export class ScrollBehaviorController {
-  static #STICK_TO_BOTTOM_THRESHOLD_PX = 32;
-
   #host;
   #getScrollElement;
   #getData;
   #itemKey;
   #scrollToIndex;
   #getScrollBehavior;
+  #getBuffer;
+  #onAwayFromBottomChange;
   #stickToBottom = true;
+  #awayFromBottom = false;
   /** @type {unknown[] | undefined} */
   #previousData;
   /** @type {{type: "bottom"} | {type: "anchor", key: string | number, offsetFromBottom: number} | undefined} */
@@ -50,13 +51,25 @@ export class ScrollBehaviorController {
    *   getSentinel: () => Element | null | undefined,
    *   getData: () => unknown[],
    *   itemKey: (item: unknown, index: number) => string | number,
-   *   scrollToIndex: (index: number, options?: {align?: "auto" | "start" | "center" | "end", behavior?: "auto" | "smooth"}) => void,
+   *   scrollToIndex: (index: number, options?: {align?: "auto" | "start" | "center" | "end", behavior?: "auto" | "smooth" | "instant"}) => void,
    *   getScrollBehavior?: () => "auto" | "smooth",
+   *   getBuffer?: () => number,
+   *   onAwayFromBottomChange?: (awayFromBottom: boolean) => void,
    * }} options
    */
   constructor(
     host,
-    { getScrollElement, getViewportElement, getSentinel, getData, itemKey, scrollToIndex, getScrollBehavior },
+    {
+      getScrollElement,
+      getViewportElement,
+      getSentinel,
+      getData,
+      itemKey,
+      scrollToIndex,
+      getScrollBehavior,
+      getBuffer,
+      onAwayFromBottomChange,
+    },
   ) {
     this.#host = host;
     this.#getScrollElement = getScrollElement;
@@ -64,6 +77,8 @@ export class ScrollBehaviorController {
     this.#itemKey = itemKey;
     this.#scrollToIndex = scrollToIndex;
     this.#getScrollBehavior = getScrollBehavior ?? (() => "auto");
+    this.#getBuffer = getBuffer ?? (() => 150);
+    this.#onAwayFromBottomChange = onAwayFromBottomChange ?? (() => {});
     host.addController(this);
 
     // Two load-more triggers: an IntersectionObserver on the sentinel, and a ResizeObserver on the
@@ -82,6 +97,7 @@ export class ScrollBehaviorController {
       onResize: () => {
         this.#applyCorrection();
         this.#checkOverflow();
+        this.#updateAwayFromBottom();
       },
     });
   }
@@ -90,22 +106,31 @@ export class ScrollBehaviorController {
   #isScrolledToBottom() {
     const el = this.#getScrollElement();
     if (!el) return true;
-    return (
-      el.scrollHeight - el.scrollTop - el.clientHeight <=
-      ScrollBehaviorController.#STICK_TO_BOTTOM_THRESHOLD_PX
-    );
+    return el.scrollHeight - el.scrollTop - el.clientHeight <= this.#getBuffer();
+  }
+
+  /**
+   * Recomputes the away-from-bottom boolean (same `buffer` threshold as `#isScrolledToBottom`) and
+   * fires `onAwayFromBottomChange` only on an actual flip — the "jump to latest" affordance's own
+   * visibility gate, latched the same way `TypingController` latches typing state.
+   */
+  #updateAwayFromBottom() {
+    const away = !this.#isScrolledToBottom();
+    if (away === this.#awayFromBottom) return;
+    this.#awayFromBottom = away;
+    this.#onAwayFromBottomChange(away);
   }
 
   /**
    * Public — lets an app force this (e.g. a "jump to latest" button). No-op on an empty list.
-   * `getScrollBehavior` governs this the same way it governs the automatic stick-to-bottom follow
-   * in `#applyCorrection()` below — one setting for "how this list moves to the bottom", however
-   * that move gets triggered.
+   * `behavior`, if passed, overrides `getScrollBehavior` for this one call — the affordance button
+   * carries its own `scrollBehavior` independent of the list's automatic stick-to-bottom follow.
+   * @param {"auto" | "smooth" | "instant"} [behavior]
    */
-  scrollToBottom() {
+  scrollToBottom(behavior) {
     const data = this.#getData();
     if (data.length === 0) return;
-    this.#scrollToIndex(data.length - 1, { align: "end", behavior: this.#getScrollBehavior() });
+    this.#scrollToIndex(data.length - 1, { align: "end", behavior: behavior ?? this.#getScrollBehavior() });
     this.#host.dispatchEvent(new CustomEvent("chx-scroll-to-bottom", { bubbles: true, composed: true }));
   }
 
@@ -182,7 +207,9 @@ export class ScrollBehaviorController {
   /**
    * Cancels any pending correction on real user intent (`wheel`/`pointerdown`/`touchstart`), not on
    * a plain `scroll` event — TanStack Virtual's own internal scroll compensation also dispatches
-   * `scroll`, which is indistinguishable from a user scroll by value alone.
+   * `scroll`, which is indistinguishable from a user scroll by value alone. The plain `scroll`
+   * listener added alongside it is only for `#updateAwayFromBottom` — that one's fine reacting to
+   * TanStack's own compensation scrolls too, since it's just a threshold check, not a cancellation.
    */
   #ensureExternalScrollCancellation() {
     const el = this.#getScrollElement();
@@ -190,11 +217,16 @@ export class ScrollBehaviorController {
     el.addEventListener("wheel", this.#handleUserInteraction, { passive: true });
     el.addEventListener("pointerdown", this.#handleUserInteraction, { passive: true });
     el.addEventListener("touchstart", this.#handleUserInteraction, { passive: true });
+    el.addEventListener("scroll", this.#handleScroll, { passive: true });
     this.#scrollListenerAttachedTo = el;
   }
 
   #handleUserInteraction = () => {
     this.#pendingCorrection = undefined;
+  };
+
+  #handleScroll = () => {
+    this.#updateAwayFromBottom();
   };
 
   /** willUpdate timing — snapshots scroll intent before this pass's new `data` render. */
@@ -225,6 +257,7 @@ export class ScrollBehaviorController {
   }
 
   hostUpdated() {
+    this.#updateAwayFromBottom(); // data/size changes can move the bottom distance without a `scroll` event
     if (!this.#justArmed) return;
     this.#justArmed = false;
     this.#applyCorrection();
@@ -234,6 +267,7 @@ export class ScrollBehaviorController {
     this.#scrollListenerAttachedTo?.removeEventListener("wheel", this.#handleUserInteraction);
     this.#scrollListenerAttachedTo?.removeEventListener("pointerdown", this.#handleUserInteraction);
     this.#scrollListenerAttachedTo?.removeEventListener("touchstart", this.#handleUserInteraction);
+    this.#scrollListenerAttachedTo?.removeEventListener("scroll", this.#handleScroll);
     this.#scrollListenerAttachedTo = undefined;
   }
 }

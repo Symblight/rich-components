@@ -3,6 +3,7 @@ import { expect, fixture, html } from "@open-wc/testing";
 import "./message-list.js";
 import "../typing-indicator/typing-indicator.js";
 import "../streaming-indicator/streaming-indicator.js";
+import "../scroll-to-bottom-affordance/scroll-to-bottom-affordance.js";
 /** @import { ChxMessageList } from "./message-list.js" */
 /** @import { ChxMessage as ChxMessageEl } from "../message/message.js" */
 
@@ -568,6 +569,76 @@ describe("chx-message-list", () => {
       el.streaming = true;
       await el.updateComplete;
       expect(el.hasAttribute("streaming")).to.be.true;
+    });
+  });
+
+  describe("scroll-to-bottom slot", () => {
+    it("renders no scroll-to-bottom slot at all until the list scrolls away from the bottom", async () => {
+      const el = /** @type {ChxMessageList} */ (
+        await fixture(html`
+          <chx-message-list style="height: 400px;">
+            <chx-scroll-to-bottom-affordance slot="scroll-to-bottom"></chx-scroll-to-bottom-affordance>
+          </chx-message-list>
+        `)
+      );
+      expect(el.shadowRoot?.querySelector('slot[name="scroll-to-bottom"]')).to.not.exist;
+    });
+
+    it("renders the slot, as a sibling of chx-infinity-scroll (not forwarded through its footer), once away from bottom", async () => {
+      const el = /** @type {ChxMessageList} */ (
+        await fixture(html`
+          <chx-message-list style="height: 400px;">
+            <chx-scroll-to-bottom-affordance slot="scroll-to-bottom"></chx-scroll-to-bottom-affordance>
+          </chx-message-list>
+        `)
+      );
+      // #awayFromBottom is private, only flipped via chx-infinity-scroll's own
+      // onAwayFromBottomChange callback — invoke it directly rather than driving a real scroll,
+      // the actual scroll->buffer computation is chx-infinity-scroll's own concern, covered by
+      // infinity-scroll.spec.js's "away from bottom" tests
+      infinityScrollOf(el).onAwayFromBottomChange(true);
+      await el.updateComplete;
+
+      const slot = /** @type {HTMLSlotElement | null} */ (
+        el.shadowRoot?.querySelector('slot[name="scroll-to-bottom"]')
+      );
+      expect(slot).to.exist;
+      expect(slot?.parentElement).to.equal(el.shadowRoot); // sibling of chx-infinity-scroll, not inside it
+      const assigned = slot?.assignedElements() ?? [];
+      expect(assigned).to.have.lengthOf(1);
+      expect(assigned[0].tagName.toLowerCase()).to.equal("chx-scroll-to-bottom-affordance");
+    });
+
+    it("scrolling back within buffer hides the slot again", async () => {
+      const el = /** @type {ChxMessageList} */ (
+        await fixture(html`<chx-message-list style="height: 400px;"></chx-message-list>`)
+      );
+      infinityScrollOf(el).onAwayFromBottomChange(true);
+      await el.updateComplete;
+      expect(el.shadowRoot?.querySelector('slot[name="scroll-to-bottom"]')).to.exist;
+
+      infinityScrollOf(el).onAwayFromBottomChange(false);
+      await el.updateComplete;
+      expect(el.shadowRoot?.querySelector('slot[name="scroll-to-bottom"]')).to.not.exist;
+    });
+
+    it("scrollToBottom() forwards the affordance's chx-scroll-to-bottom-click behavior override", async () => {
+      const el = /** @type {ChxMessageList} */ (
+        await fixture(html`<chx-message-list style="height: 400px;"></chx-message-list>`)
+      );
+      /** @type {"auto" | "smooth" | "instant" | undefined} */
+      let calledWith;
+      el.scrollToBottom = (behavior) => {
+        calledWith = behavior;
+      };
+      el.dispatchEvent(
+        new CustomEvent("chx-scroll-to-bottom-click", {
+          detail: { behavior: "instant" },
+          bubbles: true,
+          composed: true,
+        }),
+      );
+      expect(calledWith).to.equal("instant");
     });
   });
 });

@@ -167,6 +167,21 @@ describe("chx-infinity-scroll", () => {
       expect(event?.composed).to.be.true;
     });
 
+    it("scrollToBottom(behavior) overrides the scrollBehavior property for that one call", async () => {
+      const el = await mountInfinityScroll(makeManyItems(50));
+      el.scrollBehavior = "auto";
+      const scroller = /** @type {HTMLElement} */ (el.shadowRoot?.querySelector(".infinity-scroll__scroller"));
+      await waitFor(() => isAtBottom(scroller));
+
+      scroller.scrollTop = 0;
+      scroller.dispatchEvent(new Event("wheel"));
+      scroller.dispatchEvent(new Event("scroll"));
+      await el.updateComplete;
+
+      el.scrollToBottom("instant");
+      await waitFor(() => isAtBottom(scroller));
+    });
+
     it("scrollToBottom() is a no-op on an empty list", async () => {
       const el = await mountInfinityScroll([]);
       let fired = false;
@@ -226,6 +241,47 @@ describe("chx-infinity-scroll", () => {
       await el.updateComplete;
       await new Promise((resolve) => setTimeout(resolve, 100));
       expect(scroller.scrollTop).to.equal(0);
+    });
+  });
+
+  describe("away from bottom", () => {
+    /** @param {number} count */
+    function makeManyItems(count) {
+      return Array.from({ length: count }, (_, i) => ({ id: `i${i}`, label: "" }));
+    }
+
+    it("fires onAwayFromBottomChange(true) once scrolled past buffer, and (false) once back within it", async () => {
+      const el = await mountInfinityScroll(makeManyItems(50));
+      /** @type {boolean[]} */
+      const changes = [];
+      el.onAwayFromBottomChange = (away) => changes.push(away);
+      const scroller = /** @type {HTMLElement} */ (el.shadowRoot?.querySelector(".infinity-scroll__scroller"));
+      await waitFor(() => scroller.scrollHeight > scroller.clientHeight);
+
+      scroller.scrollTop = 0;
+      scroller.dispatchEvent(new Event("scroll"));
+      await waitFor(() => changes.includes(true));
+      expect(changes).to.deep.equal([true]); // latched — one call per actual flip, not per scroll tick
+
+      scroller.scrollTop = scroller.scrollHeight;
+      scroller.dispatchEvent(new Event("scroll"));
+      await waitFor(() => changes.includes(false));
+      expect(changes).to.deep.equal([true, false]);
+    });
+
+    it("buffer governs the threshold — a small scroll-up stays 'at the bottom' under a large buffer", async () => {
+      const el = await mountInfinityScroll(makeManyItems(50));
+      el.buffer = 500;
+      /** @type {boolean[]} */
+      const changes = [];
+      el.onAwayFromBottomChange = (away) => changes.push(away);
+      const scroller = /** @type {HTMLElement} */ (el.shadowRoot?.querySelector(".infinity-scroll__scroller"));
+      await waitFor(() => scroller.scrollHeight > scroller.clientHeight);
+
+      scroller.scrollTop = scroller.scrollHeight - 50; // well within a 500px buffer
+      scroller.dispatchEvent(new Event("scroll"));
+      await new Promise((resolve) => setTimeout(resolve, 100));
+      expect(changes).to.deep.equal([]);
     });
   });
 

@@ -6,8 +6,6 @@
 }
 
 .infinity-scroll__scroller {
-  position: relative; /* containing block for a floating `footer`-slotted affordance
-    (position: absolute in its own :host) — stays pinned to the visible scroll area, not the content */
   display: flex;
   flex-direction: column;
   overflow-y: auto;
@@ -38,7 +36,7 @@
 
 .infinity-scroll__scroller > slot[name="footer"]::slotted(*) {
   padding-top: var(--chx-infinity-scroll-footer-gap, 0.5rem);
-
+}
 
 .infinity-scroll__viewport {
   position: relative;

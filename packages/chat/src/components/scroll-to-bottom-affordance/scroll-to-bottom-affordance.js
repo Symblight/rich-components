@@ -1,11 +1,8 @@
 import { html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
-import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 
 import "@symblight/wc-material/icon-button";
 import "@symblight/wc-material/icon";
-
-import arrowDownward from "@material-design-icons/svg/outlined/arrow_downward.svg?raw";
 
 import styles from "./scroll-to-bottom-affordance.css?inline";
 
@@ -60,10 +57,17 @@ export class ChxScrollToBottomAffordance extends LitElement {
         class="scroll-to-bottom-affordance__button"
         part="button"
         variant="tonal"
+        selected
         aria-label=${this.label}
         @click=${this.#handleClick}
       >
-        <slot><md-icon>${unsafeSVG(arrowDownward)}</md-icon></slot>
+        <slot>
+          <md-icon>
+            <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+              <path d="m20 12-1.41-1.41L13 16.17V4h-2v12.17l-5.58-5.59L4 12l8 8 8-8z"></path>
+            </svg>
+          </md-icon>
+        </slot>
       </md-icon-button>
     `;
   }

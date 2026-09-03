@@ -329,7 +329,7 @@ export class ChxMessageList extends LitElement {
         ${when(this.streaming, () => html`<slot name="streaming" slot="footer"></slot>`)}
         ${when(this.typing, () => html`<slot name="typing" slot="footer"></slot>`)}
       </chx-infinity-scroll>
-      ${when(this.#awayFromBottom, () => html`<slot name="scroll-to-bottom" slot="footer"></slot>`)}
+      ${when(this.#awayFromBottom, () => html`<slot name="scroll-to-bottom"></slot>`)}
     `;
   }
 }

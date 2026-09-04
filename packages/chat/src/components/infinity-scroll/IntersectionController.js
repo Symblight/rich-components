@@ -59,5 +59,7 @@ export class IntersectionController {
 
   hostDisconnected() {
     this.#observer?.disconnect();
+    // reset so a reconnect's hostUpdated() re-observes instead of matching the stale target
+    this.#observedTarget = undefined;
   }
 }

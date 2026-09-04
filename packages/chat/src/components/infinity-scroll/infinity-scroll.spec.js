@@ -21,16 +21,48 @@ function makeManyItems(count) {
   return Array.from({ length: count }, (_, i) => ({ id: `i${i}`, label: `Item ${i}` }));
 }
 
+// Zero-height items (empty <div>s) — sidesteps real virtualization windowing so scroll-*position*
+// tests aren't affected by items falling in/out of the rendered window. Shared by "stick to bottom",
+// "away from bottom", and "end anchor" below; "virtualization"/"pagination" need real heights instead.
+/** @param {number} count */
+function makeEmptyItems(count) {
+  return Array.from({ length: count }, (_, i) => ({ id: `i${i}`, label: "" }));
+}
+
+/** @param {HTMLElement} scroller */
+function isAtBottom(scroller) {
+  return scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= 32;
+}
+
+/**
+ * Waits for `scrollHeight` to stop changing across a few consecutive ticks — the async, item-by-item
+ * settling from estimated to real measured sizes can still be in flight right after `isAtBottom`
+ * first turns true. Doing scrollTop *math* (not just checking position) before this settles races
+ * that settling and lands on stale numbers.
+ * @param {HTMLElement} scroller
+ */
+async function waitForSettled(scroller) {
+  let lastHeight = -1;
+  let stableTicks = 0;
+  await waitFor(() => {
+    if (scroller.scrollHeight === lastHeight) return ++stableTicks >= 3;
+    lastHeight = scroller.scrollHeight;
+    stableTicks = 0;
+    return false;
+  }, 5000);
+}
+
 /**
  * Mounts a bare chx-infinity-scroll with a plain `<div>` renderer — proves infinity-scroll's own
  * contract with no message semantics at all, the same shape chx-message-list wires in production
  * (`.data`/`.itemKey`/`.renderItem`).
  * @param {{id: string, label: string}[]} data
  * @param {string} [style]
+ * @param {"start" | false} [anchorStart]
  */
-async function mountInfinityScroll(data, style = "height: 400px;") {
+async function mountInfinityScroll(data, style = "height: 400px;", anchorStart = "start") {
   const el = /** @type {ChxInfinityScroll} */ (
-    await fixture(html`<chx-infinity-scroll style=${style}></chx-infinity-scroll>`)
+    await fixture(html`<chx-infinity-scroll style=${style} .anchorStart=${anchorStart}></chx-infinity-scroll>`)
   );
   el.itemKey = (item, index) => /** @type {{id: string} | undefined} */ (item)?.id ?? index;
   el.renderItem = (item, index) => {
@@ -114,23 +146,8 @@ describe("chx-infinity-scroll", () => {
   });
 
   describe("stick to bottom", () => {
-    /** @param {HTMLElement} scroller */
-    function isAtBottom(scroller) {
-      return scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= 32;
-    }
-
-    // deliberately empty labels — an empty <div> collapses to zero height, so effectively the
-    // whole list stays within the overscan window regardless of scroll position. These tests care
-    // about scroll *position* behavior, not real virtualization windowing (covered separately by
-    // the "virtualization" describe block above, which needs real, varied heights) — zero-height
-    // items sidestep a real item genuinely falling outside the rendered window and never appearing
-    /** @param {number} count */
-    function makeManyItems(count) {
-      return Array.from({ length: count }, (_, i) => ({ id: `i${i}`, label: "" }));
-    }
-
     it("auto-scrolls to the bottom when a new item arrives while already at the bottom", async () => {
-      const el = await mountInfinityScroll(makeManyItems(50));
+      const el = await mountInfinityScroll(makeEmptyItems(50));
       const scroller = /** @type {HTMLElement} */ (el.shadowRoot?.querySelector(".infinity-scroll__scroller"));
       await waitFor(() => isAtBottom(scroller)); // initial mount sticks to the bottom on its own
 
@@ -146,7 +163,7 @@ describe("chx-infinity-scroll", () => {
     });
 
     it("scrollToBottom() is a public method that scrolls and fires chx-scroll-to-bottom", async () => {
-      const el = await mountInfinityScroll(makeManyItems(50));
+      const el = await mountInfinityScroll(makeEmptyItems(50));
       const scroller = /** @type {HTMLElement} */ (el.shadowRoot?.querySelector(".infinity-scroll__scroller"));
       await waitFor(() => isAtBottom(scroller));
 
@@ -168,7 +185,7 @@ describe("chx-infinity-scroll", () => {
     });
 
     it("scrollToBottom(behavior) overrides the scrollBehavior property for that one call", async () => {
-      const el = await mountInfinityScroll(makeManyItems(50));
+      const el = await mountInfinityScroll(makeEmptyItems(50));
       el.scrollBehavior = "auto";
       const scroller = /** @type {HTMLElement} */ (el.shadowRoot?.querySelector(".infinity-scroll__scroller"));
       await waitFor(() => isAtBottom(scroller));
@@ -191,16 +208,14 @@ describe("chx-infinity-scroll", () => {
     });
 
     it("leaves scroll position untouched when the user had scrolled up before a new item arrives", async () => {
-      const el = await mountInfinityScroll(makeManyItems(50));
+      const el = await mountInfinityScroll(makeEmptyItems(50));
       const scroller = /** @type {HTMLElement} */ (el.shadowRoot?.querySelector(".infinity-scroll__scroller"));
       await waitFor(() => scroller.scrollHeight > scroller.clientHeight);
 
-      // scrollToIndex(0), not a raw scrollTop assignment — jumping straight to an
-      // unmeasured-before item via `scroller.scrollTop = 0` bypasses TanStack Virtual's own
-      // internal scroll-offset tracking, leaving it briefly stale relative to the first real
-      // measurement of every newly-visible item and causing its own resizeItem compensation to
-      // nudge the position afterward — an artifact of that direct DOM bypass, not reproducible
-      // through the real scrollToIndex()/scrollToBottom() API paths a real user's input drives
+      // scrollToIndex(0), not a raw scrollTop assignment — jumping straight to an unmeasured-before
+      // item via `scroller.scrollTop = 0` leaves the virtualizer's own offset tracking briefly stale,
+      // triggering its own compensation afterward — an artifact of the direct DOM bypass, not
+      // reproducible through the real scrollToIndex()/scrollToBottom() API paths a real user drives.
       el.scrollToIndex(0);
       scroller.dispatchEvent(new Event("wheel"));
       scroller.dispatchEvent(new Event("scroll"));
@@ -216,7 +231,7 @@ describe("chx-infinity-scroll", () => {
     });
 
     it("follows growing content the same way, but not once scrolled up", async () => {
-      const el = await mountInfinityScroll(makeManyItems(50));
+      const el = await mountInfinityScroll(makeEmptyItems(50));
       const scroller = /** @type {HTMLElement} */ (el.shadowRoot?.querySelector(".infinity-scroll__scroller"));
       await waitFor(() => isAtBottom(scroller));
 
@@ -245,43 +260,100 @@ describe("chx-infinity-scroll", () => {
   });
 
   describe("away from bottom", () => {
-    /** @param {number} count */
-    function makeManyItems(count) {
-      return Array.from({ length: count }, (_, i) => ({ id: `i${i}`, label: "" }));
-    }
-
-    it("fires onAwayFromBottomChange(true) once scrolled past buffer, and (false) once back within it", async () => {
+    it("fires onAwayFromBottomChange(true) once scrolled past buffer, and (false) once back within it", async function () {
+      this.timeout(8000); // real items settle slower than the zero-height fixture used elsewhere
+      // Real items, not makeEmptyItems: this test scrolls to 0 and expects a real position change —
+      // 50 zero-height items collapse to less than clientHeight once fully settled (see waitForSettled
+      // below), meaning zero actual overflow and a no-op scrollTop=0, same trap as the next test.
       const el = await mountInfinityScroll(makeManyItems(50));
+      const scroller = /** @type {HTMLElement} */ (el.shadowRoot?.querySelector(".infinity-scroll__scroller"));
+      // waits for the list to actually settle, not just to reach the bottom once — items are still
+      // converging from estimated to real measured sizes right after scrollHeight first overflows,
+      // and attaching the listener before that settles would catch its own tail as a spurious change
+      await waitFor(() => isAtBottom(scroller), 5000);
+      await waitForSettled(scroller);
+
       /** @type {boolean[]} */
       const changes = [];
       el.onAwayFromBottomChange = (away) => changes.push(away);
-      const scroller = /** @type {HTMLElement} */ (el.shadowRoot?.querySelector(".infinity-scroll__scroller"));
-      await waitFor(() => scroller.scrollHeight > scroller.clientHeight);
 
       scroller.scrollTop = 0;
       scroller.dispatchEvent(new Event("scroll"));
-      await waitFor(() => changes.includes(true));
+      await waitFor(() => changes.includes(true), 5000);
       expect(changes).to.deep.equal([true]); // latched — one call per actual flip, not per scroll tick
 
       scroller.scrollTop = scroller.scrollHeight;
       scroller.dispatchEvent(new Event("scroll"));
-      await waitFor(() => changes.includes(false));
+      await waitFor(() => changes.includes(false), 5000);
       expect(changes).to.deep.equal([true, false]);
     });
 
-    it("buffer governs the threshold — a small scroll-up stays 'at the bottom' under a large buffer", async () => {
+    it("buffer governs the threshold — a small scroll-up stays 'at the bottom' under a large buffer", async function () {
+      this.timeout(8000); // real (non-empty) items settle slower than the zero-height fixture elsewhere
+      // Real items, not makeEmptyItems: this test does scrollTop *math* (settled - 50), which needs a
+      // stable, genuinely overflowing list — zero-height items can fully converge to no overflow at
+      // all once settled, making "50px up from the bottom" meaningless (there's no bottom to be near).
       const el = await mountInfinityScroll(makeManyItems(50));
       el.buffer = 500;
+      const scroller = /** @type {HTMLElement} */ (el.shadowRoot?.querySelector(".infinity-scroll__scroller"));
+      await waitFor(() => isAtBottom(scroller), 5000);
+      await waitForSettled(scroller); // see the previous test for why
+      const settled = scroller.scrollTop;
+
       /** @type {boolean[]} */
       const changes = [];
       el.onAwayFromBottomChange = (away) => changes.push(away);
-      const scroller = /** @type {HTMLElement} */ (el.shadowRoot?.querySelector(".infinity-scroll__scroller"));
-      await waitFor(() => scroller.scrollHeight > scroller.clientHeight);
 
-      scroller.scrollTop = scroller.scrollHeight - 50; // well within a 500px buffer
+      scroller.scrollTop = settled - 50; // well within a 500px buffer
       scroller.dispatchEvent(new Event("scroll"));
       await new Promise((resolve) => setTimeout(resolve, 100));
       expect(changes).to.deep.equal([]);
+    });
+  });
+
+  // anchorStart: false swaps the virtualizer's own native end-anchor resize compensation for
+  // ScrollBehaviorController's own DOM-only version (see its class doc) — covers that path
+  // specifically; the "stick to bottom" describe above already covers the default (native) path.
+  describe("end anchor (anchorStart: false)", () => {
+    it("stays glued to the bottom as a message streams in", async () => {
+      const el = await mountInfinityScroll(makeEmptyItems(50), "height: 400px;", false);
+      const scroller = /** @type {HTMLElement} */ (el.shadowRoot?.querySelector(".infinity-scroll__scroller"));
+      await waitFor(() => isAtBottom(scroller));
+
+      const growingReply = (/** @type {string} */ label) => [
+        ...el.data.filter((/** @type {any} */ item) => item.id !== "stream-reply"),
+        { id: "stream-reply", label },
+      ];
+
+      el.data = growingReply("Hel");
+      await el.updateComplete;
+      el.data = growingReply("Hello there, this is a growing streamed reply");
+      await el.updateComplete;
+      await waitFor(() => !!el.shadowRoot?.querySelector('[data-item-id="stream-reply"]'));
+      expect(isAtBottom(scroller)).to.be.true;
+    });
+
+    it("does not drag the view back down once scrolled away", async () => {
+      const el = await mountInfinityScroll(makeEmptyItems(50), "height: 400px;", false);
+      const scroller = /** @type {HTMLElement} */ (el.shadowRoot?.querySelector(".infinity-scroll__scroller"));
+      await waitFor(() => isAtBottom(scroller));
+
+      const growingReply = (/** @type {string} */ label) => [
+        ...el.data.filter((/** @type {any} */ item) => item.id !== "stream-reply"),
+        { id: "stream-reply", label },
+      ];
+      el.data = growingReply("Hel");
+      await el.updateComplete;
+
+      scroller.scrollTop = 0;
+      scroller.dispatchEvent(new Event("wheel"));
+      scroller.dispatchEvent(new Event("scroll"));
+      await el.updateComplete;
+
+      el.data = growingReply("Hello there, this is a growing streamed reply that keeps extending");
+      await el.updateComplete;
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      expect(scroller.scrollTop).to.equal(0);
     });
   });
 

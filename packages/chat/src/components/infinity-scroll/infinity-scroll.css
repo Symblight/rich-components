@@ -2,7 +2,6 @@
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
-  overflow-anchor: unset;
 }
 
 .infinity-scroll__scroller {
@@ -11,6 +10,10 @@
   overflow-y: auto;
   flex: 1 1 auto;
   min-height: 0;
+  /* ScrollBehaviorController + the virtualizer own scrollTop — native anchoring would double-correct */
+  overflow-anchor: none;
+  /* hitting the top edge mid-momentum must not chain-scroll the page behind the list */
+  overscroll-behavior: contain;
 }
 
 .infinity-scroll__load-more-sentinel {

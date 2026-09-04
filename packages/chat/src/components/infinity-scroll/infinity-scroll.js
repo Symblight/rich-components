@@ -25,6 +25,7 @@ export class ChxInfinityScroll extends LitElement {
     overscan: { type: Number },
     scrollBehavior: { type: String, attribute: "scroll-behavior" },
     contentAlign: { type: String, attribute: "content-align", reflect: true },
+    anchorStart: { attribute: false },
     buffer: { type: Number },
     onScrollerKeydown: { attribute: false },
     onScrollerFocusin: { attribute: false },
@@ -37,6 +38,8 @@ export class ChxInfinityScroll extends LitElement {
   #scrollElement; // the .infinity-scroll__scroller node — set via a ref() directive in render()
   /** @type {Element | undefined} */
   #viewportElement; // the .infinity-scroll__viewport node — set via a ref() directive in render()
+  /** @type {Element | undefined} */
+  #sentinelElement; // the .infinity-scroll__load-more-sentinel node — set via a ref() directive in render()
   /** @type {ScrollBehaviorController} */
   #scrollBehavior;
 
@@ -65,6 +68,15 @@ export class ChxInfinityScroll extends LitElement {
     this.contentAlign = "end";
 
     /**
+     * `"start"` (default) uses the virtualizer's own native end-anchoring — resize compensation
+     * *and* prepend-anchor preservation. `false` switches both to `ScrollBehaviorController`'s own
+     * DOM-only versions instead. Only resolved once, in `firstUpdated()` — set it before first
+     * render (e.g. right after creating the element); flipping it later has no effect.
+     * @type {"start" | false}
+     */
+    this.anchorStart = "start";
+
+    /**
      * Distance (px) from the bottom edge within which the list still counts as "at the bottom" —
      * governs both the stick-to-bottom auto-follow threshold and the away-from-bottom state fed to
      * `onAwayFromBottomChange`. @type {number}
@@ -89,24 +101,25 @@ export class ChxInfinityScroll extends LitElement {
     this.onAwayFromBottomChange = () => {};
 
     this.#virtualizer = new VirtualizerController(this, {
-      count: this.data.length, // a snapshot, not a live getter — confirmed against the
-      //   installed package's own source; kept in sync on every render() via willUpdate(), below
+      count: this.data.length, // a snapshot, not a live getter — kept in sync via willUpdate(), below
       getScrollElement: () => this.#scrollElement ?? null,
       estimateSize: (index) => this.estimateItemSize(index),
       overscan: this.overscan,
       getItemKey: (index) => this.itemKey(this.data[index], index),
+      anchorTo: "start", // corrected in firstUpdated() once this.anchorStart has its real value — see there
     });
 
     this.#scrollBehavior = new ScrollBehaviorController(this, {
       getScrollElement: () => this.#scrollElement,
       getViewportElement: () => this.#viewportElement,
-      getSentinel: () => this.renderRoot?.querySelector(".infinity-scroll__load-more-sentinel"),
+      getSentinel: () => this.#sentinelElement,
       getData: () => this.data,
       itemKey: (item, index) => this.itemKey(item, index),
       scrollToIndex: (index, options) => this.scrollToIndex(index, options),
       getScrollBehavior: () => this.scrollBehavior,
       getBuffer: () => this.buffer,
       onAwayFromBottomChange: (away) => this.onAwayFromBottomChange(away),
+      getAnchorStart: () => this.anchorStart,
     });
   }
 
@@ -157,6 +170,11 @@ export class ChxInfinityScroll extends LitElement {
     this.#viewportElement = el;
   };
 
+  /** @param {Element | undefined} el */
+  #setSentinelElement = (el) => {
+    this.#sentinelElement = el;
+  };
+
   /**
    * `count`/`overscan` are plain snapshots, not live getters — synced here, right before `render()`
    * reads `getVirtualItems()`/`getTotalSize()`. Guarded so a render pass that changed neither (the
@@ -174,6 +192,23 @@ export class ChxInfinityScroll extends LitElement {
     }
   }
 
+  /**
+   * Reads `this.anchorStart` here, not the constructor — by now a consumer's property/attribute set
+   * has already landed (the constructor runs before any external code gets a chance to touch it).
+   */
+  firstUpdated() {
+    if (this.anchorStart !== "start") {
+      // A second, separate native compensation (above-the-fold resize) still runs regardless of
+      // `anchorTo` — only settable as a direct instance property. No-op it so ScrollBehaviorController
+      // is the sole thing moving scrollTop on a resize in this mode. `anchorTo` itself already
+      // defaults to "start" from the constructor, so nothing else to correct here.
+      this.#virtualizer.getVirtualizer().shouldAdjustScrollPositionOnItemSizeChange = () => false;
+      return;
+    }
+    const virtualizer = this.#virtualizer.getVirtualizer();
+    virtualizer.setOptions({ ...virtualizer.options, anchorTo: "end" });
+  }
+
   render() {
     const virtualizer = this.#virtualizer.getVirtualizer();
     const items = virtualizer.getVirtualItems(); // only the visible+overscan window
@@ -186,7 +221,11 @@ export class ChxInfinityScroll extends LitElement {
         @focusin=${this.onScrollerFocusin}
         ${ref(this.#setScrollElement)}
       >
-        <div class="infinity-scroll__load-more-sentinel" part="load-more-sentinel"></div>
+        <div
+          class="infinity-scroll__load-more-sentinel"
+          part="load-more-sentinel"
+          ${ref(this.#setSentinelElement)}
+        ></div>
         <div class="infinity-scroll__spacer" part="spacer"></div>
         <div
           class="infinity-scroll__viewport"

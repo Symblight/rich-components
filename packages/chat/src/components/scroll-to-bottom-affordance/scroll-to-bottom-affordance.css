@@ -1,0 +1,13 @@
+:host {
+  position: absolute;
+  left: 50%;
+  bottom: var(--chx-scroll-to-bottom-affordance-offset, 0.75rem);
+  transform: translateX(-50%);
+  z-index: 1;
+  display: flex;
+}
+
+.scroll-to-bottom-affordance__button {
+  --md-icon-button-font-size: 1.1rem;
+  box-shadow: var(--chx-scroll-to-bottom-affordance-shadow, 0 2px 6px rgb(0 0 0 / 0.3));
+}

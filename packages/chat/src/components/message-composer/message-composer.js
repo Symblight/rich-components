@@ -4,7 +4,6 @@ import { customElement } from "lit/decorators.js";
 import styles from "./message-composer.css?inline";
 
 import "../textbox/textbox.js";
-import "@symblight/wc-material/button";
 
 /**
  * @tag chx-message-composer
@@ -14,44 +13,59 @@ import "@symblight/wc-material/button";
 export class ChxMessageComposer extends LitElement {
   /** @type {import("lit").PropertyDeclarations} */
   static properties = {
-    value: { type: String, state: true },
-    loading: { type: Boolean, reflect: true, attribute: true },
-    label: { type: String, attribute: true },
-    placeholder: { type: String, attribute: true },
+    loading: { type: Boolean, reflect: true },
+    label: { type: String },
+    placeholder: { type: String },
     dropHint: { type: String, attribute: "drop-hint" },
-    dragging: { type: Boolean, reflect: true, attribute: true },
+    dragging: { type: Boolean, reflect: true },
     commandFields: { attribute: false },
+    pasteThreshold: { type: Number, attribute: "paste-threshold" },
+    renderPasteChip: { attribute: false },
+    pasteHandlers: { attribute: false },
+    messagesEmpty: { type: Boolean },
   };
 
   constructor() {
     super();
 
-    /** @type {String} */
-    this.value = "";
-
-    /** @type {String} */
+    /** @type {string} */
     this.label = "";
 
-    /** @type {String} */
+    /** @type {string} */
     this.placeholder = "Put your text...";
 
-    /** @type {String} Pushed down to chx-textbox — shown while an OS file drag is over the field. */
+    /** @type {string} Pushed down to chx-textbox — shown while an OS file drag is over the field. */
     this.dropHint = "Release to attach";
 
-    /** @type {boolean} Pushed down by chx-chat — see its own DropTargetController. */
+    /** @type {boolean} Pushed down by chx-chat — see chx-chat's DropTargetController. */
     this.dragging = false;
 
-    /** @type {Boolean} */
+    /** @type {boolean} */
     this.loading = false;
 
     /** @type {Map<Element, Element>} Set by chx-chat — see its handleCommandFieldSlotchange. */
     this.commandFields = new Map();
+
+    /** @type {number} Pastes of at least this many lines collapse to a chip; <= 0 disables. */
+    this.pasteThreshold = 205;
+
+    /** @type {((detail: {text: string, lines: number, data: Record<string, unknown>}) => HTMLElement) | undefined} App override for the paste chip's DOM — see chx-textbox. */
+    this.renderPasteChip = undefined;
+
+    /** @type {import("../../types/paste-handler.js").PasteHandler[]} Ordered — first match() to claim a paste wins. See .claude/plans/paste-handlers.spec.md. */
+    this.pasteHandlers = [];
+
+    /** @type {boolean} Pushed down by chx-chat — true while #internalMessages is empty. See pushSuggestionListProperties. */
+    this.messagesEmpty = true;
   }
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
     return [styles];
   }
+
+  /** Stable identity — an inline arrow in the template would dirty chx-textbox on every render. */
+  #getCommandFields = () => this.commandFields;
 
   /**
    * Forwarded from chx-chat's own insertAtCommand — see
@@ -75,14 +89,15 @@ export class ChxMessageComposer extends LitElement {
 
   /**
    * Replaces the textbox's document with plain text — e.g. pre-filling a
-   * draft or a suggested reply. See chx-textbox.setText for why this isn't
+   * draft or a suggested reply. Queued until the first render if called
+   * before the textbox exists. See chx-textbox.setText for why this isn't
    * called `setValue` (FormControlMixin already owns that name one level
    * down, for a different, form-value-only purpose).
    * @param {string} text
    */
   setText(text) {
-    this.textboxElement?.setText(text);
-    this.value = text;
+    if (this.textboxElement) this.textboxElement.setText(text);
+    else this.updateComplete.then(() => this.textboxElement?.setText(text));
   }
 
   /** Focuses the underlying chx-textbox — see chx-textbox.focus for the ProseMirror-side behavior. */
@@ -90,22 +105,15 @@ export class ChxMessageComposer extends LitElement {
     this.textboxElement?.focus();
   }
 
-  /** @returns {HTMLFormElement} */
-  get formElement() {
-    return /** @type {HTMLFormElement} */ (
-      this.renderRoot?.querySelector(".message-composer__form")
-    );
-  }
-
   /** The ProseMirror facade owned by chx-textbox — see chx-textbox's `editor` field. @returns {import("../../editor/Editor.js").Editor | undefined} */
   get editor() {
     return this.textboxElement?.editor;
   }
 
-  /** @returns {import("../textbox/textbox.js").ChxTextbox} */
+  /** @returns {import("../textbox/textbox.js").ChxTextbox | null} */
   get textboxElement() {
-    return /** @type {import("../textbox/textbox.js").ChxTextbox} */ (
-      this.renderRoot?.querySelector("chx-textbox")
+    return /** @type {import("../textbox/textbox.js").ChxTextbox | null} */ (
+      this.renderRoot?.querySelector("chx-textbox") ?? null
     );
   }
 
@@ -114,59 +122,92 @@ export class ChxMessageComposer extends LitElement {
    * on this element, forwarded into chx-textbox's own attachments slot) — a
    * light-DOM query, same reasoning as chx-chat's messageComposerElement, not
    * a renderRoot one like textboxElement above.
-   * @returns {(HTMLElement & {getAttachments: () => File[], clearAttachments: () => void, addFiles: (files: File[], source?: "picker" | "drop" | "api") => void}) | null}
+   * @returns {import("../attachments/attachments.js").ChxAttachments | null}
    */
   get attachmentsElement() {
-    return /** @type {(HTMLElement & {getAttachments: () => File[], clearAttachments: () => void, addFiles: (files: File[], source?: "picker" | "drop" | "api") => void}) | null} */ (
+    return /** @type {import("../attachments/attachments.js").ChxAttachments | null} */ (
       this.querySelector("chx-attachments")
     );
   }
 
-  /** @param {SubmitEvent} event */
-  handleSend(event) {
-    event.preventDefault();
-    if (!this.value || !this.textboxElement) return;
-
-    const value = this.textboxElement.getValue();
-    const html = this.textboxElement.getHTML();
-    const attachments = this.attachmentsElement?.getAttachments() ?? [];
-    const commands = this.textboxElement.getCommands();
-    this.textboxElement.focus();
-    this.clearValue();
-
-    this.dispatchEvent(
-      new CustomEvent("chx-send-message", {
-        detail: { value, html, attachments, commands },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-  }
-
-  /** Resets both the editor's document, any attached files, and `this.value` — they don't sync automatically. */
-  clearValue() {
-    this.textboxElement?.clear();
-    this.attachmentsElement?.clearAttachments();
-    this.value = "";
-
-    this.dispatchEvent(
-      new CustomEvent("input", {
-        detail: { value: this.value },
-        bubbles: true,
-        composed: true,
-      }),
+  /**
+   * chx-suggestion-list is optional, consumer-authored light DOM (slot="suggestions" on this
+   * element) — same status/reasoning as attachmentsElement above.
+   * @returns {(HTMLElement & {alwaysVisible: boolean, hidden: boolean}) | null}
+   */
+  get suggestionListElement() {
+    return /** @type {(HTMLElement & {alwaysVisible: boolean, hidden: boolean}) | null} */ (
+      this.querySelector("chx-suggestion-list")
     );
   }
 
   /**
+   * chx-suggestion-list never decides its own visibility — this is the one place `alwaysVisible`
+   * (declared by the consumer) and `messagesEmpty` (pushed down by chx-chat) actually combine, see
+   * .claude/plans/suggestions.spec.md's "Visibility ownership". Called from `updated()` and from the
+   * suggestions slot's own `slotchange`, same dual-trigger reasoning chx-chat uses one level up —
+   * needed here since either a consumer toggling `always-visible` after the list is already slotted,
+   * or the list being (re)assigned after `messagesEmpty` was already pushed, must re-run this check.
+   */
+  pushSuggestionListProperties() {
+    const list = this.suggestionListElement;
+    if (!list) return;
+    list.hidden = !list.alwaysVisible && !this.messagesEmpty;
+  }
+
+  /**
+   * @param {CustomEvent<{value: string, autoSubmit: boolean}>} event
+   */
+  #handleSuggestionSelect = (event) => {
+    const { value, autoSubmit } = event.detail;
+    this.setText(value);
+    if (autoSubmit) this.textboxElement?.closest("form")?.requestSubmit();
+    else this.textboxElement?.focusEnd();
+  };
+
+  /**
+   * `chx-send-message` is cancelable — a listener calling preventDefault()
+   * vetoes the send and keeps the draft (editor content + attachments) intact.
+   * @param {SubmitEvent} event
+   */
+  #handleSend(event) {
+    event.preventDefault();
+    const textbox = this.textboxElement;
+    if (!textbox) return;
+
+    const value = textbox.getValue();
+    const attachments = this.attachmentsElement?.getAttachments() ?? [];
+    if (!value.trim() && attachments.length === 0) return;
+
+    const html = textbox.getHTML();
+    const commands = textbox.getCommands();
+
+    const allowed = this.dispatchEvent(
+      new CustomEvent("chx-send-message", {
+        detail: { value, html, attachments, commands },
+        bubbles: true,
+        composed: true,
+        cancelable: true,
+      }),
+    );
+    if (!allowed) return;
+
+    textbox.focus();
+    this.clearValue();
+  }
+
+  /** Resets the editor's document and any attached files. */
+  clearValue() {
+    this.textboxElement?.clear();
+    this.attachmentsElement?.clearAttachments();
+  }
+
+  /**
    * Bound to chx-textbox's own chx-textbox-change — fires on every
-   * doc-changing transaction, direct replacement for the old native-`input`-
-   * event handleInput.
+   * doc-changing transaction.
    * @param {CustomEvent<{value: string, html: string}>} event
    */
-  handleTextboxChange = (event) => {
-    this.value = event.detail.value;
-
+  #handleTextboxChange = (event) => {
     this.dispatchEvent(
       new CustomEvent("chx-change", {
         detail: {
@@ -180,9 +221,20 @@ export class ChxMessageComposer extends LitElement {
     );
   };
 
+  /** @param {import("lit").PropertyValues} changedProperties */
+  updated(changedProperties) {
+    super.updated(changedProperties);
+    this.pushSuggestionListProperties();
+  }
+
   render() {
     return html`
-      <form class="message-composer__form" @submit=${this.handleSend}>
+      <slot
+        name="suggestions"
+        @slotchange=${this.pushSuggestionListProperties}
+        @chx-suggestion-select=${this.#handleSuggestionSelect}
+      ></slot>
+      <form class="message-composer__form" @submit=${this.#handleSend}>
         <chx-textbox
           name="message"
           class="message-composer__field"
@@ -190,10 +242,13 @@ export class ChxMessageComposer extends LitElement {
           .label=${this.label}
           .placeholder=${this.placeholder}
           .dropHint=${this.dropHint}
-          .getCommandFields=${() => this.commandFields}
+          .getCommandFields=${this.#getCommandFields}
+          .pasteThreshold=${this.pasteThreshold}
+          .renderPasteChip=${this.renderPasteChip}
+          .pasteHandlers=${this.pasteHandlers}
           ?loading=${this.loading}
           ?dragging=${this.dragging}
-          @chx-textbox-change=${this.handleTextboxChange}
+          @chx-textbox-change=${this.#handleTextboxChange}
         >
           <slot name="leading" slot="leading"></slot>
           <slot name="attachments" slot="attachments"></slot>

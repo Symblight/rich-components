@@ -2,7 +2,8 @@
   display: inline-flex;
   box-sizing: content-box;
   text-wrap: nowrap;
-  vertical-align: middle;
+  /* `middle` uses font x-height, growing the line box past 20px — `top` doesn't. */
+  vertical-align: top;
 
   --md-chip-container-color: var(
     --chx-chip-container-color,

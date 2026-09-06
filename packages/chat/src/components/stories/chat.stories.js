@@ -6,6 +6,8 @@ import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 import stop from "@material-design-icons/svg/outlined/stop.svg?raw";
 import plus from "@material-design-icons/svg/outlined/add.svg?raw";
 import contentCopyIcon from "@material-design-icons/svg/outlined/content_copy.svg?raw";
+import codeIcon from "@material-design-icons/svg/outlined/code.svg?raw";
+import "@symblight/wc-material/button";
 import "@symblight/wc-material/icon";
 import "@symblight/wc-material/icon-button";
 import "@symblight/wc-material/avatar";
@@ -13,6 +15,8 @@ import "@symblight/wc-material/avatar";
 import "../../index.js";
 import "../typing-indicator/typing-indicator.js";
 import "../streaming-indicator/streaming-indicator.js";
+import "../scroll-to-bottom-affordance/scroll-to-bottom-affordance.js";
+import "../chip/chip.js";
 
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
@@ -310,6 +314,63 @@ export const Streaming = {
   `,
 };
 
+/**
+ * Demonstrates `chx-message-list`'s `scroll-to-bottom` slot on its own. Like `streaming` above,
+ * becoming *eligible* to show is fully automatic — `chx-infinity-scroll` tracks scroll position
+ * itself and flips a boolean once the list has scrolled more than `buffer` px away from the bottom
+ * (150px here, the default, set explicitly to make the story's own point) — but what actually
+ * renders still needs `<chx-scroll-to-bottom-affordance slot="scroll-to-bottom">` slotted in
+ * explicitly, same "no default content" posture `typing`/`streaming` have. The button below jumps
+ * the list to the top so the affordance appears without having to scroll manually first; scrolling
+ * back down past the buffer on your own makes it disappear again, same as scrolling up does the
+ * reverse. The affordance's own `scroll-behavior="instant"` governs only the scroll *its* click
+ * triggers — independent of `chx-message-list`'s own `scroll-behavior` (which only governs the
+ * automatic stick-to-bottom follow and the public `scrollToBottom()` method).
+ */
+/** @type {Story} */
+export const ScrollToBottomAffordance = {
+  render: () => {
+    /** @type {import("../base/chat.js").ChxChat | undefined} */
+    let chatEl;
+    return html`
+      <div
+        class="scroll-to-bottom-story"
+        style="height: 500px; display: flex; flex-direction: column; gap: 0.5rem;"
+        @click=${(/** @type {MouseEvent} */ event) => {
+          if (!(/** @type {HTMLElement} */ (event.target).closest(".scroll-to-bottom-story__scroll-up"))) return;
+          chatEl?.messageListElement?.list?.scrollToIndex(0, { align: "start" });
+        }}
+      >
+        <md-button
+          class="scroll-to-bottom-story__scroll-up"
+          variant="outlined"
+          style="align-self: flex-start;"
+        >
+          Scroll away from bottom
+        </md-button>
+        <chx-chat
+          label="Write your prompt..."
+          .userId=${"me"}
+          .messages=${makeMessages(40)}
+          style="flex: 1; min-height: 0;"
+          ${ref((el) => (chatEl = /** @type {import("../base/chat.js").ChxChat} */ (el)))}
+        >
+          <chx-message-list buffer="150">
+            <chx-scroll-to-bottom-affordance
+              slot="scroll-to-bottom"
+              scroll-behavior="instant"
+            ></chx-scroll-to-bottom-affordance>
+          </chx-message-list>
+          <chx-message-composer>
+            <md-button slot="actions" variant="text">Opus 4.8</md-button>
+            <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+          </chx-message-composer>
+        </chx-chat>
+      </div>
+    `;
+  },
+};
+
 const PAGINATION_TOTAL_HISTORY = 1000;
 const PAGINATION_PAGE_SIZE = 40;
 
@@ -384,6 +445,12 @@ function createPaginatedAdapter() {
  * directly, the same public method, for a way to
  * trigger it without scrolling. Scroll position is preserved across a load — the messages visible
  * before the load stay in place rather than jumping.
+ *
+ * Also demonstrates `chx-message-list`'s `scroll-to-bottom` slot: with 1000 history messages there's
+ * plenty of room to scroll up and away from the bottom — past the list's `buffer` (150px default) —
+ * at which point the slotted `<chx-scroll-to-bottom-affordance slot="scroll-to-bottom">` appears on
+ * its own, no story-level wiring needed (same automatic-eligibility, opt-in-content posture as
+ * `streaming` above). Click it to jump back to the newest message.
  */
 /** @type {Story} */
 export const Pagination = {
@@ -408,7 +475,9 @@ export const Pagination = {
         .adapter=${createPaginatedAdapter()}
         style="flex: 1; min-height: 0;"
       >
-        <chx-message-list></chx-message-list>
+        <chx-message-list>
+          <chx-scroll-to-bottom-affordance slot="scroll-to-bottom"></chx-scroll-to-bottom-affordance>
+        </chx-message-list>
         <chx-message-composer>
           <md-button slot="actions" variant="text">Opus 4.8</md-button>
           <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
@@ -418,12 +487,122 @@ export const Pagination = {
   `,
 };
 
+/**
+ * `chx-message-list`'s `content-align` attribute — with only a couple of messages inside a tall
+ * container, `"end"` (the default, see `WithMessages` above) pushes them to the bottom like a real
+ * chat; `"start"` here leaves them at the top instead, with the leftover space falling below. Only
+ * affects the idle/under-full case — scroll to the bottom of `WithMessages` and this behaves
+ * identically either way once there's enough content to actually scroll.
+ */
+/** @type {Story} */
+export const ContentAlignStart = {
+  render: () => html`
+    <chx-chat
+      label="Write your prompt..."
+      .userId=${"me"}
+      .messages=${makeMessages(2)}
+      .adapter=${createSlowReplyAdapter()}
+      style="height: 500px;"
+    >
+      <chx-message-list content-align="start">
+        <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
+      </chx-message-list>
+      <chx-message-composer>
+        <md-button slot="actions" variant="text">Opus 4.8</md-button>
+        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+      </chx-message-composer>
+    </chx-chat>
+  `,
+};
+
 /** chx-message-list is optional — chx-chat lays out just the composer fine without one. */
 /** @type {Story} */
 export const ComposerOnly = {
   render: () => html`
     <chx-chat label="Write your prompt...">
       <chx-message-composer>
+        <md-button slot="actions" variant="text">Opus 4.8</md-button>
+        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+      </chx-message-composer>
+    </chx-chat>
+  `,
+};
+
+/**
+ * A paste of `paste-threshold`+ lines collapses to a "N lines" chip instead of flooding the field
+ * (threshold lowered from the 205 default so it's demoable — paste any 3+-line text). The chip is
+ * an atom: Backspace removes it whole, and on send `value` expands back to the full text. Override
+ * its rendering with the `renderPasteChip` property on chx-message-composer.
+ */
+/** @type {Story} */
+export const PasteChip = {
+  render: () => html`
+    <chx-chat label="Write your prompt...">
+      <chx-message-list></chx-message-list>
+      <chx-message-composer paste-threshold="200">
+        <md-button slot="actions" variant="text">Opus 4.8</md-button>
+        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+      </chx-message-composer>
+    </chx-chat>
+  `,
+};
+
+/**
+ * Proof of concept for a `pasteHandlers` entry (see `.claude/plans/paste-handlers.spec.md`) — an
+ * app-authored handler that recognizes pasted code and renders its own "<language> · N lines" chip
+ * for it, completely separate from the library's plain "N lines" default. Built entirely on public
+ * API: `chx-chip` (the same primitive `chx-paste-chip` itself wraps) plus the `pasteHandlers`
+ * property — nothing here reaches into the library's internals.
+ *
+ * Classification prefers the clipboard's `text/html` (VS Code/GitHub/JetBrains all wrap copied code
+ * in `<pre>`/`<code>`, often with a `language-xxx` class) and falls back to a plain-text heuristic
+ * (a ratio of brace/semicolon/keyword/indentation-shaped lines) for sources that don't carry HTML.
+ */
+function detectLanguageFromHtml(html) {
+  if (!html) return null;
+  const languageMatch = html.match(/class="[^"]*language-([\w-]+)/i);
+  if (languageMatch) return languageMatch[1];
+  return /<pre[\s>]|<code[\s>]/i.test(html) ? "code" : null;
+}
+
+function looksLikeCode(text) {
+  const lines = text.split("\n").filter((line) => line.trim() !== "");
+  if (lines.length < 2) return false;
+  const codeLineShape =
+    /[{};]\s*$|=>|^\s*(import|export|const|let|var|function|class|def|return|if|for|while|public|private|package)\b|^\s{2,}\S/;
+  const matches = lines.filter((line) => codeLineShape.test(line)).length;
+  return matches / lines.length >= 0.4;
+}
+
+/** @type {import("../../types/paste-handler.js").PasteHandler} */
+const codeblockPasteHandler = {
+  id: "codeblock",
+  match({ text, html }) {
+    const language = detectLanguageFromHtml(html);
+    if (language) return { language };
+    return looksLikeCode(text) ? { language: null } : null;
+  },
+  render({ lines, data }) {
+    const chip = document.createElement("chx-chip");
+    const icon = document.createElement("span");
+    icon.slot = "icon";
+    icon.innerHTML = codeIcon;
+    const svg = icon.querySelector("svg");
+    svg?.setAttribute("width", "18");
+    svg?.setAttribute("height", "18");
+    svg?.setAttribute("fill", "currentColor");
+    const label = data.language ? `${data.language} · ${lines} lines` : `Code · ${lines} lines`;
+    chip.append(icon, label);
+    return chip;
+  },
+};
+
+/** @type {Story} */
+export const PasteChipCodeHandler = {
+  render: () => html`
+    <chx-chat label="Write your prompt...">
+      <chx-message-list></chx-message-list>
+      <chx-message-composer paste-threshold="12" .pasteHandlers=${[codeblockPasteHandler]}>
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
         <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>

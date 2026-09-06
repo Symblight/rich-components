@@ -1,0 +1,14 @@
+:host {
+  display: block;
+  --chx-suggestion-list-gap: 0.5rem;
+}
+
+:host([hidden]) {
+  display: none;
+}
+
+.suggestion-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--chx-suggestion-list-gap);
+}

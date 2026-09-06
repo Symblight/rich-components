@@ -15,9 +15,13 @@ import { DOMSerializer } from "prosemirror-model";
  * @returns {string}
  */
 export function toPlainText(doc) {
-  const text = doc.textBetween(0, doc.content.size, "\n", (node) =>
-    node.type.name === "command" ? node.attrs.label : "",
-  );
+  // The explicit callback overrides spec-level `leafText` entirely, so the
+  // `paste` node's full text has to be re-emitted here by hand.
+  const text = doc.textBetween(0, doc.content.size, "\n", (node) => {
+    if (node.type.name === "command") return node.attrs.label;
+    if (node.type.name === "paste") return node.attrs.text;
+    return "";
+  });
   return text.replace(/\n+$/, "");
 }
 

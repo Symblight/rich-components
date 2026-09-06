@@ -1,12 +1,13 @@
 :host {
-  display: flex;
+  display: block;
   box-sizing: border-box;
-  align-items: end;
-  padding-block: 0.5rem;
   --chx-message-composer-gap: 0.5rem;
-  gap: var(--chx-message-composer-gap);
   max-width: 60rem;
   width: 100%;
+}
+
+::slotted([slot="suggestions"]) {
+  margin-block-end: var(--chx-message-composer-gap);
 }
 
 .message-composer__field {
@@ -21,18 +22,17 @@
 }
 
 .message-composer__actions-wrapper {
-  height: 100%;
   display: flex;
-  max-height: 64px;
+  max-height: 4rem;
   align-items: center;
   box-sizing: border-box;
-  gap: 0.5rem;
+  gap: var(--chx-message-composer-gap);
 }
 
 .message-composer__actions {
   display: flex;
   flex: 0 0 auto;
-  min-height: 40px;
+  min-height: 2.5rem;
   align-items: center;
-  gap: 0.4rem;
+  gap: var(--chx-message-composer-gap);
 }

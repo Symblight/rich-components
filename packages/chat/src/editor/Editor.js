@@ -8,6 +8,7 @@ import { createPastePlugin } from "./paste-plugin.js";
 import { createPlaceholderPlugin } from "./placeholder-plugin.js";
 import { createCommandPlugin, commandPluginKey } from "./command-plugin.js";
 import { CommandNodeView } from "./command-node-view.js";
+import { PasteNodeView } from "./paste-node-view.js";
 import { toPlainText, toHTML } from "./serialize.js";
 
 const MAC_PERIOD_SUBSTITUTION = /^\. ?$/;
@@ -44,11 +45,24 @@ export class Editor {
    *   onCommandSelected?: (detail: {target: string | null, id: string | undefined}) => void,
    *   attributes?: Record<string, string>,
    *   placeholder?: string,
+   *   getPasteThreshold?: () => number,
+   *   getRenderPasteChip?: () => (detail: {text: string, lines: number, data: Record<string, unknown>}) => HTMLElement,
+   *   getPasteHandlers?: () => import("../types/paste-handler.js").PasteHandler[],
    * }} options
    */
   constructor(
     mount,
-    { onChange, onSubmit, getCommandFields, onCommandSelected, attributes, placeholder },
+    {
+      onChange,
+      onSubmit,
+      getCommandFields,
+      onCommandSelected,
+      attributes,
+      placeholder,
+      getPasteThreshold,
+      getRenderPasteChip,
+      getPasteHandlers,
+    },
   ) {
     this._onChange = onChange;
     this._onCommandSelected = onCommandSelected;
@@ -58,7 +72,7 @@ export class Editor {
       plugins: [
         createCommandPlugin({ getCommandFields: getCommandFields ?? (() => new Map()) }),
         createKeymap({ onSubmit }),
-        createPastePlugin(),
+        createPastePlugin({ getPasteThreshold, getPasteHandlers }),
         createPlaceholderPlugin(placeholder ?? ""),
       ],
     });
@@ -68,6 +82,9 @@ export class Editor {
       attributes,
       nodeViews: {
         command: (node) => new CommandNodeView(node),
+        ...(getRenderPasteChip && {
+          paste: (node) => new PasteNodeView(node, { getRenderPasteChip, getPasteHandlers }),
+        }),
       },
       dispatchTransaction: (tr) => {
         const oldState = this.view.state;

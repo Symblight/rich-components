@@ -10,9 +10,8 @@
   overflow-y: auto;
   flex: 1 1 auto;
   min-height: 0;
-  /* ScrollBehaviorController + the virtualizer own scrollTop — native anchoring would double-correct */
+  padding-block: 0.4rem;
   overflow-anchor: none;
-  /* hitting the top edge mid-momentum must not chain-scroll the page behind the list */
   overscroll-behavior: contain;
 }
 

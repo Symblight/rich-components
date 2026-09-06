@@ -1,8 +1,11 @@
 import { html } from "lit";
 
+import { ref } from "lit/directives/ref.js";
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 
 import stop from "@material-design-icons/svg/outlined/stop.svg?raw";
+
+import "@symblight/wc-material/button";
 
 import "../../index.js";
 import "../suggestion-list/suggestion-list.js";
@@ -173,4 +176,86 @@ export const ValueDiffersFromLabel = {
       </chx-message-composer>
     </chx-chat>
   `,
+};
+
+/** @type {Record<string, {value: string, label: string}[]>} */
+const SUGGESTION_PACKS = {
+  General: [
+    { value: "Write an email", label: "Write an email" },
+    { value: "Summarize a document", label: "Summarize a document" },
+    { value: "Ask a question", label: "Ask a question" },
+  ],
+  Coding: [
+    { value: "Review this pull request for bugs", label: "Review a pull request" },
+    { value: "Write unit tests for this function", label: "Write unit tests" },
+    { value: "Explain this error message", label: "Explain an error" },
+  ],
+  Writing: [
+    { value: "Brainstorm blog post ideas", label: "Brainstorm ideas" },
+    { value: "Rewrite this paragraph to sound more formal", label: "Make this more formal" },
+  ],
+};
+
+/**
+ * Replaces a chx-suggestion-list's light-DOM children wholesale — chx-suggestion-list has no "set
+ * suggestions" property of its own, it's plain declarative light DOM (same as chx-attachments' own
+ * cards), so a JS-driven set just means building `<chx-suggestion>` elements and swapping them in.
+ * `replaceChildren` fires the default slot's `slotchange` exactly like initial parsing did, which is
+ * what re-clamps the roving-tabindex active index and reapplies `setTabbable` — nothing
+ * suggestions-specific needs to be re-run manually from here.
+ * @param {Element} list
+ * @param {{value: string, label: string}[]} pack
+ */
+function renderSuggestionPack(list, pack) {
+  list.replaceChildren(
+    ...pack.map((s) => {
+      const el = document.createElement("chx-suggestion");
+      el.value = s.value;
+      el.textContent = s.label;
+      return el;
+    }),
+  );
+}
+
+/**
+ * Two things a purely-declarative `<chx-suggestion-list><chx-suggestion>...` markup can't show on
+ * its own: a list that starts empty and fills in once real content is ready (`ref()` below fires a
+ * 900ms "fetch" the moment the list mounts), and swapping the whole set at runtime ("Different
+ * topic" cycles `SUGGESTION_PACKS`). Both go through `renderSuggestionPack` above, and both land the
+ * roving tab stop back on the new first chip — `#handleSlotchange` re-runs on every content change,
+ * not just the first.
+ */
+/** @type {Story} */
+export const Dynamic = {
+  render: () => {
+    const packNames = Object.keys(SUGGESTION_PACKS);
+    let packIndex = 0;
+
+    /** @param {Element | undefined} list */
+    const fetchInitialSuggestions = (list) => {
+      if (!list) return;
+      setTimeout(() => renderSuggestionPack(list, SUGGESTION_PACKS[packNames[packIndex]]), 900);
+    };
+
+    /** @param {Event} event */
+    const cycleTopic = (event) => {
+      const list = /** @type {HTMLElement} */ (event.currentTarget)
+        .closest("chx-message-composer")
+        ?.querySelector("chx-suggestion-list");
+      if (!list) return;
+      packIndex = (packIndex + 1) % packNames.length;
+      renderSuggestionPack(list, SUGGESTION_PACKS[packNames[packIndex]]);
+    };
+
+    return html`
+      <chx-chat label="Write your prompt..." .userId=${"me"} .adapter=${createReplyAdapter()}>
+        <chx-message-list></chx-message-list>
+        <chx-message-composer>
+          <chx-suggestion-list slot="suggestions" ${ref(fetchInitialSuggestions)}></chx-suggestion-list>
+          <md-button slot="actions" variant="text" @click=${cycleTopic}>Different topic</md-button>
+          <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+        </chx-message-composer>
+      </chx-chat>
+    `;
+  },
 };

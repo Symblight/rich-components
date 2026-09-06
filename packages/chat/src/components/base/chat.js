@@ -521,6 +521,7 @@ export class ChxChat extends LitElement {
     composer.loading = this.loading;
     composer.commandFields = this.commandFields;
     composer.dragging = this.dragging;
+    composer.messagesEmpty = this.#internalMessages.length === 0;
   }
 
   /**

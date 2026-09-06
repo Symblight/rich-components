@@ -22,6 +22,7 @@ export class ChxMessageComposer extends LitElement {
     pasteThreshold: { type: Number, attribute: "paste-threshold" },
     renderPasteChip: { attribute: false },
     pasteHandlers: { attribute: false },
+    messagesEmpty: { type: Boolean },
   };
 
   constructor() {
@@ -53,6 +54,9 @@ export class ChxMessageComposer extends LitElement {
 
     /** @type {import("../../types/paste-handler.js").PasteHandler[]} Ordered — first match() to claim a paste wins. See .claude/plans/paste-handlers.spec.md. */
     this.pasteHandlers = [];
+
+    /** @type {boolean} Pushed down by chx-chat — true while #internalMessages is empty. See pushSuggestionListProperties. */
+    this.messagesEmpty = true;
   }
 
   /** @returns {import("lit").CSSResultGroup} */
@@ -127,6 +131,41 @@ export class ChxMessageComposer extends LitElement {
   }
 
   /**
+   * chx-suggestion-list is optional, consumer-authored light DOM (slot="suggestions" on this
+   * element) — same status/reasoning as attachmentsElement above.
+   * @returns {(HTMLElement & {alwaysVisible: boolean, hidden: boolean}) | null}
+   */
+  get suggestionListElement() {
+    return /** @type {(HTMLElement & {alwaysVisible: boolean, hidden: boolean}) | null} */ (
+      this.querySelector("chx-suggestion-list")
+    );
+  }
+
+  /**
+   * chx-suggestion-list never decides its own visibility — this is the one place `alwaysVisible`
+   * (declared by the consumer) and `messagesEmpty` (pushed down by chx-chat) actually combine, see
+   * .claude/plans/suggestions.spec.md's "Visibility ownership". Called from `updated()` and from the
+   * suggestions slot's own `slotchange`, same dual-trigger reasoning chx-chat uses one level up —
+   * needed here since either a consumer toggling `always-visible` after the list is already slotted,
+   * or the list being (re)assigned after `messagesEmpty` was already pushed, must re-run this check.
+   */
+  pushSuggestionListProperties() {
+    const list = this.suggestionListElement;
+    if (!list) return;
+    list.hidden = !list.alwaysVisible && !this.messagesEmpty;
+  }
+
+  /**
+   * @param {CustomEvent<{value: string, autoSubmit: boolean}>} event
+   */
+  #handleSuggestionSelect = (event) => {
+    const { value, autoSubmit } = event.detail;
+    this.setText(value);
+    if (autoSubmit) this.textboxElement?.closest("form")?.requestSubmit();
+    else this.textboxElement?.focusEnd();
+  };
+
+  /**
    * `chx-send-message` is cancelable — a listener calling preventDefault()
    * vetoes the send and keeps the draft (editor content + attachments) intact.
    * @param {SubmitEvent} event
@@ -182,8 +221,19 @@ export class ChxMessageComposer extends LitElement {
     );
   };
 
+  /** @param {import("lit").PropertyValues} changedProperties */
+  updated(changedProperties) {
+    super.updated(changedProperties);
+    this.pushSuggestionListProperties();
+  }
+
   render() {
     return html`
+      <slot
+        name="suggestions"
+        @slotchange=${this.pushSuggestionListProperties}
+        @chx-suggestion-select=${this.#handleSuggestionSelect}
+      ></slot>
       <form class="message-composer__form" @submit=${this.#handleSend}>
         <chx-textbox
           name="message"

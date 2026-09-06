@@ -6,6 +6,10 @@
   width: 100%;
 }
 
+::slotted([slot="suggestions"]) {
+  margin-block-end: var(--chx-message-composer-gap);
+}
+
 .message-composer__field {
   --chx-textbox-shape: 1.6rem;
 }

@@ -11,8 +11,24 @@ import styles from "./textbox.css?inline";
 
 import "@symblight/wc-material/icon-button";
 import "@symblight/wc-material/icon";
+import "../paste-chip/paste-chip.js";
 
 import send from "@material-design-icons/svg/outlined/arrow_upward.svg?raw";
+
+/**
+ * Built-in `paste` chip — used when no pasteHandler claimed the paste (or
+ * the app hasn't set `renderPasteChip`). See chx-paste-chip for the
+ * icon/label slots this leaves to their own defaults.
+ * @param {{text: string, lines: number, data: Record<string, unknown>}} detail
+ * @returns {HTMLElement}
+ */
+function renderDefaultPasteChip({ lines }) {
+  const chip = /** @type {import("../paste-chip/paste-chip.js").ChxPasteChip} */ (
+    document.createElement("chx-paste-chip")
+  );
+  chip.lines = lines;
+  return chip;
+}
 
 /**
  * @tag chx-textbox
@@ -31,6 +47,9 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     dropHint: { type: String, attribute: "drop-hint" },
     dragging: { type: Boolean, reflect: true, attribute: true },
     getCommandFields: { attribute: false },
+    pasteThreshold: { type: Number, attribute: "paste-threshold" },
+    renderPasteChip: { attribute: false },
+    pasteHandlers: { attribute: false },
     loading: { type: Boolean, reflect: true, attribute: true },
     simplified: { state: true },
     value: { state: true },
@@ -59,11 +78,20 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     /** @type {String} Shown in place of the placeholder while an OS file drag is over the field. */
     this.dropHint = "Release to attach";
 
-    /** @type {boolean} Pushed down by chx-message-composer — see its own DropTargetController. */
+    /** @type {boolean} Pushed down by chx-message-composer — driven by chx-chat's DropTargetController. */
     this.dragging = false;
 
     /** @type {() => Map<Element, Element>} */
     this.getCommandFields = () => new Map();
+
+    /** @type {number} Pastes of at least this many lines collapse to a chip; <= 0 disables. */
+    this.pasteThreshold = 205;
+
+    /** @type {((detail: {text: string, lines: number, data: Record<string, unknown>}) => HTMLElement) | undefined} App override for the paste chip's DOM. */
+    this.renderPasteChip = undefined;
+
+    /** @type {import("../../types/paste-handler.js").PasteHandler[]} Ordered — first match() to claim a paste wins. See .claude/plans/paste-handlers.spec.md. */
+    this.pasteHandlers = [];
 
     /** @type {Editor | undefined} */
     this.editor = undefined;
@@ -99,21 +127,35 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
   connectedCallback() {
     super.connectedCallback();
     this.addEventListener("pointerdown", this.handlePointerdown);
+    // Re-entering the DOM after a disconnect (which destroyed the view) — remount.
+    if (this.hasUpdated && !this.editor) this.#mountEditor();
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     this.removeEventListener("pointerdown", this.handlePointerdown);
     this.textboxObserver?.disconnect();
+    this.textboxObserver = undefined;
+    // EditorView holds document-level listeners — without destroy() a discarded
+    // textbox stays reachable from the document and leaks.
+    this.editor?.destroy();
+    this.editor = undefined;
   }
 
   firstUpdated() {
+    this.#mountEditor();
+  }
+
+  #mountEditor() {
     this.editor = new Editor(this.inputElement, {
       onChange: this.handleEditorChange,
       onSubmit: () => this.closest("form")?.requestSubmit(),
       getCommandFields: () => this.getCommandFields(),
       onCommandSelected: this.handleCommandSelected,
       placeholder: this.placeholder,
+      getPasteThreshold: () => this.pasteThreshold,
+      getRenderPasteChip: () => this.renderPasteChip ?? renderDefaultPasteChip,
+      getPasteHandlers: () => this.pasteHandlers,
       attributes: {
         role: "textbox",
         dir: "ltr",
@@ -126,6 +168,8 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
       },
     });
     this.editor.view.dom.setAttribute("aria-label", this.label);
+    // Restore the draft across a disconnect/reconnect (e.g. the element being moved).
+    if (this.value) this.editor.setText(this.value);
 
     this.textboxObserver = new ResizeObserver(this.handleTextboxResize);
     this.textboxObserver.observe(this.editor.view.dom);

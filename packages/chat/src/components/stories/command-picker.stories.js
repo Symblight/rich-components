@@ -14,6 +14,7 @@ import descriptionIcon from "@material-design-icons/svg/outlined/description.svg
 import folderIcon from "@material-design-icons/svg/outlined/folder.svg?raw";
 import javascriptIcon from "@material-design-icons/svg/outlined/javascript.svg?raw";
 import cssIcon from "@material-design-icons/svg/outlined/css.svg?raw";
+import "@symblight/wc-material/button";
 import "@symblight/wc-material/icon";
 import "@symblight/wc-material/menu";
 

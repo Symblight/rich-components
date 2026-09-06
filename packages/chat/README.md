@@ -10,6 +10,7 @@ A Material Design 3 chat web component built with [Lit](https://lit.dev). Framew
 - **Composer** — docked to the bottom: a rich-text field for the outgoing message and a send button alongside it.
 - **Commands** — an opt-in `@`/`/`-style trigger-a-menu-get-a-chip feature for the composer. See [Commands API](./src/docs/commands.md).
 - **Attachments** — an opt-in file-attachment row above the composer, with a file picker button, OS drag-and-drop, and a default card per file. See [Attachments API](./src/docs/attachments.md).
+- **Paste chip** — pasting `paste-threshold`+ lines into the composer collapses the paste into a single "N lines" chip instead of flooding the field; expands back to the full text on send. See [Paste chip API](./src/docs/paste-chip.md).
 
 Built on top of [`@symblight/wc-material`](https://www.npmjs.com/package/@symblight/wc-material) primitives (text-field, button, icon-button, menu, chips).
 
@@ -38,12 +39,15 @@ either yourself.
 
 | Event              | `detail`                                               | Notes                                                                                                                                          |
 | ------------------ | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `chx-send-message` | `{ value: string, html: string, attachments: File[] }` | Fired when the user sends — `value`/`html` are the composed text, `attachments` is whatever's currently in the attachments row at that moment. |
+| `chx-send-message` | `{ value: string, html: string, attachments: File[] }` | Fired when the user sends — `value`/`html` are the composed text, `attachments` is whatever's currently in the attachments row at that moment. Cancelable: `preventDefault()` vetoes the send and keeps the draft intact. |
 | `chx-change`       | `{ value: string, html: string, attachments: File[] }` | Fired on every edit — same shape as `chx-send-message`, kept live while composing.                                                             |
 
 Commands (`chx-command-query`/`chx-command-confirm`/`chx-command-navigate`/`chx-command-selected`)
 and attachments (`chx-attach`/`chx-attachment-remove`) each have their own event contract, covered
-in their respective docs linked above rather than duplicated here.
+in their respective docs linked above rather than duplicated here. The paste chip feature has no
+events of its own — `paste-threshold`/`renderPasteChip` are set on `<chx-message-composer>`
+directly (see [Paste chip API](./src/docs/paste-chip.md)); `chx-send-message`/`chx-change`'s
+`value`/`html` already contain the full pasted text regardless of whether a chip is currently shown.
 
 ## Install
 

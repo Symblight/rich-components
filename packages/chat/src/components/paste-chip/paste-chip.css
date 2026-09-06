@@ -1,0 +1,5 @@
+:host {
+  display: inline-flex;
+  /* `middle` uses font x-height, growing the line box past 20px — `top` doesn't. */
+  vertical-align: top;
+}

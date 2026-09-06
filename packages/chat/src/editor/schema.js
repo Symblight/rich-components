@@ -86,6 +86,59 @@ export const schema = new Schema({
         },
       ],
     },
+    /**
+     * A collapsed long paste — the full text lives in `attrs.text`, only a
+     * chip renders (see paste-plugin.js / paste-node-view.js). `handlerId` +
+     * `data` are `null`/`{}` for the plain "N lines" chip (threshold hit, or
+     * no pasteHandler claimed it); otherwise they name which app-registered
+     * pasteHandler rendered it and carry whatever it returned from its own
+     * `match()`, round-tripped the same way `command`'s `data` bag is —
+     * opaque to the schema, only meaningful to that handler's own `render()`
+     * (see `.claude/plans/paste-handlers.spec.md`).
+     *
+     * `leafText` feeds ProseMirror's own clipboard text/plain serialization,
+     * so copying a selection containing a chip yields the full text;
+     * `toDOM` keeps the full text in clipboard HTML / getHTML() output too.
+     */
+    paste: {
+      inline: true,
+      group: "inline",
+      attrs: {
+        text: { default: "" },
+        lines: { default: 0 },
+        handlerId: { default: null },
+        data: { default: {} },
+      },
+      leafText: (node) => node.attrs.text,
+      toDOM: (node) => [
+        "span",
+        {
+          "data-paste-lines": String(node.attrs.lines),
+          ...(node.attrs.handlerId ? { "data-handler-id": node.attrs.handlerId } : {}),
+          ...Object.fromEntries(
+            Object.entries(node.attrs.data ?? {}).map(([key, value]) => [
+              toDataAttrName(key),
+              value,
+            ]),
+          ),
+        },
+        node.attrs.text,
+      ],
+      parseDOM: [
+        {
+          tag: "span[data-paste-lines]",
+          getAttrs: (dom) => {
+            const { pasteLines, handlerId, ...data } = /** @type {HTMLElement} */ (dom).dataset;
+            return {
+              text: dom.textContent ?? "",
+              lines: Number(pasteLines) || 0,
+              handlerId: handlerId ?? null,
+              data,
+            };
+          },
+        },
+      ],
+    },
   },
   marks: {},
 });

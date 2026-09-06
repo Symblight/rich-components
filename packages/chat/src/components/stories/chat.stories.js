@@ -6,6 +6,8 @@ import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 import stop from "@material-design-icons/svg/outlined/stop.svg?raw";
 import plus from "@material-design-icons/svg/outlined/add.svg?raw";
 import contentCopyIcon from "@material-design-icons/svg/outlined/content_copy.svg?raw";
+import codeIcon from "@material-design-icons/svg/outlined/code.svg?raw";
+import "@symblight/wc-material/button";
 import "@symblight/wc-material/icon";
 import "@symblight/wc-material/icon-button";
 import "@symblight/wc-material/avatar";
@@ -14,6 +16,7 @@ import "../../index.js";
 import "../typing-indicator/typing-indicator.js";
 import "../streaming-indicator/streaming-indicator.js";
 import "../scroll-to-bottom-affordance/scroll-to-bottom-affordance.js";
+import "../chip/chip.js";
 
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
@@ -518,6 +521,88 @@ export const ComposerOnly = {
   render: () => html`
     <chx-chat label="Write your prompt...">
       <chx-message-composer>
+        <md-button slot="actions" variant="text">Opus 4.8</md-button>
+        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+      </chx-message-composer>
+    </chx-chat>
+  `,
+};
+
+/**
+ * A paste of `paste-threshold`+ lines collapses to a "N lines" chip instead of flooding the field
+ * (threshold lowered from the 205 default so it's demoable — paste any 3+-line text). The chip is
+ * an atom: Backspace removes it whole, and on send `value` expands back to the full text. Override
+ * its rendering with the `renderPasteChip` property on chx-message-composer.
+ */
+/** @type {Story} */
+export const PasteChip = {
+  render: () => html`
+    <chx-chat label="Write your prompt...">
+      <chx-message-list></chx-message-list>
+      <chx-message-composer paste-threshold="200">
+        <md-button slot="actions" variant="text">Opus 4.8</md-button>
+        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+      </chx-message-composer>
+    </chx-chat>
+  `,
+};
+
+/**
+ * Proof of concept for a `pasteHandlers` entry (see `.claude/plans/paste-handlers.spec.md`) — an
+ * app-authored handler that recognizes pasted code and renders its own "<language> · N lines" chip
+ * for it, completely separate from the library's plain "N lines" default. Built entirely on public
+ * API: `chx-chip` (the same primitive `chx-paste-chip` itself wraps) plus the `pasteHandlers`
+ * property — nothing here reaches into the library's internals.
+ *
+ * Classification prefers the clipboard's `text/html` (VS Code/GitHub/JetBrains all wrap copied code
+ * in `<pre>`/`<code>`, often with a `language-xxx` class) and falls back to a plain-text heuristic
+ * (a ratio of brace/semicolon/keyword/indentation-shaped lines) for sources that don't carry HTML.
+ */
+function detectLanguageFromHtml(html) {
+  if (!html) return null;
+  const languageMatch = html.match(/class="[^"]*language-([\w-]+)/i);
+  if (languageMatch) return languageMatch[1];
+  return /<pre[\s>]|<code[\s>]/i.test(html) ? "code" : null;
+}
+
+function looksLikeCode(text) {
+  const lines = text.split("\n").filter((line) => line.trim() !== "");
+  if (lines.length < 2) return false;
+  const codeLineShape =
+    /[{};]\s*$|=>|^\s*(import|export|const|let|var|function|class|def|return|if|for|while|public|private|package)\b|^\s{2,}\S/;
+  const matches = lines.filter((line) => codeLineShape.test(line)).length;
+  return matches / lines.length >= 0.4;
+}
+
+/** @type {import("../../types/paste-handler.js").PasteHandler} */
+const codeblockPasteHandler = {
+  id: "codeblock",
+  match({ text, html }) {
+    const language = detectLanguageFromHtml(html);
+    if (language) return { language };
+    return looksLikeCode(text) ? { language: null } : null;
+  },
+  render({ lines, data }) {
+    const chip = document.createElement("chx-chip");
+    const icon = document.createElement("span");
+    icon.slot = "icon";
+    icon.innerHTML = codeIcon;
+    const svg = icon.querySelector("svg");
+    svg?.setAttribute("width", "18");
+    svg?.setAttribute("height", "18");
+    svg?.setAttribute("fill", "currentColor");
+    const label = data.language ? `${data.language} · ${lines} lines` : `Code · ${lines} lines`;
+    chip.append(icon, label);
+    return chip;
+  },
+};
+
+/** @type {Story} */
+export const PasteChipCodeHandler = {
+  render: () => html`
+    <chx-chat label="Write your prompt...">
+      <chx-message-list></chx-message-list>
+      <chx-message-composer paste-threshold="12" .pasteHandlers=${[codeblockPasteHandler]}>
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
         <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>

@@ -43,6 +43,8 @@
  * @typedef {(part: ChxMessagePart, previousElement?: HTMLElement) => HTMLElement} ChxPartRenderer
  */
 
+/** Read-only id -> live-element lookup — chx-chat's commandChipElements/attachmentChipElements, consumed by hydrateCommandChip/hydrateAttachmentPart. @typedef {{get(key: string): HTMLElement | undefined}} ChipElementLookup */
+
 /**
  * @typedef {Object} ChxChatAdapter
  * @property {(input: {cursor?: string, direction?: "forward" | "backward", signal?: AbortSignal}) => Promise<{messages: ChxMessage[], cursor?: string, hasMore?: boolean}>} [listMessages]

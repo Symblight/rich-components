@@ -1,5 +1,7 @@
 import { Schema } from "prosemirror-model";
 
+import { readChipAttrs } from "./command-chip.js";
+
 /**
  * `node.attrs.data`'s keys are JS camelCase (straight off `element.dataset`,
  * which does this conversion natively) — `toDOM`'s attrs object needs real
@@ -57,32 +59,25 @@ export const schema = new Schema({
         icon: { default: null },
         data: { default: {} },
       },
-      toDOM: (node) => [
-        "span",
-        {
-          "data-template-id": node.attrs.templateId,
-          ...Object.fromEntries(
-            Object.entries(node.attrs.data ?? {}).map(([key, value]) => [
-              toDataAttrName(key),
-              value,
-            ]),
-          ),
-        },
-        node.attrs.label,
-      ],
+      toDOM: (node) => {
+        const span = document.createElement("span");
+        span.dataset.templateId = node.attrs.templateId;
+        for (const [key, value] of Object.entries(node.attrs.data ?? {})) {
+          span.dataset[key] = value;
+        }
+        if (node.attrs.icon) {
+          const icon = document.createElement("span");
+          icon.slot = "icon";
+          icon.innerHTML = node.attrs.icon;
+          span.append(icon);
+        }
+        span.append(node.attrs.label);
+        return span;
+      },
       parseDOM: [
         {
           tag: "[data-template-id]",
-          getAttrs: (dom) => {
-            const { templateId, ...data } = /** @type {HTMLElement} */ (dom).dataset;
-            return {
-              templateId,
-              label: dom.textContent,
-              icon:
-                /** @type {HTMLElement} */ (dom).querySelector('[slot="icon"]')?.innerHTML || null,
-              data,
-            };
-          },
+          getAttrs: (dom) => readChipAttrs(/** @type {HTMLElement} */ (dom)),
         },
       ],
     },

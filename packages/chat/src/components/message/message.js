@@ -64,6 +64,9 @@ export class ChxMessage extends LitElement {
         <div class="message__meta" part="meta">
           <slot name="meta"></slot>
         </div>
+        <div class="message__attachments" part="attachments">
+          <slot name="attachments"></slot>
+        </div>
         <span class="message__content" part="content">
           <slot></slot>
         </span>

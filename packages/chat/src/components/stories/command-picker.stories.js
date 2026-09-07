@@ -18,7 +18,7 @@ import "@symblight/wc-material/button";
 import "@symblight/wc-material/icon";
 import "@symblight/wc-material/menu";
 
-import "../../index.js";
+import { readChipAttrs } from "../../index.js";
 import "../command-picker/command-picker.js";
 import "../chip/chip.js";
 
@@ -320,6 +320,92 @@ export const CustomChip = {
       <chx-command-picker
         commandCharacter="@"
         id="picker-custom-chip"
+        slot="command-field"
+        @chx-command-query=${createQueryHandler(FILES)}
+      >
+        <chx-chip slot="chip"
+          ><md-icon slot="icon">${unsafeSVG(descriptionIcon)}</md-icon></chx-chip
+        >
+      </chx-command-picker>
+    </chx-chat>
+  `,
+};
+
+/** Default sent-chip rendering, no override — hydrateCommandChip reproduces it via chx-chat.commandChipElements, falling back to cloning the `<template slot="chip">` below if the id isn't found. */
+/** @type {Story} */
+export const ChipHydratesInMessageList = {
+  render: () => html`
+    <chx-chat label="Write your prompt...">
+      <chx-message-list></chx-message-list>
+      <chx-message-composer>
+        <md-button slot="actions" variant="text">Opus 4.8</md-button>
+        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+      </chx-message-composer>
+      <chx-command-picker
+        commandCharacter="@"
+        id="picker-hydration"
+        slot="command-field"
+        @chx-command-query=${createQueryHandler(FILES)}
+      >
+        <chx-chip slot="chip"
+          ><md-icon slot="icon">${unsafeSVG(descriptionIcon)}</md-icon></chx-chip
+        >
+      </chx-command-picker>
+    </chx-chat>
+  `,
+};
+
+/** A different look means owning rendering via messageElement + readChipAttrs, not hydrateCommandChip. @type {import("../../types/adapter.js").ChxMessageRenderer} */
+function renderMessageWithCustomChip(message, previousElement) {
+  const el = /** @type {any} */ (previousElement ?? document.createElement("chx-message"));
+  el.own = message.own;
+  el.replaceChildren();
+
+  for (const part of message.parts) {
+    if (!part.html) {
+      el.append(document.createTextNode(part.text ?? ""));
+      continue;
+    }
+
+    const span = document.createElement("span");
+    span.innerHTML = part.html;
+    for (const placeholder of span.querySelectorAll("[data-template-id]")) {
+      const attrs = readChipAttrs(/** @type {HTMLElement} */ (placeholder));
+      const badge = document.createElement("span");
+      badge.textContent = `📎 ${attrs.label}`;
+      if (attrs.data.path) badge.title = attrs.data.path;
+      badge.style.cssText = [
+        "display: inline-flex",
+        "align-items: center",
+        "gap: 0.25rem",
+        "padding: 0.125rem 0.625rem",
+        "border-radius: 999px",
+        "background: var(--md-sys-color-tertiary-container)",
+        "color: var(--md-sys-color-on-tertiary-container)",
+        "font-size: 0.8125rem",
+        "cursor: pointer",
+      ].join(";");
+      badge.addEventListener("click", () => alert(`Open ${attrs.data.path ?? attrs.label}`));
+      placeholder.replaceWith(badge);
+    }
+    el.append(span);
+  }
+
+  return el;
+}
+
+/** @type {Story} */
+export const CustomChipViaMessageElement = {
+  render: () => html`
+    <chx-chat label="Write your prompt..." .messageElement=${renderMessageWithCustomChip}>
+      <chx-message-list></chx-message-list>
+      <chx-message-composer>
+        <md-button slot="actions" variant="text">Opus 4.8</md-button>
+        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+      </chx-message-composer>
+      <chx-command-picker
+        commandCharacter="@"
+        id="picker-hydration-custom"
         slot="command-field"
         @chx-command-query=${createQueryHandler(FILES)}
       >

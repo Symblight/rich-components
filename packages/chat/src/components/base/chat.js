@@ -18,7 +18,7 @@ import { finalizeStreamingParts } from "../../stream/streamHelpers.js";
 import styles from "./chat.css?inline";
 
 /** @import { ChxMessage } from "../../types/message.js" */
-/** @import { ChxChatAdapter, ChxMessageRenderer, ChxPartRenderer } from "../../types/adapter.js" */
+/** @import { ChxChatAdapter, ChxMessageRenderer, ChxPartRenderer, ChipElementLookup } from "../../types/adapter.js" */
 
 /**
  * @tag chx-chat
@@ -56,6 +56,18 @@ export class ChxChat extends LitElement {
   #attachmentsProvider;
   /** @type {ContextProvider<typeof commandsContext>} */
   #commandsProvider;
+  /** @type {Map<string, HTMLElement>} */
+  #commandChipElements = new Map();
+  /** @type {ChipElementLookup} */
+  #commandChipElementsView = { get: (key) => this.#commandChipElements.get(key) };
+  // commandId -> the message id it was minted for — lets #pruneChipElements evict a commandId once
+  // its owning message is gone, without re-parsing every message's html to find which ids remain.
+  /** @type {Map<string, string>} */
+  #commandIdOwners = new Map();
+  /** @type {Map<string, HTMLElement>} */
+  #attachmentChipElements = new Map();
+  /** @type {ChipElementLookup} */
+  #attachmentChipElementsView = { get: (key) => this.#attachmentChipElements.get(key) };
 
   constructor() {
     super();
@@ -300,10 +312,29 @@ export class ChxChat extends LitElement {
     return this.#dropTarget.dragging;
   }
 
-  /** @param {CustomEvent<{value: string, html: string, attachments: File[], commands: unknown[]}>} event */
+  /** commandId -> live chip element, for a custom messageElement/partElements to pass to hydrateCommandChip itself. Read-only — use .get(), not .set()/.delete()/.clear(). @returns {ChipElementLookup} */
+  get commandChipElements() {
+    return this.#commandChipElementsView;
+  }
+
+  /** part.id -> live `<chx-attachment>` element, for hydrateAttachmentPart — same use/read-only posture as commandChipElements. @returns {ChipElementLookup} */
+  get attachmentChipElements() {
+    return this.#attachmentChipElementsView;
+  }
+
+  /** @param {CustomEvent<{value: string, html: string, attachments: File[], attachmentElements: HTMLElement[], commands: Array<{label: string, commandId: string | undefined, element: HTMLElement}>}>} event */
   handleSend(event) {
-    const { value, html, attachments = [] } = event.detail;
+    const { value, html, attachments = [], attachmentElements = [], commands = [] } = event.detail;
     const id = crypto.randomUUID();
+    // Must land before #applyMessages below — chx-message-list's first render of this message
+    // reads these maps synchronously, so a chip/card would fall through to its rebuild-fallback
+    // tier instead of reproducing the live element if this ran after.
+    for (const { commandId, element } of commands) {
+      if (commandId) {
+        this.#commandChipElements.set(commandId, element);
+        this.#commandIdOwners.set(commandId, id);
+      }
+    }
     /** @type {ChxMessage} */
     const message = {
       id,
@@ -313,11 +344,12 @@ export class ChxChat extends LitElement {
       status: "sending",
       parts: [
         { id: `${id}-t1`, type: "text", text: value, html },
-        ...attachments.map((attachment, index) => ({
-          id: `${id}-a${index}`,
-          type: "attachment",
-          attachment,
-        })),
+        ...attachments.map((attachment, index) => {
+          const partId = `${id}-a${index}`;
+          const element = attachmentElements[index];
+          if (element) this.#attachmentChipElements.set(partId, element);
+          return { id: partId, type: "attachment", attachment };
+        }),
       ],
     };
 
@@ -334,8 +366,38 @@ export class ChxChat extends LitElement {
     validateMessages(nextMessages);
     this.#internalMessages = nextMessages;
     this.#lastAnnounced = nextMessages;
+    this.#pruneChipElements(nextMessages);
     this.#announce(nextMessages);
     this.requestUpdate();
+  }
+
+  /**
+   * Evicts #commandChipElements/#attachmentChipElements entries whose owning message is gone from
+   * `messages` — otherwise both grow for the life of the page, since nothing else ever removes
+   * from them. Cheap early-out when neither map has ever been touched (the common plain-text-only
+   * case) — otherwise a single pass over `messages`, no HTML re-parsing.
+   * @param {ChxMessage[]} messages
+   */
+  #pruneChipElements(messages) {
+    if (this.#commandIdOwners.size === 0 && this.#attachmentChipElements.size === 0) return;
+
+    const currentMessageIds = new Set(messages.map((message) => message.id));
+    for (const [commandId, ownerId] of this.#commandIdOwners) {
+      if (!currentMessageIds.has(ownerId)) {
+        this.#commandIdOwners.delete(commandId);
+        this.#commandChipElements.delete(commandId);
+      }
+    }
+
+    const currentAttachmentPartIds = new Set();
+    for (const message of messages) {
+      for (const part of message.parts ?? []) {
+        if (part.type === "attachment") currentAttachmentPartIds.add(part.id);
+      }
+    }
+    for (const partId of this.#attachmentChipElements.keys()) {
+      if (!currentAttachmentPartIds.has(partId)) this.#attachmentChipElements.delete(partId);
+    }
   }
 
   /** @param {ChxMessage[]} messages */
@@ -478,7 +540,6 @@ export class ChxChat extends LitElement {
 
   /** @param {CustomEvent<{commands: Array<{label: string, element: HTMLElement}>}>} event */
   handleChange(event) {
-    console.log(event.detail);
     this.#commandsProvider.setValue(event.detail.commands ?? []);
   }
 
@@ -536,6 +597,8 @@ export class ChxChat extends LitElement {
     list.messages = this.#internalMessages;
     list.messageElement = this.messageElement;
     list.partElements = this.partElements;
+    list.commandChipElements = this.#commandChipElementsView;
+    list.attachmentChipElements = this.#attachmentChipElementsView;
     list.typing = this.#typing.isTyping();
     list.streaming = this.#isWaitingForReply();
   }

@@ -198,7 +198,7 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     return this.editor?.getHTML() ?? "";
   }
 
-  /** @returns {Array<{label: string, element: HTMLElement}>} */
+  /** @returns {Array<{label: string, commandId: string | undefined, element: HTMLElement}>} */
   getCommands() {
     return this.editor?.getCommands() ?? [];
   }

@@ -176,15 +176,19 @@ export class ChxMessageComposer extends LitElement {
     if (!textbox) return;
 
     const value = textbox.getValue();
-    const attachments = this.attachmentsElement?.getAttachments() ?? [];
+    // One pass, not two separately-filtered calls — keeps attachments/attachmentElements paired
+    // by construction instead of by coincidence of matching filters.
+    const attachmentEntries = this.attachmentsElement?.getAttachmentEntries() ?? [];
+    const attachments = attachmentEntries.map((entry) => entry.file);
     if (!value.trim() && attachments.length === 0) return;
 
     const html = textbox.getHTML();
     const commands = textbox.getCommands();
+    const attachmentElements = attachmentEntries.map((entry) => entry.element);
 
     const allowed = this.dispatchEvent(
       new CustomEvent("chx-send-message", {
-        detail: { value, html, attachments, commands },
+        detail: { value, html, attachments, attachmentElements, commands },
         bubbles: true,
         composed: true,
         cancelable: true,

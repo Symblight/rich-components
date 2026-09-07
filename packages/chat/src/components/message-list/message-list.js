@@ -6,6 +6,8 @@ import { ref } from "lit/directives/ref.js";
 import "../message/message.js";
 import "../infinity-scroll/infinity-scroll.js";
 import { FocusBehaviorController } from "../../controllers/FocusBehaviorController.js";
+import { hydrateCommandChip } from "../../editor/command-chip.js";
+import { hydrateAttachmentPart } from "../attachment/attachment-card.js";
 import styles from "./message-list.css?inline";
 
 /** @import { ChxMessage, ChxMessagePart } from "../../types/message.js" */
@@ -25,6 +27,8 @@ export class ChxMessageList extends LitElement {
     messages: { attribute: false },
     messageElement: { attribute: false },
     partElements: { attribute: false },
+    commandChipElements: { attribute: false },
+    attachmentChipElements: { attribute: false },
     messagesLabel: { type: String, attribute: "messages-label" },
     scrollBehavior: { type: String, attribute: "scroll-behavior" },
     contentAlign: { type: String, attribute: "content-align" },
@@ -37,7 +41,8 @@ export class ChxMessageList extends LitElement {
   // for the built-in <chx-message> path) — only a matching key means previousElement is safe to
   // hand back to a renderer, so a part/message whose renderer changed never gets a stale element
   #messageElementCache = new Map();
-  // part.id -> { key, element }; key is part.type
+  // part.id -> { key, part, element }; key is part.type, part is the last-rendered part object —
+  // invalidated on either change, so a streamed part update never shows stale content
   #partElementCache = new Map();
   // Rendering now happens inside chx-infinity-scroll's own render pass (via the .renderItem
   // callback below), asynchronously relative to this component's own render() — so unlike a
@@ -86,6 +91,12 @@ export class ChxMessageList extends LitElement {
 
     /** @type {Record<string, ChxPartRenderer> | undefined} */
     this.partElements = undefined;
+
+    /** commandId -> live chip element, from chx-chat — see hydrateCommandChip. @type {import("../../types/adapter.js").ChipElementLookup | undefined} */
+    this.commandChipElements = undefined;
+
+    /** part.id -> live `<chx-attachment>` element, from chx-chat — see hydrateAttachmentPart. @type {import("../../types/adapter.js").ChipElementLookup | undefined} */
+    this.attachmentChipElements = undefined;
 
     /** @type {string} */
     this.messagesLabel = "Messages";
@@ -227,22 +238,60 @@ export class ChxMessageList extends LitElement {
   #renderPart(part) {
     /** @type {Set<string>} */ (this.#pendingRenderedPartIds).add(part.id);
     const renderer = this.partElements?.[part.type];
-    if (!renderer) {
-      // built into el.replaceChildren() below (native DOM, not a Lit `html` template) — a Lit
-      // directive like unsafeHTML() has no meaning there, so the html fallback builds a real node
-      if (part.html) {
-        const span = document.createElement("span");
-        span.innerHTML = part.html;
-        return span;
-      }
-      return part.text ?? "";
+    if (renderer) {
+      const cached = this.#partElementCache.get(part.id);
+      const previous = cached?.key === part.type ? cached.element : undefined;
+      const element = renderer(part, previous);
+      if (part.type === "attachment" && element instanceof HTMLElement) element.slot = "attachments";
+      this.#partElementCache.set(part.id, { key: part.type, part, element });
+      return element;
     }
+    if (part.type === "attachment") return this.#renderAttachmentPart(part);
+    if (!part.html) return part.text ?? "";
+    return this.#renderHtmlPart(part);
+  }
 
+  /**
+   * Strict cache hit for the default (no `partElements[part.type]`) rendering paths below — unlike
+   * the custom-renderer branch above, these have no incremental-update mechanism of their own, so
+   * they only ever reuse a fully-unchanged part's element (same type AND same part reference).
+   * @param {ChxMessagePart} part
+   * @returns {string | HTMLElement | undefined}
+   */
+  #getCachedElement(part) {
     const cached = this.#partElementCache.get(part.id);
-    const previous = cached?.key === part.type ? cached.element : undefined;
-    const element = renderer(part, previous);
-    this.#partElementCache.set(part.id, { key: part.type, element });
+    return cached?.key === part.type && cached.part === part ? cached.element : undefined;
+  }
+
+  /** @param {ChxMessagePart} part @returns {string | HTMLElement} */
+  #renderAttachmentPart(part) {
+    const cached = this.#getCachedElement(part);
+    if (cached !== undefined) return cached;
+
+    const element =
+      hydrateAttachmentPart(part, { attachmentChipElements: this.attachmentChipElements }) ?? "";
+    // renders above .message__content via chx-message's own attachments slot
+    if (element instanceof HTMLElement) element.slot = "attachments";
+    this.#partElementCache.set(part.id, { key: part.type, part, element });
     return element;
+  }
+
+  /** @param {ChxMessagePart} part @returns {HTMLElement} */
+  #renderHtmlPart(part) {
+    const cached = this.#getCachedElement(part);
+    if (cached !== undefined) return /** @type {HTMLElement} */ (cached);
+
+    // built into el.replaceChildren() below (native DOM, not a Lit `html` template) — a Lit
+    // directive like unsafeHTML() has no meaning there, so the html fallback builds a real node
+    const span = document.createElement("span");
+    span.innerHTML = /** @type {string} */ (part.html);
+    for (const placeholder of span.querySelectorAll("[data-template-id]")) {
+      hydrateCommandChip(/** @type {HTMLElement} */ (placeholder), {
+        commandChipElements: this.commandChipElements,
+      });
+    }
+    this.#partElementCache.set(part.id, { key: part.type, part, element: span });
+    return span;
   }
 
   /**

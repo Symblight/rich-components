@@ -8,6 +8,7 @@ import { createPastePlugin } from "./paste-plugin.js";
 import { createPlaceholderPlugin } from "./placeholder-plugin.js";
 import { createCommandPlugin, commandPluginKey } from "./command-plugin.js";
 import { CommandNodeView } from "./command-node-view.js";
+import { readChipAttrs } from "./command-chip.js";
 import { PasteNodeView } from "./paste-node-view.js";
 import { toPlainText, toHTML } from "./serialize.js";
 
@@ -109,22 +110,16 @@ export class Editor {
     return toHTML(this.view.state.doc, schema);
   }
 
-  /**
-   * Each resolved command chip paired with its own live DOM node — not a
-   * clone, the exact element CommandNodeView rendered — so the app can read
-   * back whatever data it stashed on its own chip template (e.g. a
-   * data-path attribute) without the library having to standardize a
-   * "value" concept. `view.nodeDOM(pos)` returns the NodeView's own DOM for
-   * an atom node, which for `command` is exactly that element.
-   * @returns {Array<{label: string, element: HTMLElement}>}
-   */
+  /** Each resolved command chip paired with its own live DOM node (not a clone) and its commandId (minted in resolveCommand). @returns {Array<{label: string, commandId: string | undefined, element: HTMLElement}>} */
   getCommands() {
-    /** @type {Array<{label: string, element: HTMLElement}>} */
+    /** @type {Array<{label: string, commandId: string | undefined, element: HTMLElement}>} */
     const commands = [];
     this.view.state.doc.descendants((node, pos) => {
       if (node.type.name !== "command") return;
       const dom = this.view.nodeDOM(pos);
-      if (dom instanceof HTMLElement) commands.push({ label: node.attrs.label, element: dom });
+      if (dom instanceof HTMLElement) {
+        commands.push({ label: node.attrs.label, commandId: node.attrs.data?.commandId, element: dom });
+      }
     });
     return commands;
   }
@@ -182,28 +177,15 @@ export class Editor {
         : parent.querySelector?.("[data-template-id]");
     if (!(chip instanceof HTMLElement) || !chip.dataset.templateId) return;
 
-    // Direct text-node children only, not chip.textContent — a chip shell
-    // can carry a non-text icon child whose own text would otherwise leak
-    // into the label.
-    const label = [...chip.childNodes]
-      .filter((child) => child.nodeType === Node.TEXT_NODE)
-      .map((child) => child.textContent)
-      .join("")
-      .trim();
+    const { templateId, label, icon, data } = readChipAttrs(chip);
 
-    const icon = chip.querySelector('[slot="icon"]')?.innerHTML || null;
-
-    // Everything else the app set on the chip's dataset (e.g. data-path) —
-    // round-tripped through the doc and reapplied onto the rendered chip by
-    // CommandNodeView, so it's still readable off getCommands()'s `element`
-    // later, without the schema having to name a specific "value" attr.
-    const { templateId: _templateId, ...data } = chip.dataset;
+    const commandId = data.commandId ?? crypto.randomUUID();
 
     const commandNode = this.view.state.schema.nodes.command.create({
-      templateId: chip.dataset.templateId,
+      templateId,
       label,
       icon,
-      data,
+      data: { ...data, commandId },
     });
 
     const { from, to, element } = pluginState;

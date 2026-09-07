@@ -169,11 +169,23 @@ export class ChxAttachments extends LitElement {
     for (const element of this.cardElements) element.remove();
   }
 
-  /** Files currently backing the visible cards — reads `.file` off each, in DOM order. @returns {File[]} */
+  /** file+element pairs for valid cards, in DOM order — the one filtering pass getAttachments()/getAttachmentElements() both derive from, so the two can't drift out of pairing. @returns {Array<{file: File, element: HTMLElement}>} */
+  getAttachmentEntries() {
+    return /** @type {Array<{file: File, element: HTMLElement}>} */ (
+      this.cardElements
+        .map((element) => ({ file: /** @type {{file?: File}} */ (element).file, element }))
+        .filter((entry) => entry.file instanceof File)
+    );
+  }
+
+  /** Files currently backing the visible cards, in DOM order. @returns {File[]} */
   getAttachments() {
-    return this.cardElements
-      .map((element) => /** @type {{file?: File}} */ (element).file)
-      .filter((file) => file instanceof File);
+    return this.getAttachmentEntries().map((entry) => entry.file);
+  }
+
+  /** The live `<chx-attachment>` elements, same order as getAttachments(). @returns {HTMLElement[]} */
+  getAttachmentElements() {
+    return this.getAttachmentEntries().map((entry) => entry.element);
   }
 
   /** @param {Event} event */

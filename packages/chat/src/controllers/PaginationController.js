@@ -13,6 +13,7 @@
  * @implements {ReactiveController}
  */
 export class PaginationController {
+  #host;
   #getAdapter;
   #getMessages;
   #applyMessages;
@@ -34,10 +35,31 @@ export class PaginationController {
    * }} options
    */
   constructor(host, { getAdapter, getMessages, applyMessages }) {
+    this.#host = host;
     this.#getAdapter = getAdapter;
     this.#getMessages = getMessages;
     this.#applyMessages = applyMessages;
     host.addController(this);
+  }
+
+  /** Whether older history can still be loaded — pushed down to `chx-infinity-scroll`'s `hasMore`. */
+  get hasMore() {
+    return this.#hasMore;
+  }
+
+  /** Whether a page fetch is in flight — pushed down to `chx-infinity-scroll`'s `loading`. */
+  get loading() {
+    return this.#loading;
+  }
+
+  /**
+   * Mutates in-flight/exhausted state and re-renders the host so the new values reach the list.
+   * @param {{loading?: boolean, hasMore?: boolean}} state
+   */
+  #setState({ loading, hasMore }) {
+    if (loading !== undefined) this.#loading = loading;
+    if (hasMore !== undefined) this.#hasMore = hasMore;
+    this.#host.requestUpdate();
   }
 
   /**
@@ -60,18 +82,18 @@ export class PaginationController {
   async loadInitial() {
     const adapter = this.#getAdapter();
     if (!adapter?.listMessages || this.#loading) return;
-    this.#loading = true;
+    this.#setState({ loading: true });
     const controller = new AbortController();
     this.#loadInitialAbort = controller;
     try {
       const result = await adapter.listMessages({ signal: controller.signal });
       this.#cursor = result.cursor;
-      this.#hasMore = result.hasMore ?? false;
+      this.#setState({ hasMore: result.hasMore ?? false });
       this.#applyMessages(result.messages);
     } catch (error) {
       if (!controller.signal.aborted) throw error; // a genuine adapter error still propagates
     } finally {
-      this.#loading = false;
+      this.#setState({ loading: false });
     }
   }
 
@@ -79,7 +101,7 @@ export class PaginationController {
   async loadMore() {
     const adapter = this.#getAdapter();
     if (!adapter?.listMessages || this.#loading || !this.#hasMore) return;
-    this.#loading = true;
+    this.#setState({ loading: true });
     const controller = new AbortController();
     this.#loadMoreAbort = controller;
     try {
@@ -89,12 +111,12 @@ export class PaginationController {
         signal: controller.signal,
       });
       this.#cursor = result.cursor;
-      this.#hasMore = result.hasMore ?? false;
+      this.#setState({ hasMore: result.hasMore ?? false });
       this.#applyMessages(this.#mergeHistory(this.#getMessages(), result.messages));
     } catch (error) {
       if (!controller.signal.aborted) throw error; // a genuine adapter error still propagates
     } finally {
-      this.#loading = false;
+      this.#setState({ loading: false });
     }
   }
 

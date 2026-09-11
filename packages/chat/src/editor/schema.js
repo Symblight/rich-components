@@ -32,25 +32,12 @@ export const schema = new Schema({
     },
     text: { group: "inline" },
     /**
-     * A resolved command chip — see src/editor/command-plugin.js and
-     * command-node-view.js. No `content` → already a leaf/atom per
-     * prosemirror-model (isLeaf/isAtom both derive from the absence of a
-     * content match, not from an explicit `atom: true`). `toDOM` is a
-     * plain static placeholder, not a copy of the live chip markup — it
-     * only feeds clipboard copy and Editor.getHTML()'s detached-wrapper
-     * serialization, where a <script> could never execute anyway; the
-     * NodeView (command-node-view.js) is what actually renders the real,
-     * interactive chip by re-cloning the app's own <template>.
-     *
-     * `data` carries whatever extra `data-*` attributes the app set on the
-     * chip it handed to `insertAtCommand` (e.g. `data-path`), captured off
-     * its `dataset` minus `templateId` — arbitrary app data the library
-     * doesn't interpret, just round-trips through the doc and reapplies
-     * onto the rendered chip (see command-node-view.js) so
-     * `Editor.getCommands()`'s `element` can be read back from later,
-     * without the schema having to name a specific "value" concept.
+     * A resolved chip — shared by commands and chip-mode attachments. `toDOM` is a static
+     * placeholder for clipboard/getHTML() only; command-node-view.js's NodeView renders the real
+     * chip by re-cloning the app's `<template>`. `data.chipOwnerId` is how historical `renderChip`
+     * dispatch finds the owning field back.
      */
-    command: {
+    chip: {
       inline: true,
       group: "inline",
       attrs: {

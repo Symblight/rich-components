@@ -4,6 +4,13 @@ import { customElement } from "lit/decorators.js";
 import "@symblight/wc-material/menu";
 import "../chip/chip.js";
 
+import {
+  readChipAttrs,
+  buildChipElement,
+  findChipElement,
+  ensureTemplateId,
+} from "../../editor/command-chip.js";
+
 import styles from "./command-picker.css?inline";
 
 /** @typedef {HTMLElement & { open: boolean, toggle: (options?: {force?: boolean}) => Promise<void>, openAtPoint: (x: number, y: number) => void }} MenuElement */
@@ -27,23 +34,22 @@ export class ChxCommandPicker extends LitElement {
     return [styles];
   }
 
+  // real private fields must be declared here, in the class body — a bare `this.#foo = ...`
+  // inside the constructor alone isn't enough
+  /** @type {string | null} */
+  #activeTarget = null;
+  /** @type {{x: number, y: number} | null} */
+  #anchorPoint = null;
+  /** @type {number} */
+  #highlightedIndex = -1;
+  /** @type {HTMLTemplateElement | null} */
+  #chipTemplate = null;
+
   constructor() {
     super();
 
     /** @type {string} */
     this.commandCharacter = "@";
-
-    /** @type {string | null} */
-    this._activeTarget = null;
-
-    /** @type {{x: number, y: number} | null} */
-    this._anchorPoint = null;
-
-    /** @type {number} */
-    this._highlightedIndex = -1;
-
-    /** @type {HTMLTemplateElement | null} */
-    this._chipTemplate = null;
   }
 
   connectedCallback() {
@@ -93,12 +99,12 @@ export class ChxCommandPicker extends LitElement {
       if (root && !root.hasAttribute("data-template-id")) {
         root.setAttribute("data-template-id", slotted.id);
       }
-      this._chipTemplate = slotted;
+      this.#chipTemplate = slotted;
       return;
     }
 
     // A plain element, not a <template> — adopt it into one, so
-    // CommandNodeView's document.getElementById(templateId) reclone still
+    // ChipNodeView's document.getElementById(templateId) reclone still
     // has a real <template> to find. Lets consumers author the chip shell
     // as an ordinary element (Lit bindings and all — a <template> tag
     // can't contain bindings) instead of hand-writing a <template>.
@@ -111,7 +117,7 @@ export class ChxCommandPicker extends LitElement {
       slotted.remove();
       template.content.append(slotted);
       this.appendChild(template);
-      this._chipTemplate = template;
+      this.#chipTemplate = template;
       return;
     }
 
@@ -121,12 +127,12 @@ export class ChxCommandPicker extends LitElement {
     chip.setAttribute("data-template-id", template.id);
     template.content.append(chip);
     this.appendChild(template);
-    this._chipTemplate = template;
+    this.#chipTemplate = template;
   }
 
   clearOptions() {
     this.menuElement.replaceChildren();
-    this._highlightedIndex = -1;
+    this.#highlightedIndex = -1;
   }
 
   /** @param {Element | DocumentFragment | HTMLTemplateElement} container */
@@ -142,15 +148,15 @@ export class ChxCommandPicker extends LitElement {
     }
 
     this.menuElement.append(...items);
-    if (this._anchorPoint) {
-      this.menuElement.openAtPoint(this._anchorPoint.x, this._anchorPoint.y);
+    if (this.#anchorPoint) {
+      this.menuElement.openAtPoint(this.#anchorPoint.x, this.#anchorPoint.y);
     }
     this.setHighlighted(0);
   }
 
   closeMenu() {
     this.menuElement.toggle({ force: false });
-    this._highlightedIndex = -1;
+    this.#highlightedIndex = -1;
   }
 
   /** @param {number} index */
@@ -160,30 +166,30 @@ export class ChxCommandPicker extends LitElement {
     ]);
     for (const item of items) item.selected = false;
     if (items.length === 0) {
-      this._highlightedIndex = -1;
+      this.#highlightedIndex = -1;
       return;
     }
-    this._highlightedIndex = ((index % items.length) + items.length) % items.length;
-    items[this._highlightedIndex].selected = true;
+    this.#highlightedIndex = ((index % items.length) + items.length) % items.length;
+    items[this.#highlightedIndex].selected = true;
   }
 
   /** @param {Event} event */
   handleQuery = (event) => {
     const { target, value, x, y } = /** @type {CustomEvent} */ (event).detail;
-    this._activeTarget = target;
+    this.#activeTarget = target;
     if (value === null) {
-      this._anchorPoint = null;
+      this.#anchorPoint = null;
       this.closeMenu();
       return;
     }
-    this._anchorPoint = { x, y };
+    this.#anchorPoint = { x, y };
     if (WHITESPACE.test(value)) {
       this.closeMenu();
       return;
     }
     if (this.menuElement.children.length > 0) {
       this.menuElement.openAtPoint(x, y);
-      this.setHighlighted(Math.max(this._highlightedIndex, 0));
+      this.setHighlighted(Math.max(this.#highlightedIndex, 0));
     }
   };
 
@@ -191,7 +197,7 @@ export class ChxCommandPicker extends LitElement {
   handleNavigate = (event) => {
     if (!this.menuElement.open) return;
     const { direction } = /** @type {CustomEvent} */ (event).detail;
-    this.setHighlighted(this._highlightedIndex + (direction === "down" ? 1 : -1));
+    this.setHighlighted(this.#highlightedIndex + (direction === "down" ? 1 : -1));
   };
 
   handleConfirm = () => {
@@ -221,33 +227,65 @@ export class ChxCommandPicker extends LitElement {
 
     this.dispatchEvent(
       new CustomEvent("chx-command-picked", {
-        detail: { target: this._activeTarget, value, setChip },
+        detail: { target: this.#activeTarget, value, setChip },
         bubbles: true,
       }),
     );
 
-    const chatEl =
-      /** @type {(HTMLElement & { insertAtCommand: (target: string | null, node: Node) => void }) | null} */ (
-        this.closest("chx-chat")
+    const composer =
+      /** @type {(HTMLElement & { insertAtRange: (target: string | null, node: Node) => void }) | null | undefined} */ (
+        /** @type {any} */ (this.closest("chx-chat"))?.messageComposerElement
       );
-    if (!chatEl) return;
+    if (!composer) return;
 
     const node = overrideNode ?? this.buildDefaultChip(optionElement, value);
-    chatEl.insertAtCommand(this._activeTarget, node);
+    this.#stampOwner(node);
+    composer.insertAtRange(this.#activeTarget, node);
+  }
+
+  /** Tags the node about to be inserted with this picker's own id, for renderChip to find later. @param {Node} node */
+  #stampOwner(node) {
+    const chip = findChipElement(node);
+    if (chip) chip.dataset.chipOwnerId = this.id;
+  }
+
+  /**
+   * Rebuilds a historical chip — called by chx-chat's renderChip dispatch. Delegates to
+   * `buildChip` so live and historical stay in sync.
+   * @param {HTMLElement} placeholder
+   * @returns {Node | null}
+   */
+  renderChip(placeholder) {
+    const attrs = readChipAttrs(placeholder);
+    if (attrs.data.chipOwnerId !== this.id) return null;
+    return ensureTemplateId(this.buildChip(attrs, "message"), attrs.templateId);
+  }
+
+  /**
+   * Draws a chip — the single place both live resolution and historical hydration draw from.
+   * Override to customize the look everywhere at once. `source` is `"composer"` (live pick) or
+   * `"message"` (historical) in case the two need to differ.
+   * @param {{templateId: string, label: string, icon: string | null, data: Record<string, string>}} attrs
+   * @param {"composer" | "message"} _source
+   * @returns {HTMLElement}
+   */
+  buildChip(attrs, _source) {
+    return buildChipElement(attrs);
   }
 
   /**
    * @param {MenuItemElement} optionElement
    * @param {string} value
-   * @returns {DocumentFragment}
+   * @returns {HTMLElement}
    */
   buildDefaultChip(optionElement, value) {
-    const clone = /** @type {DocumentFragment} */ (
-      /** @type {HTMLTemplateElement} */ (this._chipTemplate).content.cloneNode(true)
-    );
-    const chip = clone.querySelector("[data-template-id]");
-    if (chip) chip.append(optionElement.textContent?.trim() || value);
-    return clone;
+    const attrs = {
+      templateId: /** @type {HTMLTemplateElement} */ (this.#chipTemplate).id,
+      label: optionElement.textContent?.trim() || value,
+      icon: null,
+      data: {},
+    };
+    return ensureTemplateId(this.buildChip(attrs, "composer"), attrs.templateId);
   }
 
   render() {

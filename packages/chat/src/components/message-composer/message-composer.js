@@ -18,7 +18,7 @@ export class ChxMessageComposer extends LitElement {
     placeholder: { type: String },
     dropHint: { type: String, attribute: "drop-hint" },
     dragging: { type: Boolean, reflect: true },
-    commandFields: { attribute: false },
+    triggerFields: { attribute: false },
     pasteThreshold: { type: Number, attribute: "paste-threshold" },
     renderPasteChip: { attribute: false },
     pasteHandlers: { attribute: false },
@@ -43,13 +43,13 @@ export class ChxMessageComposer extends LitElement {
     /** @type {boolean} */
     this.loading = false;
 
-    /** @type {Map<Element, Element>} Set by chx-chat — see its handleCommandFieldSlotchange. */
-    this.commandFields = new Map();
+    /** @type {Map<string, Element>} Set by chx-chat — see its handleCommandFieldSlotchange. */
+    this.triggerFields = new Map();
 
     /** @type {number} Pastes of at least this many lines collapse to a chip; <= 0 disables. */
     this.pasteThreshold = 205;
 
-    /** @type {((detail: {text: string, lines: number, data: Record<string, unknown>}) => HTMLElement) | undefined} App override for the paste chip's DOM — see chx-textbox. */
+    /** @type {((detail: {text: string, lines: number, data: Record<string, unknown>, source: "composer"}) => HTMLElement) | undefined} App override for the paste chip's DOM — see chx-textbox. */
     this.renderPasteChip = undefined;
 
     /** @type {import("../../types/paste-handler.js").PasteHandler[]} Ordered — first match() to claim a paste wins. See .claude/plans/paste-handlers.spec.md. */
@@ -65,16 +65,15 @@ export class ChxMessageComposer extends LitElement {
   }
 
   /** Stable identity — an inline arrow in the template would dirty chx-textbox on every render. */
-  #getCommandFields = () => this.commandFields;
+  #getTriggerFields = () => this.triggerFields;
 
   /**
-   * Forwarded from chx-chat's own insertAtCommand — see
-   * chx-textbox.insertAtCommand for the actual insertion logic.
+   * Replaces the tracked range identified by `target` with `node` — see chx-textbox.insertAtRange.
    * @param {string | null} target
    * @param {Node} node
    */
-  insertAtCommand(target, node) {
-    this.textboxElement?.insertAtCommand(target, node);
+  insertAtRange(target, node) {
+    this.textboxElement?.insertAtRange(target, node);
   }
 
   /**
@@ -131,6 +130,24 @@ export class ChxMessageComposer extends LitElement {
   }
 
   /**
+   * Warns if more than one <chx-attachments> is slotted — attachmentsElement silently uses only
+   * the first.
+   * @param {Event} event
+   */
+  handleAttachmentsSlotchange(event) {
+    const slot = /** @type {HTMLSlotElement} */ (event.target);
+    const assigned = slot
+      .assignedElements({ flatten: true })
+      .filter((element) => element.localName === "chx-attachments");
+    if (assigned.length > 1) {
+      console.error(
+        `[chx-message-composer] only one <chx-attachments> is supported, found ${assigned.length} — only the first is used`,
+        assigned,
+      );
+    }
+  }
+
+  /**
    * chx-suggestion-list is optional, consumer-authored light DOM (slot="suggestions" on this
    * element) — same status/reasoning as attachmentsElement above.
    * @returns {(HTMLElement & {alwaysVisible: boolean, hidden: boolean}) | null}
@@ -176,19 +193,14 @@ export class ChxMessageComposer extends LitElement {
     if (!textbox) return;
 
     const value = textbox.getValue();
-    // One pass, not two separately-filtered calls — keeps attachments/attachmentElements paired
-    // by construction instead of by coincidence of matching filters.
-    const attachmentEntries = this.attachmentsElement?.getAttachmentEntries() ?? [];
-    const attachments = attachmentEntries.map((entry) => entry.file);
+    const attachments = this.attachmentsElement?.getAttachments() ?? [];
     if (!value.trim() && attachments.length === 0) return;
 
     const html = textbox.getHTML();
-    const commands = textbox.getCommands();
-    const attachmentElements = attachmentEntries.map((entry) => entry.element);
 
     const allowed = this.dispatchEvent(
       new CustomEvent("chx-send-message", {
-        detail: { value, html, attachments, attachmentElements, commands },
+        detail: { value, html, attachments },
         bubbles: true,
         composed: true,
         cancelable: true,
@@ -217,7 +229,6 @@ export class ChxMessageComposer extends LitElement {
         detail: {
           ...event.detail,
           attachments: this.attachmentsElement?.getAttachments() ?? [],
-          commands: this.textboxElement?.getCommands() ?? [],
         },
         bubbles: true,
         composed: true,
@@ -246,7 +257,7 @@ export class ChxMessageComposer extends LitElement {
           .label=${this.label}
           .placeholder=${this.placeholder}
           .dropHint=${this.dropHint}
-          .getCommandFields=${this.#getCommandFields}
+          .getTriggerFields=${this.#getTriggerFields}
           .pasteThreshold=${this.pasteThreshold}
           .renderPasteChip=${this.renderPasteChip}
           .pasteHandlers=${this.pasteHandlers}
@@ -255,7 +266,11 @@ export class ChxMessageComposer extends LitElement {
           @chx-textbox-change=${this.#handleTextboxChange}
         >
           <slot name="leading" slot="leading"></slot>
-          <slot name="attachments" slot="attachments"></slot>
+          <slot
+            name="attachments"
+            slot="attachments"
+            @slotchange=${this.handleAttachmentsSlotchange}
+          ></slot>
           <slot name="flight-icon" slot="flight-icon"></slot>
 
           <div slot="trailing" class="message-composer__actions-wrapper">

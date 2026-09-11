@@ -1,4 +1,4 @@
-import { EditorState, Selection, TextSelection } from "prosemirror-state";
+import { EditorState, Selection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { ReplaceStep } from "prosemirror-transform";
 
@@ -7,13 +7,13 @@ import { createKeymap } from "./keymap.js";
 import { createPastePlugin } from "./paste-plugin.js";
 import { createPlaceholderPlugin } from "./placeholder-plugin.js";
 import { createCommandPlugin, commandPluginKey } from "./command-plugin.js";
-import { CommandNodeView } from "./command-node-view.js";
-import { readChipAttrs } from "./command-chip.js";
+import { ChipNodeView } from "./command-node-view.js";
+import { readChipAttrs, findChipElement } from "./command-chip.js";
 import { PasteNodeView } from "./paste-node-view.js";
+import { landCaretAfterNode } from "./land-caret.js";
 import { toPlainText, toHTML } from "./serialize.js";
 
 const MAC_PERIOD_SUBSTITUTION = /^\. ?$/;
-const WHITESPACE = /\s/; // matches U+00A0 too, same as command-plugin.js/command-picker.js
 
 // Undoes macOS/Android's system "double space -> period" text replacement,
 // gated on autocorrect="off" already being set — ported from CodeMirror 6's
@@ -37,17 +37,24 @@ function fixMacDoubleSpacePeriod(tr, oldState, view) {
 
 /** Facade over the composer's editing engine — constructed by chx-textbox (textbox.js) against its own mount div; chx-message-composer never touches ProseMirror directly. */
 export class Editor {
+  // real private fields must be declared here, in the class body — a bare `this.#foo = ...`
+  // inside the constructor alone isn't enough
+  /** @type {(detail: {value: string, html: string}) => void} */
+  #onChange;
+  /** @type {((detail: {target: string | null, id: string | undefined}) => void) | undefined} */
+  #onCommandSelected;
+
   /**
    * @param {HTMLElement} mount
    * @param {{
    *   onChange: (detail: {value: string, html: string}) => void,
    *   onSubmit: () => void,
-   *   getCommandFields?: () => Map<Element, Element>,
+   *   getCommandFields?: () => Map<string, Element>,
    *   onCommandSelected?: (detail: {target: string | null, id: string | undefined}) => void,
    *   attributes?: Record<string, string>,
    *   placeholder?: string,
    *   getPasteThreshold?: () => number,
-   *   getRenderPasteChip?: () => (detail: {text: string, lines: number, data: Record<string, unknown>}) => HTMLElement,
+   *   getRenderPasteChip?: () => (detail: {text: string, lines: number, data: Record<string, unknown>, source: "composer"}) => HTMLElement,
    *   getPasteHandlers?: () => import("../types/paste-handler.js").PasteHandler[],
    * }} options
    */
@@ -65,8 +72,8 @@ export class Editor {
       getPasteHandlers,
     },
   ) {
-    this._onChange = onChange;
-    this._onCommandSelected = onCommandSelected;
+    this.#onChange = onChange;
+    this.#onCommandSelected = onCommandSelected;
 
     const state = EditorState.create({
       schema,
@@ -82,7 +89,7 @@ export class Editor {
       state,
       attributes,
       nodeViews: {
-        command: (node) => new CommandNodeView(node),
+        chip: (node) => new ChipNodeView(node),
         ...(getRenderPasteChip && {
           paste: (node) => new PasteNodeView(node, { getRenderPasteChip, getPasteHandlers }),
         }),
@@ -91,13 +98,13 @@ export class Editor {
         const oldState = this.view.state;
         const fixedTr = fixMacDoubleSpacePeriod(tr, oldState, this.view);
         this.view.updateState(oldState.apply(fixedTr));
-        if (fixedTr.docChanged) this._emitChange();
+        if (fixedTr.docChanged) this.#emitChange();
       },
     });
   }
 
-  _emitChange() {
-    this._onChange?.({ value: this.getValue(), html: this.getHTML() });
+  #emitChange() {
+    this.#onChange?.({ value: this.getValue(), html: this.getHTML() });
   }
 
   /** @returns {string} */
@@ -108,20 +115,6 @@ export class Editor {
   /** @returns {string} */
   getHTML() {
     return toHTML(this.view.state.doc, schema);
-  }
-
-  /** Each resolved command chip paired with its own live DOM node (not a clone) and its commandId (minted in resolveCommand). @returns {Array<{label: string, commandId: string | undefined, element: HTMLElement}>} */
-  getCommands() {
-    /** @type {Array<{label: string, commandId: string | undefined, element: HTMLElement}>} */
-    const commands = [];
-    this.view.state.doc.descendants((node, pos) => {
-      if (node.type.name !== "command") return;
-      const dom = this.view.nodeDOM(pos);
-      if (dom instanceof HTMLElement) {
-        commands.push({ label: node.attrs.label, commandId: node.attrs.data?.commandId, element: dom });
-      }
-    });
-    return commands;
   }
 
   /** @returns {boolean} */
@@ -159,9 +152,7 @@ export class Editor {
   }
 
   /**
-   * Resolves the active command search by replacing it with a `command`
-   * node built from `node`'s `data-template-id` + text content. A stale
-   * `target` is a no-op.
+   * Resolves the active command search into a `chip` node. A stale `target` is a no-op.
    * @param {string | null} target
    * @param {Node} node
    */
@@ -170,18 +161,14 @@ export class Editor {
     if (!pluginState?.active || !target || target !== pluginState.target) return;
     if (pluginState.from === null || pluginState.to === null) return;
 
-    const parent = /** @type {ParentNode} */ (node);
-    const chip =
-      node instanceof Element && node.hasAttribute("data-template-id")
-        ? node
-        : parent.querySelector?.("[data-template-id]");
-    if (!(chip instanceof HTMLElement) || !chip.dataset.templateId) return;
+    const chip = findChipElement(node);
+    if (!chip) return;
 
     const { templateId, label, icon, data } = readChipAttrs(chip);
 
     const commandId = data.commandId ?? crypto.randomUUID();
 
-    const commandNode = this.view.state.schema.nodes.command.create({
+    const commandNode = this.view.state.schema.nodes.chip.create({
       templateId,
       label,
       icon,
@@ -189,24 +176,32 @@ export class Editor {
     });
 
     const { from, to, element } = pluginState;
-    let tr = this.view.state.tr.replaceWith(from, to, commandNode);
-
-    // Land the caret one space after the chip so typing can continue right
-    // away — reuse a space that's already there instead of adding a second
-    // one. U+00A0, not a plain " ": a trailing space at the very end of a
-    // line isn't a caret-reachable position in the browser's own rendering.
-    const afterChip = from + commandNode.nodeSize;
-    const $afterChip = tr.doc.resolve(afterChip);
-    const nextChar = $afterChip.parent.textBetween(
-      $afterChip.parentOffset,
-      Math.min($afterChip.parentOffset + 1, $afterChip.parent.content.size),
+    const tr = landCaretAfterNode(
+      this.view.state.tr.replaceWith(from, to, commandNode),
+      from,
+      commandNode,
     );
-    if (!nextChar || !WHITESPACE.test(nextChar)) tr = tr.insertText(" ", afterChip);
-
-    tr = tr.setSelection(TextSelection.create(tr.doc, afterChip + 1));
     this.view.dispatch(tr);
     this.view.focus();
 
-    this._onCommandSelected?.({ target, id: element?.id });
+    this.#onCommandSelected?.({ target, id: element?.id });
+  }
+
+  /**
+   * Inserts a chip node at the current selection — resolveCommand's counterpart for callers with
+   * no tracked search session to validate against (e.g. attaching a file in chip mode).
+   * @param {Node} node
+   */
+  insertChip(node) {
+    const chip = findChipElement(node);
+    if (!chip) return;
+
+    const { templateId, label, icon, data } = readChipAttrs(chip);
+    const chipNode = this.view.state.schema.nodes.chip.create({ templateId, label, icon, data });
+
+    const { from, to } = this.view.state.selection;
+    const tr = landCaretAfterNode(this.view.state.tr.replaceWith(from, to, chipNode), from, chipNode);
+    this.view.dispatch(tr);
+    this.view.focus();
   }
 }

@@ -2,26 +2,46 @@ import { html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
 
 import "../attachment/attachment.js";
+import "../chip/chip.js";
+
+import {
+  readChipAttrs,
+  buildChipElement,
+  findChipElement,
+  ensureTemplateId,
+  setupChipTemplate,
+} from "../../editor/command-chip.js";
 
 import styles from "./attachments.css?inline";
 
 /**
  * @tag chx-attachments
- * @summary Attachment row rendered above the composer's input. Only
- * `<chx-attachment slot="attachment">` children render as cards.
+ * @summary Attachment row above the input (`mode="header"`), or inline chips in the text (`mode="chip"`).
  */
 @customElement("chx-attachments")
 export class ChxAttachments extends LitElement {
+  /** @type {import("lit").PropertyDeclarations} */
+  static properties = {
+    mode: { type: String, attribute: true },
+  };
+
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
     return [styles];
   }
 
+  // real private fields must be declared here, in the class body — a bare `this.#foo = ...`
+  // inside the constructor alone isn't enough
+  /** @type {HTMLTemplateElement | null} Set by setupCardTemplate — the app's `slot="card"` shell, if any. */
+  #cardTemplate = null;
+  /** @type {HTMLTemplateElement | null} Set by setupChipTemplate (chip mode only) — the app's `slot="chip"` shell, if any. */
+  #chipTemplate = null;
+
   constructor() {
     super();
 
-    /** @type {HTMLTemplateElement | null} Set by setupCardTemplate — the app's `slot="card"` shell, if any. */
-    this._cardTemplate = null;
+    /** Chip mode requires an `id` (see setupChipTemplate). @type {"header" | "chip"} */
+    this.mode = "header";
   }
 
   connectedCallback() {
@@ -42,6 +62,7 @@ export class ChxAttachments extends LitElement {
 
   firstUpdated() {
     this.setupCardTemplate();
+    if (this.mode === "chip") this.#chipTemplate = setupChipTemplate(this);
   }
 
   /** @returns {HTMLInputElement} */
@@ -59,7 +80,7 @@ export class ChxAttachments extends LitElement {
     if (!slotted) return;
 
     if (slotted instanceof HTMLTemplateElement) {
-      this._cardTemplate = slotted;
+      this.#cardTemplate = slotted;
       return;
     }
 
@@ -71,7 +92,7 @@ export class ChxAttachments extends LitElement {
     slotted.remove();
     template.content.append(slotted);
     this.appendChild(template);
-    this._cardTemplate = template;
+    this.#cardTemplate = template;
   }
 
   /** Opens the native file picker via the internal hidden file input. */
@@ -101,18 +122,30 @@ export class ChxAttachments extends LitElement {
     );
     if (!accepted) return;
 
+    if (this.mode === "chip") {
+      for (const file of fileArray) this.insertChip(file);
+      return;
+    }
+
     const fragment = document.createDocumentFragment();
-    for (const file of fileArray) fragment.append(this.buildDefaultCard(file));
+    for (const file of fileArray) {
+      const card = /** @type {HTMLElement} */ (this.buildAttachment(file, "composer"));
+      card.slot = "attachment";
+      fragment.append(card);
+    }
     this.addAttachments(fragment);
   }
 
   /**
+   * Builds a `<chx-attachment>` card from a File — the single place both live attach and
+   * historical re-rendering draw from. Doesn't decide `.slot`/actions, see the two call sites.
    * @param {File} file
-   * @returns {Node}
+   * @param {"composer" | "message"} [_source]
+   * @returns {HTMLElement}
    */
-  buildDefaultCard(file) {
-    if (this._cardTemplate) {
-      const clone = /** @type {DocumentFragment} */ (this._cardTemplate.content.cloneNode(true));
+  buildAttachment(file, _source) {
+    if (this.#cardTemplate) {
+      const clone = /** @type {DocumentFragment} */ (this.#cardTemplate.content.cloneNode(true));
       const root = /** @type {(HTMLElement & {file?: File}) | null} */ (clone.firstElementChild);
       // The template's root must be a <chx-attachment> — only that tag
       // is ever accepted as a card (see the class doc comment) — fall
@@ -121,16 +154,80 @@ export class ChxAttachments extends LitElement {
       // nothing.
       if (root?.localName === "chx-attachment") {
         root.file = file;
-        root.slot = "attachment";
-        return clone;
+        return root;
       }
     }
     const card = /** @type {HTMLElement & {file?: File}} */ (
       document.createElement("chx-attachment")
     );
     card.file = file;
-    card.slot = "attachment";
     return card;
+  }
+
+  /**
+   * Rebuilds an already-sent attachment part's card. Suppresses the actions slot — a remove
+   * button makes no sense on an immutable sent message.
+   * @param {import("../../types/message.js").ChxMessagePart} part
+   * @returns {HTMLElement | undefined}
+   */
+  renderAttachment(part) {
+    if (!(part.attachment instanceof File)) return undefined;
+    const card = this.buildAttachment(part.attachment, "message");
+    const actions = document.createElement("span");
+    actions.slot = "actions";
+    card.append(actions);
+    return card;
+  }
+
+  /**
+   * Inserts a file as an inline chip at the current caret position — chip mode's counterpart to
+   * buildAttachment/addAttachments. No-op if there's no composer/editor to insert into.
+   * @param {File} file
+   */
+  insertChip(file) {
+    const composer = /** @type {(Element & {editor?: import("../../editor/Editor.js").Editor}) | null} */ (
+      this.closest("chx-message-composer")
+    );
+    const editor = composer?.editor;
+    if (!editor) return;
+
+    const attrs = {
+      templateId: /** @type {HTMLTemplateElement} */ (this.#chipTemplate).id,
+      label: file.name,
+      icon: null,
+      data: { fileName: file.name, fileSize: String(file.size), fileType: file.type },
+    };
+    const node = ensureTemplateId(this.buildChip(attrs, "composer"), attrs.templateId);
+    this.#stampOwner(node);
+    editor.insertChip(node);
+  }
+
+  /**
+   * Draws a chip-mode attachment's inline pill — the single place live insertion and historical
+   * hydration both draw from. Override to customize the look everywhere at once.
+   * @param {{templateId: string, label: string, icon: string | null, data: Record<string, string>}} attrs
+   * @param {"composer" | "message"} _source
+   * @returns {HTMLElement}
+   */
+  buildChip(attrs, _source) {
+    return buildChipElement(attrs);
+  }
+
+  /**
+   * Rebuilds a historical chip-mode attachment placeholder — called by chx-chat's renderChip dispatch.
+   * @param {HTMLElement} placeholder
+   * @returns {Node | null}
+   */
+  renderChip(placeholder) {
+    const attrs = readChipAttrs(placeholder);
+    if (attrs.data.chipOwnerId !== this.id) return null;
+    return ensureTemplateId(this.buildChip(attrs, "message"), attrs.templateId);
+  }
+
+  /** Tags the chip about to be inserted with this instance's own id, for renderChip to find later. @param {Node} node */
+  #stampOwner(node) {
+    const chip = findChipElement(node);
+    if (chip) chip.dataset.chipOwnerId = this.id;
   }
 
   /**

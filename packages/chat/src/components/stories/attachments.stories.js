@@ -237,3 +237,50 @@ export const CustomCardShape = {
     </chx-chat>
   `,
 };
+
+/**
+ * Chip mode — attaching a file inserts an inline chip in the text instead of a card. Requires an
+ * `id` on `<chx-attachments>`. Seeded with a historical message already containing a chip-mode
+ * attachment token, to demonstrate historical hydration.
+ */
+/** @type {Story} */
+export const ChipMode = {
+  render: () => html`
+    ${triggerStyles}
+    <chx-chat
+      label="Write your prompt..."
+      .messages=${[
+        {
+          id: "msg-1",
+          authorId: "user-1",
+          own: true,
+          createdAt: Date.now(),
+          status: "sent",
+          parts: [
+            {
+              id: "msg-1-t1",
+              type: "text",
+              text: "Please review report.pdf before the meeting",
+              html:
+                'Please review <span data-template-id="files-chip-template" data-chip-owner-id="files" data-file-name="report.pdf">report.pdf</span>' +
+                " before the meeting",
+            },
+          ],
+        },
+      ]}
+    >
+      <chx-message-list></chx-message-list>
+      <chx-message-composer>
+        <md-icon-button
+          slot="leading"
+          class="attach-trigger"
+          @click=${createOpenHandler("chx-attachments")}
+        >
+          <md-icon>${unsafeSVG(attachFileIcon)}</md-icon>
+        </md-icon-button>
+        <chx-attachments id="files" mode="chip" slot="attachments"></chx-attachments>
+        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+      </chx-message-composer>
+    </chx-chat>
+  `,
+};

@@ -54,7 +54,13 @@ composerEl.renderPasteChip = ({ text, lines }) => {
 };
 ```
 
-`text` is the full pasted string, `lines` its line count. Whatever element you return is mounted
+`text` is the full pasted string, `lines` its line count, `source` is always `"composer"` — a
+collapsed paste unfolds back to its full text once sent (see "Sending" above), so `renderPasteChip`
+only ever runs for the live editing view, never for historical message content. It's there for the
+same call-signature shape as `chx-command-picker.buildChip`/`chx-attachments.buildAttachment`'s own
+`source` argument, not because it varies here today.
+
+Whatever element you return is mounted
 directly into the editor as the chip's DOM — style/behave it however you like, keeping in mind it's
 inert (`contenteditable="false"` is set on it automatically) and, per "Chip behavior" above, only
 removable as a whole unit in this version. Unset `renderPasteChip` (or never set it) to keep the
@@ -100,6 +106,7 @@ composerEl.pasteHandlers = [
     },
     // May run again much later (undo/redo, pasting the editor's own copied HTML back in) —
     // must be reconstructible from {text, lines, data} alone, never from the original event.
+    // Also receives `source` (always "composer" — see "Custom chip rendering" above).
     render({ lines, data }) {
       const chip = document.createElement("chx-chip");
       chip.textContent = `${data.language} · ${lines} lines`;
@@ -140,7 +147,7 @@ story (`src/components/stories/chat.stories.js`).
 | Property/attribute | Type                                              | Default     | Notes                                                                          |
 | ------------------- | -------------------------------------------------- | ----------- | ------------------------------------------------------------------------------ |
 | `paste-threshold`   | `number`                                           | `205`       | Collapse when the pasted line count is `>=` this. `<= 0` disables collapsing. |
-| `renderPasteChip`   | `(detail: {text: string, lines: number, data: Record<string, unknown>}) => HTMLElement` | _(unset)_ | Property only — the fallback renderer when no handler claims the paste, or the threshold was hit. |
+| `renderPasteChip`   | `(detail: {text: string, lines: number, data: Record<string, unknown>, source: "composer"}) => HTMLElement` | _(unset)_ | Property only — the fallback renderer when no handler claims the paste, or the threshold was hit. `source` is always `"composer"` — see "Custom chip rendering". |
 | `pasteHandlers`     | `Array<{id: string, match: (ctx) => object \| null, render: (ctx) => HTMLElement}>` | `[]` | Property only — see "Custom paste handlers". Ordered; first `match()` to return non-null wins. |
 
 ## Not yet supported

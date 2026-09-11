@@ -6,8 +6,6 @@ import { ref } from "lit/directives/ref.js";
 import "../message/message.js";
 import "../infinity-scroll/infinity-scroll.js";
 import { FocusBehaviorController } from "../../controllers/FocusBehaviorController.js";
-import { hydrateCommandChip } from "../../editor/command-chip.js";
-import { hydrateAttachmentPart } from "../attachment/attachment-card.js";
 import styles from "./message-list.css?inline";
 
 /** @import { ChxMessage, ChxMessagePart } from "../../types/message.js" */
@@ -27,8 +25,8 @@ export class ChxMessageList extends LitElement {
     messages: { attribute: false },
     messageElement: { attribute: false },
     partElements: { attribute: false },
-    commandChipElements: { attribute: false },
-    attachmentChipElements: { attribute: false },
+    renderChip: { attribute: false },
+    renderAttachment: { attribute: false },
     messagesLabel: { type: String, attribute: "messages-label" },
     scrollBehavior: { type: String, attribute: "scroll-behavior" },
     contentAlign: { type: String, attribute: "content-align" },
@@ -75,11 +73,11 @@ export class ChxMessageList extends LitElement {
     /** @type {Record<string, ChxPartRenderer> | undefined} */
     this.partElements = undefined;
 
-    /** commandId -> live chip element, from chx-chat — see hydrateCommandChip. @type {import("../../types/adapter.js").ChipElementLookup | undefined} */
-    this.commandChipElements = undefined;
+    /** Rebuilds a historical `[data-template-id]` chip placeholder — pushed down from chx-chat. @type {((placeholder: HTMLElement) => Node | null | undefined) | undefined} */
+    this.renderChip = undefined;
 
-    /** part.id -> live `<chx-attachment>` element, from chx-chat — see hydrateAttachmentPart. @type {import("../../types/adapter.js").ChipElementLookup | undefined} */
-    this.attachmentChipElements = undefined;
+    /** Rebuilds an already-sent attachment part's card — pushed down from chx-chat. @type {((part: ChxMessagePart) => HTMLElement | null | undefined) | undefined} */
+    this.renderAttachment = undefined;
 
     /** @type {string} */
     this.messagesLabel = "Messages";
@@ -290,8 +288,7 @@ export class ChxMessageList extends LitElement {
     const cached = this.#getCachedElement(part);
     if (cached !== undefined) return cached;
 
-    const element =
-      hydrateAttachmentPart(part, { attachmentChipElements: this.attachmentChipElements }) ?? "";
+    const element = this.renderAttachment?.(part) ?? "";
     // renders above .message__content via chx-message's own attachments slot
     if (element instanceof HTMLElement) element.slot = "attachments";
     this.#partElementCache.set(part.id, { key: part.type, part, element });
@@ -308,9 +305,8 @@ export class ChxMessageList extends LitElement {
     const span = document.createElement("span");
     span.innerHTML = /** @type {string} */ (part.html);
     for (const placeholder of span.querySelectorAll("[data-template-id]")) {
-      hydrateCommandChip(/** @type {HTMLElement} */ (placeholder), {
-        commandChipElements: this.commandChipElements,
-      });
+      const node = this.renderChip?.(/** @type {HTMLElement} */ (placeholder));
+      if (node) placeholder.replaceWith(node);
     }
     this.#partElementCache.set(part.id, { key: part.type, part, element: span });
     return span;

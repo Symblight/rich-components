@@ -12,7 +12,6 @@ import { validateMessages } from "../../utils/validate-messages.js";
 import { StreamController } from "../../controllers/StreamController.js";
 import { PaginationController } from "../../controllers/PaginationController.js";
 import { TypingController } from "../../controllers/TypingController.js";
-import { LOAD_MORE_EVENT } from "../infinity-scroll/ScrollBehaviorController.js";
 import { finalizeStreamingParts } from "../../stream/streamHelpers.js";
 
 import styles from "./chat.css?inline";
@@ -193,10 +192,6 @@ export class ChxChat extends LitElement {
         );
       },
     });
-
-    this.#pagination.loadInitial();
-
-    this.addEventListener(LOAD_MORE_EVENT, this.loadMoreHistory);
   }
 
   disconnectedCallback() {
@@ -207,16 +202,17 @@ export class ChxChat extends LitElement {
       "chx-attachments-change",
       /** @type {EventListener} */ (this.handleAttachmentsChange),
     );
-    this.removeEventListener(LOAD_MORE_EVENT, this.loadMoreHistory);
     for (const controller of this.#activeDeliveries.values()) controller.abort();
     this.#unsubscribe?.();
   }
 
   /**
    * Loads one older page of history — see `PaginationController` for the cursor/hasMore/in-flight
-   * state and the actual prepend-merge logic, this just forwards to it. Normally triggered by
-   * `chx-message-list`'s own scroll-to-top sentinel (`chx-load-more`), callable directly too (e.g.
-   * a manual "load more" button).
+   * state and the actual prepend-merge logic, this just forwards to it. Normally reached when
+   * `chx-message-list`'s `onLoadMore` fires near the top (wired through `syncMessageList` below),
+   * callable directly too (e.g. a manual "load more" button). Re-entrancy is guarded by
+   * `PaginationController` itself (no-op while loading or exhausted); the list additionally gates on
+   * the `loading`/`hasMore` it's pushed, so no promise hand-back is needed.
    */
   loadMoreHistory() {
     return this.#pagination.loadMore();
@@ -601,6 +597,11 @@ export class ChxChat extends LitElement {
     list.attachmentChipElements = this.#attachmentChipElementsView;
     list.typing = this.#typing.isTyping();
     list.streaming = this.#isWaitingForReply();
+    list.loading = this.#pagination.loading;
+    list.hasMore = this.#pagination.hasMore;
+    // chx-message-list forwards this to chx-infinity-scroll, whose LoadMoreController awaits it near
+    // the top of the scroll — the sole load-more path now.
+    list.onLoadMore = () => this.#pagination.loadMore();
   }
 
   /**

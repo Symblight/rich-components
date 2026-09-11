@@ -824,7 +824,7 @@ describe("chx-chat", () => {
       expect(calls).to.equal(1);
     });
 
-    it("chx-load-more (dispatched by chx-message-list) triggers loadMoreHistory", async () => {
+    it("chx-message-list's onLoadMore (wired by chx-chat) triggers loadMoreHistory", async () => {
       let calls = 0;
       const el = /** @type {ChxChat} */ (
         await fixture(html`<chx-chat><chx-message-list></chx-message-list></chx-chat>`)
@@ -837,8 +837,8 @@ describe("chx-chat", () => {
       };
       await el.updateComplete;
 
-      el.dispatchEvent(new CustomEvent("chx-load-more", { bubbles: true, composed: true }));
-      await new Promise((resolve) => setTimeout(resolve, 0));
+      const list = /** @type {ChxMessageList} */ (el.messageListElement);
+      await list.onLoadMore();
 
       expect(calls).to.be.greaterThan(0);
     });

@@ -450,12 +450,12 @@ describe("chx-message-list", () => {
       expect(event).to.exist;
     });
 
-    it("chx-load-more bubbles out of chx-message-list", async () => {
+    it("chx-load-more-start bubbles out of chx-message-list", async () => {
       const el = /** @type {ChxMessageList} */ (
         await fixture(html`<chx-message-list style="height: 400px;"></chx-message-list>`)
       );
       let fired = false;
-      el.addEventListener("chx-load-more", () => (fired = true));
+      el.addEventListener("chx-load-more-start", () => (fired = true));
       el.messages = [makeMessage({ id: "m1" })]; // one short message — nowhere near 400px tall
       await el.updateComplete;
 

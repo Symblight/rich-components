@@ -2,50 +2,49 @@
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
+  min-height: 0;
 }
 
 .infinity-scroll__scroller {
-  display: flex;
-  flex-direction: column;
-  overflow-y: auto;
   flex: 1 1 auto;
   min-height: 0;
-  padding-block: 0.4rem;
+  overflow-y: auto;
   overflow-anchor: none;
   overscroll-behavior: contain;
+  padding-block: 0.4rem;
 }
 
-.infinity-scroll__load-more-sentinel {
-  height: 0;
+/* rests a list shorter than the viewport on the bottom edge instead of the top */
+.infinity-scroll__content {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  min-height: 100%;
+  box-sizing: border-box;
 }
 
-.infinity-scroll__spacer {
-  flex: 1 1 auto;
-  min-height: 0;
+/* content-align="start" rests a short list at the top instead */
+:host([content-align="start"]) .infinity-scroll__content {
+  justify-content: flex-start;
 }
 
-:host([content-align="start"]) .infinity-scroll__spacer {
-  flex: 0 1 auto;
-}
-
-.infinity-scroll__scroller > :not(.infinity-scroll__spacer) {
-  flex-shrink: 0;
-}
-
-.infinity-scroll__scroller > slot[name="footer"] {
+/* footer slot follows the content: sits right under the last item, pinned to the bottom with it */
+.infinity-scroll__content > slot[name="footer"] {
   display: block;
+  flex: none;
 }
 
-.infinity-scroll__scroller > slot[name="footer"]::slotted(*) {
+.infinity-scroll__content > slot[name="footer"]::slotted(*) {
   padding-top: var(--chx-infinity-scroll-footer-gap, 0.5rem);
 }
 
-.infinity-scroll__viewport {
+.infinity-scroll__canvas {
   position: relative;
   width: 100%;
+  flex: none;
 }
 
-.infinity-scroll__virtual-item {
+.infinity-scroll__row {
   position: absolute;
   top: 0;
   left: 0;
@@ -53,4 +52,5 @@
   display: flex;
   flex-direction: column;
   padding: 2px 0 0;
+  overflow-anchor: none;
 }

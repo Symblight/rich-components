@@ -1,4 +1,5 @@
-import { html } from "lit";
+import { html, LitElement } from "lit";
+import { customElement } from "lit/decorators.js";
 
 import { ref } from "lit/directives/ref.js";
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
@@ -57,7 +58,9 @@ function makeMessages(count) {
         {
           id: `msg-${i}-t1`,
           type: "text",
-          text: own ? `My message #${i}` : `Assistant reply #${i}, a bit longer to see wrapping happen.`,
+          text: own
+            ? `My message #${i}`
+            : `Assistant reply #${i}, a bit longer to see wrapping happen.`,
         },
       ],
     };
@@ -83,7 +86,10 @@ const FAKE_REPLIES = [
 function createSlowReplyAdapter() {
   let replyCount = 0;
   return {
-    sendMessage: async (/** @type {any} */ message, /** @type {{signal: AbortSignal}} */ { signal }) => {
+    sendMessage: async (
+      /** @type {any} */ message,
+      /** @type {{signal: AbortSignal}} */ { signal },
+    ) => {
       await new Promise((resolve) => setTimeout(resolve, 1800)); // nothing sent yet — chx-chat's own
       //   state (a delivery in flight, no reply message) is what drives `streaming`, not this story
       if (signal.aborted) return;
@@ -257,12 +263,17 @@ export const Typing = {
         class="typing-story"
         style="height: 500px; display: flex; flex-direction: column; gap: 0.5rem;"
         @click=${(/** @type {MouseEvent} */ event) => {
-          if (!(/** @type {HTMLElement} */ (event.target).closest(".typing-story__toggle-typing"))) return;
+          if (!(/** @type {HTMLElement} */ (event.target).closest(".typing-story__toggle-typing")))
+            return;
           if (!chatEl) return;
           chatEl.setTyping(!chatEl.messageListElement?.typing);
         }}
       >
-        <md-button class="typing-story__toggle-typing" variant="outlined" style="align-self: flex-start;">
+        <md-button
+          class="typing-story__toggle-typing"
+          variant="outlined"
+          style="align-self: flex-start;"
+        >
           Toggle "the other side is typing"
         </md-button>
         <chx-chat
@@ -337,7 +348,14 @@ export const ScrollToBottomAffordance = {
         class="scroll-to-bottom-story"
         style="height: 500px; display: flex; flex-direction: column; gap: 0.5rem;"
         @click=${(/** @type {MouseEvent} */ event) => {
-          if (!(/** @type {HTMLElement} */ (event.target).closest(".scroll-to-bottom-story__scroll-up"))) return;
+          if (
+            !(
+              /** @type {HTMLElement} */ (event.target).closest(
+                ".scroll-to-bottom-story__scroll-up",
+              )
+            )
+          )
+            return;
           chatEl?.messageListElement?.list?.scrollToIndex(0, { align: "start" });
         }}
       >
@@ -375,9 +393,35 @@ const PAGINATION_TOTAL_HISTORY = 1000;
 const PAGINATION_PAGE_SIZE = 40;
 
 const WORDS = [
-  "the", "quick", "brown", "fox", "jumps", "over", "lazy", "dog", "chat", "message", "history",
-  "scroll", "virtual", "list", "render", "component", "async", "stream", "reply", "assistant",
-  "user", "prompt", "context", "token", "model", "response", "pagination", "cursor", "anchor",
+  "the",
+  "quick",
+  "brown",
+  "fox",
+  "jumps",
+  "over",
+  "lazy",
+  "dog",
+  "chat",
+  "message",
+  "history",
+  "scroll",
+  "virtual",
+  "list",
+  "render",
+  "component",
+  "async",
+  "stream",
+  "reply",
+  "assistant",
+  "user",
+  "prompt",
+  "context",
+  "token",
+  "model",
+  "response",
+  "pagination",
+  "cursor",
+  "anchor",
 ];
 
 /** Deterministic in [0, 1) — seeded so story content is stable across reloads. @param {number} seed */
@@ -389,7 +433,10 @@ function seededRandom(seed) {
 /** @param {number} seed */
 function makeSentence(seed) {
   const wordCount = 4 + Math.floor(seededRandom(seed) * 12); // 4-15 words
-  const words = Array.from({ length: wordCount }, (_, i) => WORDS[Math.floor(seededRandom(seed * 31 + i) * WORDS.length)]);
+  const words = Array.from(
+    { length: wordCount },
+    (_, i) => WORDS[Math.floor(seededRandom(seed * 31 + i) * WORDS.length)],
+  );
   return `${words[0][0].toUpperCase()}${words[0].slice(1)} ${words.slice(1).join(" ")}.`;
 }
 
@@ -459,14 +506,19 @@ export const Pagination = {
       class="pagination-story"
       style="height: 500px; display: flex; flex-direction: column; gap: 0.5rem;"
       @click=${(/** @type {MouseEvent} */ event) => {
-        if (!(/** @type {HTMLElement} */ (event.target).closest(".pagination-story__load-more"))) return;
+        if (!(/** @type {HTMLElement} */ (event.target).closest(".pagination-story__load-more")))
+          return;
         const container = /** @type {HTMLElement} */ (event.currentTarget);
         /** @type {(HTMLElement & {loadMoreHistory: () => Promise<void>}) | null} */ (
           container.querySelector("chx-chat")
         )?.loadMoreHistory();
       }}
     >
-      <md-button class="pagination-story__load-more" variant="outlined" style="align-self: flex-start;">
+      <md-button
+        class="pagination-story__load-more"
+        variant="outlined"
+        style="align-self: flex-start;"
+      >
         Load older messages
       </md-button>
       <chx-chat
@@ -476,7 +528,10 @@ export const Pagination = {
         style="flex: 1; min-height: 0;"
       >
         <chx-message-list>
-          <chx-scroll-to-bottom-affordance slot="scroll-to-bottom"></chx-scroll-to-bottom-affordance>
+          <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
+          <chx-scroll-to-bottom-affordance
+            slot="scroll-to-bottom"
+          ></chx-scroll-to-bottom-affordance>
         </chx-message-list>
         <chx-message-composer>
           <md-button slot="actions" variant="text">Opus 4.8</md-button>
@@ -486,6 +541,8 @@ export const Pagination = {
     </div>
   `,
 };
+
+
 
 /**
  * `chx-message-list`'s `content-align` attribute — with only a couple of messages inside a tall

@@ -33,46 +33,29 @@ export class ChxMessageList extends LitElement {
     scrollBehavior: { type: String, attribute: "scroll-behavior" },
     contentAlign: { type: String, attribute: "content-align" },
     buffer: { type: Number },
+    estimateItemSize: { attribute: false },
     typing: { type: Boolean, reflect: true, attribute: true },
     streaming: { type: Boolean, reflect: true, attribute: true },
+    loading: { type: Boolean },
+    hasMore: { type: Boolean },
+    onLoadMore: { attribute: false },
   };
 
-  // message.id -> { key, element }; key is the messageElement function reference (or undefined
-  // for the built-in <chx-message> path) — only a matching key means previousElement is safe to
-  // hand back to a renderer, so a part/message whose renderer changed never gets a stale element
   #messageElementCache = new Map();
-  // part.id -> { key, part, element }; key is part.type, part is the last-rendered part object —
-  // invalidated on either change, so a streamed part update never shows stale content
   #partElementCache = new Map();
-  // Rendering now happens inside chx-infinity-scroll's own render pass (via the .renderItem
-  // callback below), asynchronously relative to this component's own render() — so unlike a
-  // plain single-shadow-root repeat(), there's no single "this render pass just ended" moment to
-  // reset/sweep against. Instead, #renderItem collects ids into these two sets as it's called
-  // (once per currently-visible item, every time chx-infinity-scroll re-renders for any reason),
-  // and a microtask queued on the *first* call of a batch flushes+sweeps once every synchronous
-  // call in that batch has landed — self-contained, no cross-component lifecycle coordination.
   /** @type {Set<string> | undefined} */
   #pendingRenderedMessageIds;
   /** @type {Set<string> | undefined} */
   #pendingRenderedPartIds;
-  // partId -> last-seen part.state, diffed on every render() to detect a streaming start/complete
-  // edge for the visually-hidden status region — a separate concern from the two caches above,
-  // computed synchronously inside render() itself (not from #renderPart, which runs lazily during
-  // chx-infinity-scroll's own later render pass) so this render's own status-region text is never
-  // one pass stale
   #previousPartStates = new Map();
   #statusText = "";
   /** @type {ChxInfinityScroll | undefined} */
   #infinityScrollElement; // set via a ref() directive in render()
   /** @type {FocusBehaviorController} */
   #focusBehavior; // roving tabindex — assigned in the constructor, below
-  // gates the scroll-to-bottom slot — flipped by infinity-scroll's onAwayFromBottomChange callback,
-  // not a public property: unlike typing/streaming this is intrinsic to scroll position, not
-  // something the app drives
   #awayFromBottom = false;
-  // stable bound reference (not an inline arrow) — passed as chx-infinity-scroll's .itemKey, so it
-  // doesn't see a "changed" property on every render
-  #itemKey = (/** @type {ChxMessage} */ message, /** @type {number} */ index) => message?.id ?? index;
+  #itemKey = (/** @type {ChxMessage} */ message, /** @type {number} */ index) =>
+    message?.id ?? index;
 
   constructor() {
     super();
@@ -115,6 +98,17 @@ export class ChxMessageList extends LitElement {
     this.buffer = 150;
 
     /**
+     * Forwarded straight through to chx-infinity-scroll — a pre-measurement height guess for a
+     * message, used before the virtualizer has actually measured it. Content-aware rather than a flat
+     * constant: on a fast scroll into a history prepend, several items above the scroll anchor render
+     * at this estimate and only settle to their real size a frame later; the scroll shift you see at
+     * the top is the summed `(real − estimate)` error over those items, so a per-message estimate
+     * (roughly proportional to text length) keeps that error — and the shift — small regardless of
+     * scroll velocity. Overridable by a consumer. @type {(item: ChxMessage, index: number) => number}
+     */
+    this.estimateItemSize = (message) => this.#estimateMessageSize(message);
+
+    /**
      * Whether the other side is currently typing — gates the `typing` slot in render(). No default
      * content: unlike `messageElement`/`partElements`, an unslotted `typing`/`streaming` renders
      * nothing at all, same as `<chx-command-picker>`'s own connection (a plain, standalone element a
@@ -125,6 +119,18 @@ export class ChxMessageList extends LitElement {
 
     /** Waiting for a reply with no message yet — gates the `streaming` slot, same no-default posture as `typing` above. @type {boolean} */
     this.streaming = false;
+
+    /** Forwarded straight to `chx-infinity-scroll` — pushed down from chx-chat's `PaginationController`. @type {boolean} */
+    this.loading = false;
+
+    /** Forwarded straight to `chx-infinity-scroll` — pushed down from chx-chat's `PaginationController`. @type {boolean} */
+    this.hasMore = true;
+
+    /**
+     * Fetches one older page — forwarded straight to `chx-infinity-scroll`'s own `onLoadMore`, which
+     * `LoadMoreController` awaits directly. @type {() => Promise<void>}
+     */
+    this.onLoadMore = () => Promise.resolve();
 
     this.#focusBehavior = new FocusBehaviorController(this, {
       getMessages: () => this.messages,
@@ -171,6 +177,21 @@ export class ChxMessageList extends LitElement {
     this.#awayFromBottom = away;
     this.requestUpdate();
   };
+
+  /**
+   * Rough pre-measurement height for a message — text length → line count → px. Deliberately cheap
+   * and approximate; it only has to shrink the estimate-vs-real gap enough that a fast-scroll prepend
+   * doesn't visibly jump, not be exact (the virtualizer measures the real height right after).
+   * @param {ChxMessage} message
+   */
+  #estimateMessageSize(message) {
+    const chars = (message.parts ?? []).reduce((sum, part) => {
+      if (part.type === "attachment") return sum + 220; // attachment cards are tall and text-less
+      return sum + (part.text?.length ?? part.html?.length ?? 0);
+    }, 0);
+    const lines = Math.max(1, Math.ceil(chars / 42)); // ~42 chars per rendered line
+    return 32 + lines * 20; // meta + padding, then line-height per line
+  }
 
   /**
    * Passed to `chx-infinity-scroll` as `.renderItem` — called once per currently-visible message,
@@ -242,7 +263,8 @@ export class ChxMessageList extends LitElement {
       const cached = this.#partElementCache.get(part.id);
       const previous = cached?.key === part.type ? cached.element : undefined;
       const element = renderer(part, previous);
-      if (part.type === "attachment" && element instanceof HTMLElement) element.slot = "attachments";
+      if (part.type === "attachment" && element instanceof HTMLElement)
+        element.slot = "attachments";
       this.#partElementCache.set(part.id, { key: part.type, part, element });
       return element;
     }
@@ -335,8 +357,9 @@ export class ChxMessageList extends LitElement {
     this.#previousPartStates = currentPartStates;
   }
 
-  /** The chx-infinity-scroll instance rendering this list — public so a consumer can reach its own
-   * API (scrollToIndex, part-based styling) directly. @returns {ChxInfinityScroll | undefined} */
+  /** The chx-infinity-scroll(-v3) instance rendering this list — public so a consumer can reach
+   * its own API (scrollToIndex, part-based styling) directly.
+   * @returns {ChxInfinityScroll | undefined} */
   get list() {
     return this.#infinityScrollElement;
   }
@@ -367,9 +390,13 @@ export class ChxMessageList extends LitElement {
         .data=${this.messages}
         .itemKey=${this.#itemKey}
         .renderItem=${this.#renderItem}
+        .estimateItemSize=${this.estimateItemSize}
         .scrollBehavior=${this.scrollBehavior}
         .contentAlign=${this.contentAlign}
         .buffer=${this.buffer}
+        .hasMore=${this.hasMore}
+        .loading=${this.loading}
+        .onLoadMore=${this.onLoadMore}
         .onScrollerKeydown=${this.#focusBehavior.handleKeyDown}
         .onScrollerFocusin=${this.#focusBehavior.handleFocusIn}
         .onAwayFromBottomChange=${this.#handleAwayFromBottomChange}

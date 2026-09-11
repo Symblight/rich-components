@@ -43,12 +43,12 @@ export const schema = new Schema({
      * interactive chip by re-cloning the app's own <template>.
      *
      * `data` carries whatever extra `data-*` attributes the app set on the
-     * chip it handed to `insertAtCommand` (e.g. `data-path`), captured off
+     * chip it handed to `insertAtRange` (e.g. `data-path`), captured off
      * its `dataset` minus `templateId` — arbitrary app data the library
      * doesn't interpret, just round-trips through the doc and reapplies
-     * onto the rendered chip (see command-node-view.js) so
-     * `Editor.getCommands()`'s `element` can be read back from later,
-     * without the schema having to name a specific "value" concept.
+     * onto the rendered chip (see command-node-view.js), including
+     * `commandFieldId`, which is how a historical chip's `renderChip`
+     * dispatch (see chx-chat.renderChip) finds its owning trigger field back.
      */
     command: {
       inline: true,

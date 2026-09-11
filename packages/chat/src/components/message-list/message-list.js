@@ -6,7 +6,6 @@ import { ref } from "lit/directives/ref.js";
 import "../message/message.js";
 import "../infinity-scroll/infinity-scroll.js";
 import { FocusBehaviorController } from "../../controllers/FocusBehaviorController.js";
-import { hydrateCommandChip } from "../../editor/command-chip.js";
 import { hydrateAttachmentPart } from "../attachment/attachment-card.js";
 import styles from "./message-list.css?inline";
 
@@ -27,7 +26,7 @@ export class ChxMessageList extends LitElement {
     messages: { attribute: false },
     messageElement: { attribute: false },
     partElements: { attribute: false },
-    commandChipElements: { attribute: false },
+    renderChip: { attribute: false },
     attachmentChipElements: { attribute: false },
     messagesLabel: { type: String, attribute: "messages-label" },
     scrollBehavior: { type: String, attribute: "scroll-behavior" },
@@ -75,8 +74,13 @@ export class ChxMessageList extends LitElement {
     /** @type {Record<string, ChxPartRenderer> | undefined} */
     this.partElements = undefined;
 
-    /** commandId -> live chip element, from chx-chat — see hydrateCommandChip. @type {import("../../types/adapter.js").ChipElementLookup | undefined} */
-    this.commandChipElements = undefined;
+    /**
+     * Rebuilds a historical `[data-template-id]` chip placeholder — pushed down from chx-chat's own
+     * generic dispatcher, which routes to whichever registered trigger field owns it. message-list
+     * doesn't know or care what produces the result, just replaces the placeholder if one comes back.
+     * @type {((placeholder: HTMLElement) => Node | null | undefined) | undefined}
+     */
+    this.renderChip = undefined;
 
     /** part.id -> live `<chx-attachment>` element, from chx-chat — see hydrateAttachmentPart. @type {import("../../types/adapter.js").ChipElementLookup | undefined} */
     this.attachmentChipElements = undefined;
@@ -308,9 +312,8 @@ export class ChxMessageList extends LitElement {
     const span = document.createElement("span");
     span.innerHTML = /** @type {string} */ (part.html);
     for (const placeholder of span.querySelectorAll("[data-template-id]")) {
-      hydrateCommandChip(/** @type {HTMLElement} */ (placeholder), {
-        commandChipElements: this.commandChipElements,
-      });
+      const node = this.renderChip?.(/** @type {HTMLElement} */ (placeholder));
+      if (node) placeholder.replaceWith(node);
     }
     this.#partElementCache.set(part.id, { key: part.type, part, element: span });
     return span;

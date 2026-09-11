@@ -18,7 +18,7 @@ export class ChxMessageComposer extends LitElement {
     placeholder: { type: String },
     dropHint: { type: String, attribute: "drop-hint" },
     dragging: { type: Boolean, reflect: true },
-    commandFields: { attribute: false },
+    triggerFields: { attribute: false },
     pasteThreshold: { type: Number, attribute: "paste-threshold" },
     renderPasteChip: { attribute: false },
     pasteHandlers: { attribute: false },
@@ -43,8 +43,8 @@ export class ChxMessageComposer extends LitElement {
     /** @type {boolean} */
     this.loading = false;
 
-    /** @type {Map<Element, Element>} Set by chx-chat — see its handleCommandFieldSlotchange. */
-    this.commandFields = new Map();
+    /** @type {Map<string, Element>} Set by chx-chat — see its handleCommandFieldSlotchange. */
+    this.triggerFields = new Map();
 
     /** @type {number} Pastes of at least this many lines collapse to a chip; <= 0 disables. */
     this.pasteThreshold = 205;
@@ -65,16 +65,18 @@ export class ChxMessageComposer extends LitElement {
   }
 
   /** Stable identity — an inline arrow in the template would dirty chx-textbox on every render. */
-  #getCommandFields = () => this.commandFields;
+  #getTriggerFields = () => this.triggerFields;
 
   /**
-   * Forwarded from chx-chat's own insertAtCommand — see
-   * chx-textbox.insertAtCommand for the actual insertion logic.
+   * Replaces the tracked range identified by `target` (the token a trigger field gets via its own
+   * query event) with `node` — see chx-textbox.insertAtRange for the actual insertion logic. Called
+   * directly by whatever registered trigger field resolved the search (e.g. chx-command-picker), not
+   * routed through chx-chat.
    * @param {string | null} target
    * @param {Node} node
    */
-  insertAtCommand(target, node) {
-    this.textboxElement?.insertAtCommand(target, node);
+  insertAtRange(target, node) {
+    this.textboxElement?.insertAtRange(target, node);
   }
 
   /**
@@ -183,12 +185,11 @@ export class ChxMessageComposer extends LitElement {
     if (!value.trim() && attachments.length === 0) return;
 
     const html = textbox.getHTML();
-    const commands = textbox.getCommands();
     const attachmentElements = attachmentEntries.map((entry) => entry.element);
 
     const allowed = this.dispatchEvent(
       new CustomEvent("chx-send-message", {
-        detail: { value, html, attachments, attachmentElements, commands },
+        detail: { value, html, attachments, attachmentElements },
         bubbles: true,
         composed: true,
         cancelable: true,
@@ -217,7 +218,6 @@ export class ChxMessageComposer extends LitElement {
         detail: {
           ...event.detail,
           attachments: this.attachmentsElement?.getAttachments() ?? [],
-          commands: this.textboxElement?.getCommands() ?? [],
         },
         bubbles: true,
         composed: true,
@@ -246,7 +246,7 @@ export class ChxMessageComposer extends LitElement {
           .label=${this.label}
           .placeholder=${this.placeholder}
           .dropHint=${this.dropHint}
-          .getCommandFields=${this.#getCommandFields}
+          .getTriggerFields=${this.#getTriggerFields}
           .pasteThreshold=${this.pasteThreshold}
           .renderPasteChip=${this.renderPasteChip}
           .pasteHandlers=${this.pasteHandlers}

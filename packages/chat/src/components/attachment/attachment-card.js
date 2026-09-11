@@ -20,7 +20,7 @@ export function buildAttachmentCard(file) {
  * attachmentChipElements (chx-chat's part.id -> live element map) first, cloning it and manually
  * reapplying `.file` (cloneNode doesn't copy JS-only properties); then falls back to
  * buildAttachmentCard if `part.attachment` is still a live File; otherwise renders as nothing. Pure
- * (unlike hydrateCommandChip, there's no placeholder DOM node here to mutate/replace).
+ * (unlike a chip's `renderChip`, there's no placeholder DOM node here to mutate/replace).
  * @param {import("../../types/message.js").ChxMessagePart} part
  * @param {{attachmentChipElements?: import("../../types/adapter.js").ChipElementLookup}} [options]
  * @returns {HTMLElement | undefined}

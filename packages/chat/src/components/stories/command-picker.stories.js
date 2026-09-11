@@ -18,7 +18,6 @@ import "@symblight/wc-material/button";
 import "@symblight/wc-material/icon";
 import "@symblight/wc-material/menu";
 
-import { readChipAttrs } from "../../index.js";
 import "../command-picker/command-picker.js";
 import "../chip/chip.js";
 
@@ -127,9 +126,8 @@ function createFileQueryHandler(tree) {
  * (matching the menu/chip visually), while stashing the full mocked path in
  * a `data-path` attribute on the chip's own element — that's the "value for
  * handling, name for display" split: nothing in the library ever reads
- * data-path, it's purely an app convention read back later off
- * `chx-textbox.getCommands()`'s `element` (see chx-change/chx-send-message
- * below).
+ * data-path, it's purely an app convention, recoverable later via
+ * readChipAttrs on the resolved chip element itself.
  * @param {string} templateId
  * @returns {(event: Event) => void}
  */
@@ -149,22 +147,6 @@ function createFilePickedHandler(templateId) {
     clone.append(name);
     setChip(clone);
   };
-}
-
-/**
- * Reads chx-change/chx-send-message's `commands` detail back — each entry's
- * `element` is the live chip DOM node inserted by createFilePickedHandler
- * above, so `.dataset.path` recovers the full mocked path even though the
- * chip and the menu only ever displayed the file's name.
- * @param {Event} event
- */
-function logCommands(event) {
-  const { commands } =
-    /** @type {CustomEvent<{commands: Array<{label: string, element: HTMLElement}>}>} */ (event)
-      .detail;
-  console.log(
-    commands.map((command) => ({ label: command.label, path: command.element.dataset.path })),
-  );
 }
 
 /**
@@ -227,19 +209,13 @@ export const Basic = {
  * folder or file icon, headline, muted supporting-text path), same shape as
  * a real "@" file picker. The resolved chip only ever shows the file's
  * name; the full mocked path travels separately as a `data-path` attribute
- * on the chip element, recoverable later via chx-textbox.getCommands()'s
- * `element` — logged here on every chx-change/chx-send-message via
- * logCommands so the label/value split is visible in the console: label
- * stays "chat.js", path is the full mocked "src/components/base/chat.js".
+ * on the chip element — label/value split, same idea as CustomChipPerOptionIcon
+ * below.
  */
 /** @type {Story} */
 export const DynamicSearch = {
   render: () => html`
-    <chx-chat
-      label="Write your prompt..."
-      @chx-change=${logCommands}
-      @chx-send-message=${logCommands}
-    >
+    <chx-chat label="Write your prompt...">
       <chx-message-list></chx-message-list>
       <chx-message-composer>
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
@@ -331,7 +307,7 @@ export const CustomChip = {
   `,
 };
 
-/** Default sent-chip rendering, no override — hydrateCommandChip reproduces it via chx-chat.commandChipElements, falling back to cloning the `<template slot="chip">` below if the id isn't found. */
+/** Default sent-chip rendering, no override — chx-command-picker's own renderChip rebuilds it by re-cloning the `<template slot="chip">` below, dispatched to by chx-chat once the chat's already sent. */
 /** @type {Story} */
 export const ChipHydratesInMessageList = {
   render: () => html`
@@ -344,68 +320,6 @@ export const ChipHydratesInMessageList = {
       <chx-command-picker
         commandCharacter="@"
         id="picker-hydration"
-        slot="command-field"
-        @chx-command-query=${createQueryHandler(FILES)}
-      >
-        <chx-chip slot="chip"
-          ><md-icon slot="icon">${unsafeSVG(descriptionIcon)}</md-icon></chx-chip
-        >
-      </chx-command-picker>
-    </chx-chat>
-  `,
-};
-
-/** A different look means owning rendering via messageElement + readChipAttrs, not hydrateCommandChip. @type {import("../../types/adapter.js").ChxMessageRenderer} */
-function renderMessageWithCustomChip(message, previousElement) {
-  const el = /** @type {any} */ (previousElement ?? document.createElement("chx-message"));
-  el.own = message.own;
-  el.replaceChildren();
-
-  for (const part of message.parts) {
-    if (!part.html) {
-      el.append(document.createTextNode(part.text ?? ""));
-      continue;
-    }
-
-    const span = document.createElement("span");
-    span.innerHTML = part.html;
-    for (const placeholder of span.querySelectorAll("[data-template-id]")) {
-      const attrs = readChipAttrs(/** @type {HTMLElement} */ (placeholder));
-      const badge = document.createElement("span");
-      badge.textContent = `📎 ${attrs.label}`;
-      if (attrs.data.path) badge.title = attrs.data.path;
-      badge.style.cssText = [
-        "display: inline-flex",
-        "align-items: center",
-        "gap: 0.25rem",
-        "padding: 0.125rem 0.625rem",
-        "border-radius: 999px",
-        "background: var(--md-sys-color-tertiary-container)",
-        "color: var(--md-sys-color-on-tertiary-container)",
-        "font-size: 0.8125rem",
-        "cursor: pointer",
-      ].join(";");
-      badge.addEventListener("click", () => alert(`Open ${attrs.data.path ?? attrs.label}`));
-      placeholder.replaceWith(badge);
-    }
-    el.append(span);
-  }
-
-  return el;
-}
-
-/** @type {Story} */
-export const CustomChipViaMessageElement = {
-  render: () => html`
-    <chx-chat label="Write your prompt..." .messageElement=${renderMessageWithCustomChip}>
-      <chx-message-list></chx-message-list>
-      <chx-message-composer>
-        <md-button slot="actions" variant="text">Opus 4.8</md-button>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
-      </chx-message-composer>
-      <chx-command-picker
-        commandCharacter="@"
-        id="picker-hydration-custom"
         slot="command-field"
         @chx-command-query=${createQueryHandler(FILES)}
       >
@@ -437,6 +351,125 @@ export const CustomCommands = {
         id="commands"
         slot="command-field"
         @chx-command-query=${createQueryHandler(COMMANDS)}
+      ></chx-command-picker>
+    </chx-chat>
+  `,
+};
+
+/**
+ * Overrides `<chx-command-picker>`'s `buildChip(attrs)` — the single draw point shared by live
+ * resolution (right as you pick an option) and historical hydration (once a message with that chip
+ * has been sent and re-rendered) — rather than a `slot="chip"` template. Overriding `buildChip`
+ * instead of `renderChip` directly keeps both paths visually identical for free: `attrs` is
+ * already parsed (`{templateId, label, icon, data}`), no manual `readChipAttrs` needed here.
+ * `attrs.data.path` is the app-only breadcrumb `createFilePickedHandler`-style handlers stash on a
+ * live chip — round-trips through the token the same way.
+ * @param {{templateId: string, label: string, icon: string | null, data: Record<string, string>}} attrs
+ * @returns {HTMLElement}
+ */
+function buildFilesChip(attrs) {
+  const chip = /** @type {import("../chip/chip.js").ChxChip} */ (document.createElement("chx-chip"));
+  chip.style.setProperty("--chx-chip-container-color", "var(--md-sys-color-primary-container)");
+  chip.style.setProperty("--chx-chip-label-color", "var(--md-sys-color-on-primary-container)");
+  chip.style.setProperty("--chx-chip-icon-color", "var(--md-sys-color-on-primary-container)");
+  const icon = document.createElement("md-icon");
+  icon.slot = "icon";
+  icon.innerHTML = descriptionIcon;
+  if (attrs.data.path) chip.title = attrs.data.path;
+  chip.append(icon, attrs.label);
+  return chip;
+}
+
+/** Same idea as buildFilesChip, distinct icon/color — the "commands" picker's own buildChip override. @param {{templateId: string, label: string, icon: string | null, data: Record<string, string>}} attrs @returns {HTMLElement} */
+function buildCommandsChip(attrs) {
+  const chip = /** @type {import("../chip/chip.js").ChxChip} */ (document.createElement("chx-chip"));
+  chip.style.setProperty("--chx-chip-container-color", "var(--md-sys-color-tertiary-container)");
+  chip.style.setProperty("--chx-chip-label-color", "var(--md-sys-color-on-tertiary-container)");
+  chip.style.setProperty("--chx-chip-icon-color", "var(--md-sys-color-on-tertiary-container)");
+  const icon = document.createElement("md-icon");
+  icon.slot = "icon";
+  icon.innerHTML = terminalIcon;
+  chip.append(icon, attrs.label);
+  return chip;
+}
+
+/**
+ * Two independently-owned pickers ("@" files, "/" commands), each customizing its chips by
+ * overriding `.buildChip` (see buildFilesChip/buildCommandsChip above) instead of a `slot="chip"`
+ * template — different icon and container color per picker, so the two chip "families" stay
+ * visually distinct, and *identical* whether you type the trigger live or load a past message
+ * containing one (try typing "@" or "/" here — the live-picked chip matches the seeded historical
+ * ones exactly, unlike overriding `renderChip` directly, which only ever affects history). `chx-chat`
+ * is seeded with a `messages` array whose `html` already contains resolved chip tokens — the exact
+ * `<span data-template-id="…" data-command-field-id="…">` markup the `command` schema node's own
+ * `toDOM` produces (see schema.js), hand-written here rather than typed live; `data-template-id`'s
+ * value is irrelevant to either override (no template lookup happens) but still required for
+ * chx-message-list to find the placeholder at all — it only ever looks for `[data-template-id]`.
+ * Nothing runs a search or a resolve on load: chx-message-list finds each placeholder, chx-chat's
+ * `renderChip` dispatches it by `data-command-field-id` to the one picker that would have minted
+ * it, and that picker's default `renderChip` calls its own `buildChip` override to rebuild it.
+ * Proves multi-picker routing: neither picker ever touches the other's chips, live or historical.
+ */
+/** @type {Story} */
+export const MultiPickerHydration = {
+  render: () => html`
+    <chx-chat
+      label="Write your prompt..."
+      .messages=${[
+        {
+          id: "msg-1",
+          authorId: "user-1",
+          own: true,
+          createdAt: Date.now(),
+          status: "sent",
+          parts: [
+            {
+              id: "msg-1-t1",
+              type: "text",
+              text: "Check chat.js and /summarize it for me",
+              html:
+                'Check <span data-template-id="files-chip-template" data-command-field-id="files" data-path="src/components/base/chat.js">chat.js</span>' +
+                ' and <span data-template-id="commands-chip-template" data-command-field-id="commands">summarize</span> it for me',
+            },
+          ],
+        },
+        {
+          id: "msg-2",
+          authorId: "assistant",
+          own: false,
+          createdAt: Date.now(),
+          status: "sent",
+          parts: [
+            {
+              id: "msg-2-t1",
+              type: "text",
+              text: "On it — /explain coming up, referencing message-composer.js too.",
+              html:
+                'On it — <span data-template-id="commands-chip-template" data-command-field-id="commands">explain</span>' +
+                ' coming up, referencing <span data-template-id="files-chip-template" data-command-field-id="files" data-path="src/components/message-composer/message-composer.js">message-composer.js</span> too.',
+            },
+          ],
+        },
+      ]}
+    >
+      <chx-message-list></chx-message-list>
+      <chx-message-composer>
+        <md-button slot="actions" variant="text">Opus 4.8</md-button>
+        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+      </chx-message-composer>
+      <chx-command-picker
+        commandCharacter="@"
+        id="files"
+        slot="command-field"
+        @chx-command-query=${createQueryHandler(FILES)}
+        .buildChip=${buildFilesChip}
+      ></chx-command-picker>
+      <chx-command-picker
+        commandCharacter="/"
+        id="commands"
+        slot="command-field"
+        @chx-command-query=${createQueryHandler(COMMANDS)}
+        .buildChip=${buildCommandsChip}
       ></chx-command-picker>
     </chx-chat>
   `,

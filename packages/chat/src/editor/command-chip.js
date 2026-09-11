@@ -46,18 +46,3 @@ export function buildCommandChip({ templateId, label, icon, data }) {
   for (const [key, value] of Object.entries(data ?? {})) dom.dataset[key] = value;
   return dom;
 }
-
-/**
- * Upgrades a static `[data-template-id]` placeholder into the real chip, in place — the default
- * reproduction, not a customization hook (for a different look, use readChipAttrs instead). Tries
- * commandChipElements (chx-chat's commandId -> live element map) first, then buildCommandChip.
- * Mutates `placeholder` and returns nothing (unlike hydrateAttachmentPart, which is pure — this one
- * has a DOM node to replace, that one doesn't).
- * @param {HTMLElement} placeholder
- * @param {{commandChipElements?: import("../types/adapter.js").ChipElementLookup}} [options]
- */
-export function hydrateCommandChip(placeholder, { commandChipElements } = {}) {
-  const attrs = readChipAttrs(placeholder);
-  const live = attrs.data.commandId ? commandChipElements?.get(attrs.data.commandId) : undefined;
-  placeholder.replaceWith(live ? live.cloneNode(true) : buildCommandChip(attrs));
-}

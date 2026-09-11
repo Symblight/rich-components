@@ -6,7 +6,6 @@ import "../message-composer/message-composer.js";
 import "../message-list/message-list.js";
 import { DropTargetController } from "../../controllers/DropTargetController.js";
 import { attachmentsContext } from "../../context/attachments-context.js";
-import { commandsContext } from "../../context/commands-context.js";
 import { reconcileMessages } from "../../utils/messages.js";
 import { validateMessages } from "../../utils/validate-messages.js";
 import { StreamController } from "../../controllers/StreamController.js";
@@ -29,7 +28,7 @@ export class ChxChat extends LitElement {
   static properties = {
     loading: { type: Boolean, reflect: true, attribute: true },
     label: { type: String, attribute: true },
-    commandFields: { attribute: false },
+    triggerFields: { attribute: false },
     userId: { type: String, attribute: true },
     messages: { attribute: false },
     messageElement: { attribute: false },
@@ -53,16 +52,6 @@ export class ChxChat extends LitElement {
   #dropTarget;
   /** @type {ContextProvider<typeof attachmentsContext>} */
   #attachmentsProvider;
-  /** @type {ContextProvider<typeof commandsContext>} */
-  #commandsProvider;
-  /** @type {Map<string, HTMLElement>} */
-  #commandChipElements = new Map();
-  /** @type {ChipElementLookup} */
-  #commandChipElementsView = { get: (key) => this.#commandChipElements.get(key) };
-  // commandId -> the message id it was minted for — lets #pruneChipElements evict a commandId once
-  // its owning message is gone, without re-parsing every message's html to find which ids remain.
-  /** @type {Map<string, string>} */
-  #commandIdOwners = new Map();
   /** @type {Map<string, HTMLElement>} */
   #attachmentChipElements = new Map();
   /** @type {ChipElementLookup} */
@@ -77,8 +66,8 @@ export class ChxChat extends LitElement {
     /** @type {Boolean} */
     this.loading = false;
 
-    /** @type {Map<Element, Element>} */
-    this.commandFields = new Map();
+    /** @type {Map<string, Element>} Keyed by element.id — see handleCommandFieldSlotchange. */
+    this.triggerFields = new Map();
 
     /** @type {String | undefined} */
     this.userId = undefined;
@@ -136,7 +125,7 @@ export class ChxChat extends LitElement {
      * shadow nesting depth — kept in sync via `chx-attachments-change`
      * (below), not by chx-chat computing anything itself. Chosen over the
      * manual per-level property-push pattern already used for
-     * label/loading/commandFields specifically because chx-textbox (the
+     * label/loading/triggerFields specifically because chx-textbox (the
      * consumer that needs this, for its `textbox_attached` row-gap) sits
      * two shadow levels down (chx-chat → chx-message-composer's shadow →
      * chx-textbox) — context crosses that in one hop, no relay through
@@ -144,18 +133,6 @@ export class ChxChat extends LitElement {
      */
     this.#attachmentsProvider = new ContextProvider(this, {
       context: attachmentsContext,
-      initialValue: [],
-    });
-
-    /**
-     * Same pattern as #attachmentsProvider above, kept in sync via
-     * handleChange's own `chx-change` listener (its `commands` detail) instead
-     * of a dedicated change event — resolved command chips live inside the
-     * ProseMirror doc, not as light-DOM children, so there's no separate
-     * slotchange-driven signal to hook the way chx-attachments has one.
-     */
-    this.#commandsProvider = new ContextProvider(this, {
-      context: commandsContext,
       initialValue: [],
     });
   }
@@ -168,7 +145,6 @@ export class ChxChat extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this.addEventListener("chx-send-message", /** @type {EventListener} */ (this.handleSend));
-    this.addEventListener("chx-change", /** @type {EventListener} */ (this.handleChange));
     this.addEventListener(
       "chx-attachments-change",
       /** @type {EventListener} */ (this.handleAttachmentsChange),
@@ -197,7 +173,6 @@ export class ChxChat extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     this.removeEventListener("chx-send-message", /** @type {EventListener} */ (this.handleSend));
-    this.removeEventListener("chx-change", /** @type {EventListener} */ (this.handleChange));
     this.removeEventListener(
       "chx-attachments-change",
       /** @type {EventListener} */ (this.handleAttachmentsChange),
@@ -263,18 +238,6 @@ export class ChxChat extends LitElement {
   }
 
   /**
-   * Resolves the command search identified by `target` (the token handed to
-   * the app via command-query's detail) by replacing its tracked range with
-   * `node` — see Editor.resolveCommand for the actual insertion logic.
-   * A stale `target` is a no-op.
-   * @param {string | null} target
-   * @param {Node} node
-   */
-  insertAtCommand(target, node) {
-    this.messageComposerElement?.insertAtCommand(target, node);
-  }
-
-  /**
    * Programmatically attaches a file — same effect as picking or dropping
    * one. A no-op if no <chx-attachments> is connected anywhere in the
    * composer.
@@ -308,29 +271,30 @@ export class ChxChat extends LitElement {
     return this.#dropTarget.dragging;
   }
 
-  /** commandId -> live chip element, for a custom messageElement/partElements to pass to hydrateCommandChip itself. Read-only — use .get(), not .set()/.delete()/.clear(). @returns {ChipElementLookup} */
-  get commandChipElements() {
-    return this.#commandChipElementsView;
-  }
-
-  /** part.id -> live `<chx-attachment>` element, for hydrateAttachmentPart — same use/read-only posture as commandChipElements. @returns {ChipElementLookup} */
+  /** part.id -> live `<chx-attachment>` element, for hydrateAttachmentPart. Read-only — use .get(), not .set()/.delete()/.clear(). @returns {ChipElementLookup} */
   get attachmentChipElements() {
     return this.#attachmentChipElementsView;
   }
 
-  /** @param {CustomEvent<{value: string, html: string, attachments: File[], attachmentElements: HTMLElement[], commands: Array<{label: string, commandId: string | undefined, element: HTMLElement}>}>} event */
+  /**
+   * Rebuilds a historical chip placeholder by dispatching to whichever registered trigger field
+   * owns it (matched via `data-command-field-id`) — chat itself never knows what a "command" or a
+   * "chip" is, it just looks up a field by id and calls a duck-typed `renderChip` on it if present.
+   * @param {HTMLElement} placeholder
+   * @returns {Node | null | undefined}
+   */
+  renderChip = (placeholder) => {
+    const fieldId = placeholder.dataset.commandFieldId;
+    const field = /** @type {(Element & {renderChip?: (el: HTMLElement) => Node | null}) | undefined} */ (
+      fieldId ? this.triggerFields.get(fieldId) : undefined
+    );
+    return field?.renderChip?.(placeholder);
+  };
+
+  /** @param {CustomEvent<{value: string, html: string, attachments: File[], attachmentElements: HTMLElement[]}>} event */
   handleSend(event) {
-    const { value, html, attachments = [], attachmentElements = [], commands = [] } = event.detail;
+    const { value, html, attachments = [], attachmentElements = [] } = event.detail;
     const id = crypto.randomUUID();
-    // Must land before #applyMessages below — chx-message-list's first render of this message
-    // reads these maps synchronously, so a chip/card would fall through to its rebuild-fallback
-    // tier instead of reproducing the live element if this ran after.
-    for (const { commandId, element } of commands) {
-      if (commandId) {
-        this.#commandChipElements.set(commandId, element);
-        this.#commandIdOwners.set(commandId, id);
-      }
-    }
     /** @type {ChxMessage} */
     const message = {
       id,
@@ -350,7 +314,6 @@ export class ChxChat extends LitElement {
     };
 
     this.#applyMessages(reconcileMessages(this.#internalMessages, message, this.userId));
-    this.#commandsProvider.setValue([]);
     this.#deliver(message); // not awaited — see #deliver's own doc for what this does
   }
 
@@ -368,22 +331,14 @@ export class ChxChat extends LitElement {
   }
 
   /**
-   * Evicts #commandChipElements/#attachmentChipElements entries whose owning message is gone from
-   * `messages` — otherwise both grow for the life of the page, since nothing else ever removes
-   * from them. Cheap early-out when neither map has ever been touched (the common plain-text-only
-   * case) — otherwise a single pass over `messages`, no HTML re-parsing.
+   * Evicts #attachmentChipElements entries whose owning message is gone from `messages` —
+   * otherwise it grows for the life of the page, since nothing else ever removes from it. Cheap
+   * early-out when it's never been touched (the common attachment-less case) — otherwise a single
+   * pass over `messages`.
    * @param {ChxMessage[]} messages
    */
   #pruneChipElements(messages) {
-    if (this.#commandIdOwners.size === 0 && this.#attachmentChipElements.size === 0) return;
-
-    const currentMessageIds = new Set(messages.map((message) => message.id));
-    for (const [commandId, ownerId] of this.#commandIdOwners) {
-      if (!currentMessageIds.has(ownerId)) {
-        this.#commandIdOwners.delete(commandId);
-        this.#commandChipElements.delete(commandId);
-      }
-    }
+    if (this.#attachmentChipElements.size === 0) return;
 
     const currentAttachmentPartIds = new Set();
     for (const message of messages) {
@@ -534,29 +489,24 @@ export class ChxChat extends LitElement {
     }
   }
 
-  /** @param {CustomEvent<{commands: Array<{label: string, element: HTMLElement}>}>} event */
-  handleChange(event) {
-    this.#commandsProvider.setValue(event.detail.commands ?? []);
-  }
-
   /** @param {CustomEvent<{attachments: File[]}>} event */
   handleAttachmentsChange = (event) => {
     this.#attachmentsProvider.setValue(event.detail.attachments);
   };
 
   /**
-   * Sole discovery point for <chx-command-field> — chx-chat is the direct
-   * parent of both chx-message-composer and (once it consumes this too)
-   * chx-message-list, so a plain property passed to both is enough; no
-   * `@lit/context` needed. Key and value are both the live element —
-   * chx-chat stays agnostic of what a "plugin" even is, doesn't read
-   * commandCharacter itself, just tracks connected elements.
+   * Sole discovery point for <chx-command-field>/<chx-command-picker> — chx-chat is the direct
+   * parent of both chx-message-composer and chx-message-list, so a plain property passed to both
+   * is enough; no `@lit/context` needed. Keyed by `element.id` (not the element itself) so
+   * `renderChip` can dispatch straight to the one field a chip's `data-command-field-id` names —
+   * chx-chat stays agnostic of what a "plugin" even is, doesn't read commandCharacter itself, just
+   * tracks connected elements by id.
    * @param {Event} event
    */
   handleCommandFieldSlotchange(event) {
     const slot = /** @type {HTMLSlotElement} */ (event.target);
-    this.commandFields = new Map(
-      slot.assignedElements({ flatten: true }).map((element) => [element, element]),
+    this.triggerFields = new Map(
+      slot.assignedElements({ flatten: true }).map((element) => [element.id, element]),
     );
   }
 
@@ -576,7 +526,7 @@ export class ChxChat extends LitElement {
     if (!composer) return;
     composer.label = this.label;
     composer.loading = this.loading;
-    composer.commandFields = this.commandFields;
+    composer.triggerFields = this.triggerFields;
     composer.dragging = this.dragging;
     composer.messagesEmpty = this.#internalMessages.length === 0;
   }
@@ -584,7 +534,7 @@ export class ChxChat extends LitElement {
   /**
    * The message list only needs the drag-overlay state (see
    * message-list.js's own `dragging`/`dropHint`) — it has no
-   * label/loading/commandFields concept of its own.
+   * label/loading/triggerFields concept of its own.
    */
   pushMessageListProperties() {
     const list = this.messageListElement;
@@ -593,7 +543,7 @@ export class ChxChat extends LitElement {
     list.messages = this.#internalMessages;
     list.messageElement = this.messageElement;
     list.partElements = this.partElements;
-    list.commandChipElements = this.#commandChipElementsView;
+    list.renderChip = this.renderChip;
     list.attachmentChipElements = this.#attachmentChipElementsView;
     list.typing = this.#typing.isTyping();
     list.streaming = this.#isWaitingForReply();
@@ -637,7 +587,7 @@ export class ChxChat extends LitElement {
    * `dragging` is controller-driven (DropTargetController calls
    * requestUpdate() directly, not through a declared reactive property), so
    * it never shows up in changedProperties the way label/loading/
-   * commandFields do. Cheap enough to just always re-push.
+   * triggerFields do. Cheap enough to just always re-push.
    * @param {import("lit").PropertyValues} changedProperties
    */
   updated(changedProperties) {

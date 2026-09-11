@@ -234,7 +234,16 @@ template, own options).
 
 - **Per-picker `placement`/`offset` customization** — currently fixed, not exposed as a public
   property yet.
-- **Rendering/interactivity inside `chx-message-list`** for already-sent messages.
+- **Rendering inside `chx-message-list` for already-sent messages** is supported for
+  `<chx-command-picker>` out of the box (via its own `renderChip`, dispatched to automatically —
+  see "Customizing the resolved chip" above). If you want a JS-built look (not a `slot="chip"`
+  template) for **both** live-typed and historical chips, override `buildChip(attrs)` instead of
+  `renderChip` directly — `buildChip` is the one draw point both paths share, so the two stay
+  visually identical automatically. Overriding `renderChip` itself only affects historical
+  rendering; live resolution keeps using `slot="chip"`/the auto-built default regardless, so the
+  two will visibly diverge unless you keep them in sync yourself. A hand-rolled
+  `<chx-command-field>` doesn't get either hook for free — it would need to implement its own
+  `renderChip(placeholder)` method for chx-chat's dispatcher to find and call.
 - **A defined format** for how a chip's structured data (e.g. a user id, not just display text)
   should round-trip through `chx-send-message`/`getMessages` beyond the raw `html` field.
 - **No marks** (bold/italic/etc.) yet in the composer's text.
@@ -285,7 +294,7 @@ yourself.
   const filesMenuEl = document.getElementById("files-menu");
 
   // Opaque token from chx-command-query's detail — hold onto it and pass it
-  // back unchanged to insertAtCommand, so chx-chat can reject a stale
+  // back unchanged to insertAtRange, so chx-textbox can reject a stale
   // resolution (e.g. the user already backspaced past the trigger, or
   // opened a second command, before this fetch resolved).
   let activeTarget = null;
@@ -319,7 +328,7 @@ yourself.
     const node = template.content.cloneNode(true);
     const chip = node.querySelector("md-input-chip");
     if (chip) chip.textContent = value;
-    chatEl.insertAtCommand(activeTarget, node); // replaces the tracked "@query" text
+    chatEl.messageComposerElement.insertAtRange(activeTarget, node); // replaces the tracked "@query" text
     filesMenuEl.open = false;
   }
 
@@ -354,11 +363,13 @@ yourself.
 </script>
 ```
 
-Calling `chatEl.insertAtCommand(target, node)` is what finalizes the chip: composer replaces
-the raw typed text (from the trigger character to the caret) with `node`, made non-editable.
-`target` must match the token the composer is currently tracking — a stale/late resolution
-(after the trigger closed or a different command opened) is silently ignored rather than
-inserting into the wrong place.
+Calling `chatEl.messageComposerElement.insertAtRange(target, node)` is what finalizes the chip:
+composer replaces the raw typed text (from the trigger character to the caret) with `node`, made
+non-editable. `target` must match the token the composer is currently tracking — a stale/late
+resolution (after the trigger closed or a different command opened) is silently ignored rather
+than inserting into the wrong place. This is chat-agnostic plumbing shared with `<chx-command-picker>`
+— `chx-chat` itself has no command-specific method at all, `messageComposerElement` is its only
+(fully generic) part in this.
 
 ### `<chx-command-field>`
 
@@ -373,7 +384,7 @@ completely separate, app-defined `Node`, not an instance of this component. Your
 doesn't need to anchor to this field at all — `chx-command-query`'s `x`/`y` (see Events) let
 you open it right at the caret via `openAtPoint`.
 
-### `chx-chat.insertAtCommand(target, node)`
+### `chx-message-composer.insertAtRange(target, node)`
 
 Resolves the command search identified by `target` (the token from that search's
 `chx-command-query` events) by replacing its tracked "@query" range with a chip. `node` is
@@ -391,7 +402,7 @@ past).
 
 | Event                  | Dispatched by                                                             | Bubbles / composed | `detail`                             | Notes                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  |
 | ---------------------- | ------------------------------------------------------------------------- | ------------------ | ------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `chx-command-query`    | `chx-message-composer` (on the matching registered `<chx-command-field>`) | yes / no           | `{ value, character, target, x, y }` | Fires on every keystroke while a trigger character is "open" (at the start of a line, or right after whitespace — `user@domain` mid-word never triggers, and the caret has to sit at the end of the query, not merely inside/before already-typed text). `value` is the text typed since the trigger, spaces included. `value: null` signals close (Escape pressed, or the trigger character deleted). `target` is an opaque token identifying this search session — pass it back to `insertAtCommand`. `x`/`y` are the trigger character's viewport coordinates, fixed for the whole session, meant for `menu.openAtPoint(x, y)`; not present when `value` is `null`. |
+| `chx-command-query`    | `chx-message-composer` (on the matching registered `<chx-command-field>`) | yes / no           | `{ value, character, target, x, y }` | Fires on every keystroke while a trigger character is "open" (at the start of a line, or right after whitespace — `user@domain` mid-word never triggers, and the caret has to sit at the end of the query, not merely inside/before already-typed text). `value` is the text typed since the trigger, spaces included. `value: null` signals close (Escape pressed, or the trigger character deleted). `target` is an opaque token identifying this search session — pass it back to `insertAtRange`. `x`/`y` are the trigger character's viewport coordinates, fixed for the whole session, meant for `menu.openAtPoint(x, y)`; not present when `value` is `null`. |
 | `chx-command-confirm`  | `chx-message-composer` (on the matching registered `<chx-command-field>`) | yes / no           | `{ target }`                         | Fires when Enter is pressed while a search is open — the composer swallows Enter itself (so it never submits the message mid-search) and leaves "what does confirm mean" entirely to you, since only your app knows which item is currently highlighted.                                                                                                                                                                                                                                                                                                                                                                                                               |
 | `chx-command-navigate` | `chx-message-composer` (on the matching registered `<chx-command-field>`) | yes / no           | `{ target, direction }`              | Fires when ArrowUp/ArrowDown is pressed while a search is open. `direction` is `"up"` or `"down"`. Focus is never moved to the menu for this — see Quick start's `handleNavigate` for driving `<md-menu-item>.selected` directly instead of `menu.focusFirstItem()`/real DOM focus.                                                                                                                                                                                                                                                                                                                                                                                    |
 | `chx-command-selected` | `chx-message-composer`                                                    | yes / yes          | `{ target, id }`                     | Confirmation, fired after the node is actually inserted into the textbox.                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                              |

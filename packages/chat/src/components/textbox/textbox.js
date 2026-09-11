@@ -33,7 +33,7 @@ function renderDefaultPasteChip({ lines }) {
 /**
  * @tag chx-textbox
  * @summary MD3 filled-field container that owns the ProseMirror `EditorView`
- * directly, configured via `label`/`placeholder`/`getCommandFields` and
+ * directly, configured via `label`/`placeholder`/`getTriggerFields` and
  * reacting to `chx-textbox-change`/`chx-command-selected`.
  */
 @customElement("chx-textbox")
@@ -46,7 +46,7 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     placeholder: { type: String, attribute: true },
     dropHint: { type: String, attribute: "drop-hint" },
     dragging: { type: Boolean, reflect: true, attribute: true },
-    getCommandFields: { attribute: false },
+    getTriggerFields: { attribute: false },
     pasteThreshold: { type: Number, attribute: "paste-threshold" },
     renderPasteChip: { attribute: false },
     pasteHandlers: { attribute: false },
@@ -81,8 +81,8 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     /** @type {boolean} Pushed down by chx-message-composer — driven by chx-chat's DropTargetController. */
     this.dragging = false;
 
-    /** @type {() => Map<Element, Element>} */
-    this.getCommandFields = () => new Map();
+    /** @type {() => Map<string, Element>} */
+    this.getTriggerFields = () => new Map();
 
     /** @type {number} Pastes of at least this many lines collapse to a chip; <= 0 disables. */
     this.pasteThreshold = 205;
@@ -150,7 +150,7 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     this.editor = new Editor(this.inputElement, {
       onChange: this.handleEditorChange,
       onSubmit: () => this.closest("form")?.requestSubmit(),
-      getCommandFields: () => this.getCommandFields(),
+      getCommandFields: () => this.getTriggerFields(),
       onCommandSelected: this.handleCommandSelected,
       placeholder: this.placeholder,
       getPasteThreshold: () => this.pasteThreshold,
@@ -198,11 +198,6 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     return this.editor?.getHTML() ?? "";
   }
 
-  /** @returns {Array<{label: string, commandId: string | undefined, element: HTMLElement}>} */
-  getCommands() {
-    return this.editor?.getCommands() ?? [];
-  }
-
   focus() {
     this.editor?.focus();
   }
@@ -234,12 +229,12 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
   }
 
   /**
-   * Forwarded from chx-message-composer's own insertAtCommand — see
+   * Forwarded from chx-message-composer's own insertAtRange — see
    * Editor.resolveCommand for the actual insertion logic.
    * @param {string | null} target
    * @param {Node} node
    */
-  insertAtCommand(target, node) {
+  insertAtRange(target, node) {
     this.editor?.resolveCommand(target, node);
   }
 

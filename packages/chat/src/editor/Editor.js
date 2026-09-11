@@ -42,7 +42,7 @@ export class Editor {
    * @param {{
    *   onChange: (detail: {value: string, html: string}) => void,
    *   onSubmit: () => void,
-   *   getCommandFields?: () => Map<Element, Element>,
+   *   getCommandFields?: () => Map<string, Element>,
    *   onCommandSelected?: (detail: {target: string | null, id: string | undefined}) => void,
    *   attributes?: Record<string, string>,
    *   placeholder?: string,

@@ -46,7 +46,7 @@ no `chx-send-message` listener needed just to see your own message appear.
 streamed reply, or an ingested `adapter.subscribe`/`addMessage` message all update the same
 internal store directly. Reassign `messages` only when you want to replace the whole array
 yourself (bulk load, external edit/delete) — always with a **new array reference**, the same
-identity rule `commandFields` already has.
+identity rule `triggerFields` already has.
 
 ```js
 chatEl.addEventListener("chx-messages-change", (event) => {
@@ -260,7 +260,7 @@ messageListEl.addEventListener("chx-scroll-to-bottom", () => hideJumpToLatestBut
 | `retry`                                                | `(messageId: string): void`                                                    | Re-sends a `status: "failed"` message. No-op otherwise.                                                    |
 | `regenerate`                                           | `(messageId: string): void`                                                    | Redoes an assistant reply (needs `adapter.regenerate`). Accepts the reply's id or its anchoring send's id. |
 | `cancel`                                               | `(messageId: string): void`                                                    | Aborts an in-flight send/regenerate.                                                                       |
-| `attachFile` / `setText` / `focus` / `insertAtCommand` | —                                                                              | Delegate to the composer — see the attachments/commands docs.                                              |
+| `attachFile` / `setText` / `focus`                     | —                                                                              | Delegate to the composer — see the attachments docs.                                                      |
 
 ### `chx-chat` — events
 

@@ -4,6 +4,8 @@ import { customElement } from "lit/decorators.js";
 import "@symblight/wc-material/menu";
 import "../chip/chip.js";
 
+import { readChipAttrs, buildCommandChip } from "../../editor/command-chip.js";
+
 import styles from "./command-picker.css?inline";
 
 /** @typedef {HTMLElement & { open: boolean, toggle: (options?: {force?: boolean}) => Promise<void>, openAtPoint: (x: number, y: number) => void }} MenuElement */
@@ -226,28 +228,93 @@ export class ChxCommandPicker extends LitElement {
       }),
     );
 
-    const chatEl =
-      /** @type {(HTMLElement & { insertAtCommand: (target: string | null, node: Node) => void }) | null} */ (
-        this.closest("chx-chat")
+    const composer =
+      /** @type {(HTMLElement & { insertAtRange: (target: string | null, node: Node) => void }) | null | undefined} */ (
+        /** @type {any} */ (this.closest("chx-chat"))?.messageComposerElement
       );
-    if (!chatEl) return;
+    if (!composer) return;
 
     const node = overrideNode ?? this.buildDefaultChip(optionElement, value);
-    chatEl.insertAtCommand(this._activeTarget, node);
+    this._stampOwner(node);
+    composer.insertAtRange(this._activeTarget, node);
+  }
+
+  /**
+   * Tags whichever node is about to be inserted (the default chip, or an app-supplied `setChip`
+   * override) with this picker's own id — the token `renderChip` later reads to know a historical
+   * placeholder is its own, without any live-element bookkeeping. Handles both shapes `insertAtRange`
+   * accepts: a bare chip element, or a fragment wrapping one.
+   * @param {Node} node
+   */
+  _stampOwner(node) {
+    const chip =
+      node instanceof Element && node.hasAttribute("data-template-id")
+        ? node
+        : /** @type {ParentNode} */ (node).querySelector?.("[data-template-id]");
+    if (chip instanceof HTMLElement) chip.dataset.commandFieldId = this.id;
+  }
+
+  /**
+   * Rebuilds a historical `[data-template-id]` placeholder into the real chip — called by chx-chat's
+   * generic renderChip dispatcher once it's matched the placeholder's `data-command-field-id` back to
+   * this instance. Pure builder, no DOM mutation — the caller replaces the placeholder itself.
+   * Delegates the actual drawing to `buildChip` (below) — override that instead of this one unless
+   * you specifically need to change ownership/matching, so live and historical stay in sync for free.
+   * @param {HTMLElement} placeholder
+   * @returns {Node | null}
+   */
+  renderChip(placeholder) {
+    const attrs = readChipAttrs(placeholder);
+    if (attrs.data.commandFieldId !== this.id) return null;
+    return this._ensureTemplateId(this.buildChip(attrs), attrs.templateId);
+  }
+
+  /**
+   * Draws a chip from resolved attrs — the single place a picker's chip is actually built, used by
+   * both live resolution (buildDefaultChip, below, right as you pick an option) and historical
+   * hydration (renderChip, above, once a message with that chip has been sent and re-rendered).
+   * Override this one method to customize the look everywhere at once. Overriding `renderChip`
+   * directly instead only affects historical rendering — the two paths are NOT otherwise kept in
+   * sync, so a `renderChip` override alone will visibly diverge from what typing shows live. Default
+   * implementation clones this picker's own `slot="chip"` template (or the auto-built default).
+   * Whatever this returns gets `data-template-id` stamped on automatically if missing (see
+   * `_ensureTemplateId`) — a custom override never needs to know that attribute exists.
+   * @param {{templateId: string, label: string, icon: string | null, data: Record<string, string>}} attrs
+   * @returns {HTMLElement}
+   */
+  buildChip(attrs) {
+    return buildCommandChip(attrs);
+  }
+
+  /**
+   * `insertAtRange`/`Editor.resolveCommand` (live) and this picker's own `renderChip` (historical)
+   * both require `data-template-id` on the chip node as their round-trip anchor — silently no-op
+   * without it, confirmed live: a `buildChip` override that returns a plain element with no
+   * `data-template-id` makes Enter/click on a menu option do nothing at all, no error either. A
+   * custom `buildChip` has no reason to know that requirement exists, so it's enforced here instead
+   * of documented as the override's responsibility.
+   * @param {HTMLElement} chip
+   * @param {string} templateId
+   * @returns {HTMLElement}
+   */
+  _ensureTemplateId(chip, templateId) {
+    if (!chip.hasAttribute("data-template-id")) chip.setAttribute("data-template-id", templateId);
+    return chip;
   }
 
   /**
    * @param {MenuItemElement} optionElement
    * @param {string} value
-   * @returns {DocumentFragment}
+   * @returns {HTMLElement}
    */
   buildDefaultChip(optionElement, value) {
-    const clone = /** @type {DocumentFragment} */ (
-      /** @type {HTMLTemplateElement} */ (this._chipTemplate).content.cloneNode(true)
-    );
-    const chip = clone.querySelector("[data-template-id]");
-    if (chip) chip.append(optionElement.textContent?.trim() || value);
-    return clone;
+    const attrs = {
+      templateId: /** @type {HTMLTemplateElement} */ (this._chipTemplate).id,
+      label: optionElement.textContent?.trim() || value,
+      icon: null,
+      data: {},
+    };
+    return this._ensureTemplateId(this.buildChip(attrs), attrs.templateId);
   }
 
   render() {

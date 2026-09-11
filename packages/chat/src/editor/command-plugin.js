@@ -52,7 +52,7 @@ const INACTIVE_STATE = {
 
 /**
  * Detects an open trigger search and dispatches chx-command-* events.
- * @param {{ getCommandFields: () => Map<Element, Element> }} options
+ * @param {{ getCommandFields: () => Map<string, Element> }} options
  * @returns {import("prosemirror-state").Plugin}
  */
 export function createCommandPlugin({ getCommandFields }) {

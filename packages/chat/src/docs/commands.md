@@ -237,11 +237,14 @@ template, own options).
 - **Rendering inside `chx-message-list` for already-sent messages** is supported for
   `<chx-command-picker>` out of the box (via its own `renderChip`, dispatched to automatically —
   see "Customizing the resolved chip" above). If you want a JS-built look (not a `slot="chip"`
-  template) for **both** live-typed and historical chips, override `buildChip(attrs)` instead of
-  `renderChip` directly — `buildChip` is the one draw point both paths share, so the two stay
+  template) for **both** live-typed and historical chips, override `buildChip(attrs, source)` instead
+  of `renderChip` directly — `buildChip` is the one draw point both paths share, so the two stay
   visually identical automatically. Overriding `renderChip` itself only affects historical
   rendering; live resolution keeps using `slot="chip"`/the auto-built default regardless, so the
-  two will visibly diverge unless you keep them in sync yourself. A hand-rolled
+  two will visibly diverge unless you keep them in sync yourself. `source` is `"composer"` while an
+  option is being picked live, `"message"` when rebuilding a chip already sitting in a sent
+  message — use it if the two really do need to differ (e.g. only a live chip should carry a click
+  handler, since an immutable historical one has nothing for it to do). A hand-rolled
   `<chx-command-field>` doesn't get either hook for free — it would need to implement its own
   `renderChip(placeholder)` method for chx-chat's dispatcher to find and call.
 - **A defined format** for how a chip's structured data (e.g. a user id, not just display text)

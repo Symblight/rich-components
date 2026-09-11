@@ -1,6 +1,6 @@
-import { Plugin, TextSelection } from "prosemirror-state";
+import { Plugin } from "prosemirror-state";
 
-const WHITESPACE = /\s/; // matches U+00A0 too, same as command-plugin.js/Editor.js
+import { landCaretAfterNode } from "./land-caret.js";
 
 /**
  * A trailing "\n" is a line terminator, not an extra line — "a\nb\n" is 2
@@ -14,11 +14,7 @@ export function countLines(text) {
 }
 
 /**
- * Builds a `paste` node at the current selection and lands the caret one
- * space after it — same "reuse a following space instead of adding a
- * second one" logic as Editor.js's resolveCommand. Shared by both the
- * threshold branch and the pasteHandler branch below, since caret placement
- * doesn't depend on which one produced the chip.
+ * Builds a `paste` node at the current selection and lands the caret one space after it.
  * @param {import("prosemirror-view").EditorView} view
  * @param {{text: string, lines: number, handlerId: string | null, data: Record<string, unknown>}} attrs
  * @returns {true}
@@ -26,16 +22,7 @@ export function countLines(text) {
 function insertPasteChip(view, attrs) {
   const chip = view.state.schema.nodes.paste.create(attrs);
   const from = view.state.selection.from;
-  let tr = view.state.tr.replaceSelectionWith(chip, false);
-
-  const afterChip = from + chip.nodeSize;
-  const $afterChip = tr.doc.resolve(afterChip);
-  const nextChar = $afterChip.parent.textBetween(
-    $afterChip.parentOffset,
-    Math.min($afterChip.parentOffset + 1, $afterChip.parent.content.size),
-  );
-  if (!nextChar || !WHITESPACE.test(nextChar)) tr = tr.insertText(" ", afterChip);
-  tr = tr.setSelection(TextSelection.create(tr.doc, afterChip + 1));
+  const tr = landCaretAfterNode(view.state.tr.replaceSelectionWith(chip, false), from, chip);
 
   view.dispatch(tr.scrollIntoView());
   return true;

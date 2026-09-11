@@ -20,6 +20,9 @@ import { getFiles } from "@atlaskit/pragmatic-drag-and-drop/utils/get-files";
  * @implements {ReactiveController}
  */
 export class DropTargetController {
+  /** @type {(() => void) | undefined} */
+  #cleanup;
+
   /**
    * @param {ReactiveControllerHost & HTMLElement} host
    * @param {{onDrop: (files: File[]) => void, canDrop?: () => boolean}} options
@@ -38,7 +41,7 @@ export class DropTargetController {
     this.dragging = false;
 
     /** @type {(() => void) | undefined} */
-    this._cleanup = undefined;
+    this.#cleanup = undefined;
 
     host.addController(this);
   }
@@ -51,7 +54,7 @@ export class DropTargetController {
   }
 
   hostConnected() {
-    this._cleanup = dropTargetForExternal({
+    this.#cleanup = dropTargetForExternal({
       element: this.host,
       canDrop: ({ source }) => containsFiles({ source }) && this.canDrop(),
       onDragEnter: () => this.setDragging(true),
@@ -65,7 +68,7 @@ export class DropTargetController {
   }
 
   hostDisconnected() {
-    this._cleanup?.();
-    this._cleanup = undefined;
+    this.#cleanup?.();
+    this.#cleanup = undefined;
   }
 }

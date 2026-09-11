@@ -19,7 +19,7 @@ import send from "@material-design-icons/svg/outlined/arrow_upward.svg?raw";
  * Built-in `paste` chip — used when no pasteHandler claimed the paste (or
  * the app hasn't set `renderPasteChip`). See chx-paste-chip for the
  * icon/label slots this leaves to their own defaults.
- * @param {{text: string, lines: number, data: Record<string, unknown>}} detail
+ * @param {{text: string, lines: number, data: Record<string, unknown>, source: "composer"}} detail
  * @returns {HTMLElement}
  */
 function renderDefaultPasteChip({ lines }) {
@@ -87,7 +87,7 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     /** @type {number} Pastes of at least this many lines collapse to a chip; <= 0 disables. */
     this.pasteThreshold = 205;
 
-    /** @type {((detail: {text: string, lines: number, data: Record<string, unknown>}) => HTMLElement) | undefined} App override for the paste chip's DOM. */
+    /** @type {((detail: {text: string, lines: number, data: Record<string, unknown>, source: "composer"}) => HTMLElement) | undefined} App override for the paste chip's DOM. */
     this.renderPasteChip = undefined;
 
     /** @type {import("../../types/paste-handler.js").PasteHandler[]} Ordered — first match() to claim a paste wins. See .claude/plans/paste-handlers.spec.md. */

@@ -357,13 +357,8 @@ export const CustomCommands = {
 };
 
 /**
- * Overrides `<chx-command-picker>`'s `buildChip(attrs)` — the single draw point shared by live
- * resolution (right as you pick an option) and historical hydration (once a message with that chip
- * has been sent and re-rendered) — rather than a `slot="chip"` template. Overriding `buildChip`
- * instead of `renderChip` directly keeps both paths visually identical for free: `attrs` is
- * already parsed (`{templateId, label, icon, data}`), no manual `readChipAttrs` needed here.
- * `attrs.data.path` is the app-only breadcrumb `createFilePickedHandler`-style handlers stash on a
- * live chip — round-trips through the token the same way.
+ * Overrides `<chx-command-picker>`'s `buildChip(attrs)` for a JS-built look, kept in sync between
+ * live and historical automatically.
  * @param {{templateId: string, label: string, icon: string | null, data: Record<string, string>}} attrs
  * @returns {HTMLElement}
  */
@@ -380,7 +375,7 @@ function buildFilesChip(attrs) {
   return chip;
 }
 
-/** Same idea as buildFilesChip, distinct icon/color — the "commands" picker's own buildChip override. @param {{templateId: string, label: string, icon: string | null, data: Record<string, string>}} attrs @returns {HTMLElement} */
+/** Same idea as buildFilesChip, distinct icon/color. @param {{templateId: string, label: string, icon: string | null, data: Record<string, string>}} attrs @returns {HTMLElement} */
 function buildCommandsChip(attrs) {
   const chip = /** @type {import("../chip/chip.js").ChxChip} */ (document.createElement("chx-chip"));
   chip.style.setProperty("--chx-chip-container-color", "var(--md-sys-color-tertiary-container)");
@@ -394,21 +389,9 @@ function buildCommandsChip(attrs) {
 }
 
 /**
- * Two independently-owned pickers ("@" files, "/" commands), each customizing its chips by
- * overriding `.buildChip` (see buildFilesChip/buildCommandsChip above) instead of a `slot="chip"`
- * template — different icon and container color per picker, so the two chip "families" stay
- * visually distinct, and *identical* whether you type the trigger live or load a past message
- * containing one (try typing "@" or "/" here — the live-picked chip matches the seeded historical
- * ones exactly, unlike overriding `renderChip` directly, which only ever affects history). `chx-chat`
- * is seeded with a `messages` array whose `html` already contains resolved chip tokens — the exact
- * `<span data-template-id="…" data-command-field-id="…">` markup the `command` schema node's own
- * `toDOM` produces (see schema.js), hand-written here rather than typed live; `data-template-id`'s
- * value is irrelevant to either override (no template lookup happens) but still required for
- * chx-message-list to find the placeholder at all — it only ever looks for `[data-template-id]`.
- * Nothing runs a search or a resolve on load: chx-message-list finds each placeholder, chx-chat's
- * `renderChip` dispatches it by `data-command-field-id` to the one picker that would have minted
- * it, and that picker's default `renderChip` calls its own `buildChip` override to rebuild it.
- * Proves multi-picker routing: neither picker ever touches the other's chips, live or historical.
+ * Two independently-owned pickers ("@" files, "/" commands), each with its own `.buildChip` look.
+ * Seeded with a historical message already containing resolved chip tokens, to demonstrate
+ * multi-picker routing — try typing "@" or "/" too, the live chip matches the seeded ones exactly.
  */
 /** @type {Story} */
 export const MultiPickerHydration = {
@@ -428,8 +411,8 @@ export const MultiPickerHydration = {
               type: "text",
               text: "Check chat.js and /summarize it for me",
               html:
-                'Check <span data-template-id="files-chip-template" data-command-field-id="files" data-path="src/components/base/chat.js">chat.js</span>' +
-                ' and <span data-template-id="commands-chip-template" data-command-field-id="commands">summarize</span> it for me',
+                'Check <span data-template-id="files-chip-template" data-chip-owner-id="files" data-path="src/components/base/chat.js">chat.js</span>' +
+                ' and <span data-template-id="commands-chip-template" data-chip-owner-id="commands">summarize</span> it for me',
             },
           ],
         },
@@ -445,8 +428,8 @@ export const MultiPickerHydration = {
               type: "text",
               text: "On it — /explain coming up, referencing message-composer.js too.",
               html:
-                'On it — <span data-template-id="commands-chip-template" data-command-field-id="commands">explain</span>' +
-                ' coming up, referencing <span data-template-id="files-chip-template" data-command-field-id="files" data-path="src/components/message-composer/message-composer.js">message-composer.js</span> too.',
+                'On it — <span data-template-id="commands-chip-template" data-chip-owner-id="commands">explain</span>' +
+                ' coming up, referencing <span data-template-id="files-chip-template" data-chip-owner-id="files" data-path="src/components/message-composer/message-composer.js">message-composer.js</span> too.',
             },
           ],
         },

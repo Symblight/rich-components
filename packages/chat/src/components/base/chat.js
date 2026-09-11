@@ -15,8 +15,8 @@ import { finalizeStreamingParts } from "../../stream/streamHelpers.js";
 
 import styles from "./chat.css?inline";
 
-/** @import { ChxMessage } from "../../types/message.js" */
-/** @import { ChxChatAdapter, ChxMessageRenderer, ChxPartRenderer, ChipElementLookup } from "../../types/adapter.js" */
+/** @import { ChxMessage, ChxMessagePart } from "../../types/message.js" */
+/** @import { ChxChatAdapter, ChxMessageRenderer, ChxPartRenderer } from "../../types/adapter.js" */
 
 /**
  * @tag chx-chat
@@ -52,10 +52,6 @@ export class ChxChat extends LitElement {
   #dropTarget;
   /** @type {ContextProvider<typeof attachmentsContext>} */
   #attachmentsProvider;
-  /** @type {Map<string, HTMLElement>} */
-  #attachmentChipElements = new Map();
-  /** @type {ChipElementLookup} */
-  #attachmentChipElementsView = { get: (key) => this.#attachmentChipElements.get(key) };
 
   constructor() {
     super();
@@ -271,29 +267,35 @@ export class ChxChat extends LitElement {
     return this.#dropTarget.dragging;
   }
 
-  /** part.id -> live `<chx-attachment>` element, for hydrateAttachmentPart. Read-only — use .get(), not .set()/.delete()/.clear(). @returns {ChipElementLookup} */
-  get attachmentChipElements() {
-    return this.#attachmentChipElementsView;
-  }
-
   /**
-   * Rebuilds a historical chip placeholder by dispatching to whichever registered trigger field
-   * owns it (matched via `data-command-field-id`) — chat itself never knows what a "command" or a
-   * "chip" is, it just looks up a field by id and calls a duck-typed `renderChip` on it if present.
+   * Rebuilds a historical chip by dispatching to whichever field owns it (by `data-chip-owner-id`)
+   * — a trigger field, or the composer's single `chx-attachments` for chip-mode.
    * @param {HTMLElement} placeholder
    * @returns {Node | null | undefined}
    */
   renderChip = (placeholder) => {
-    const fieldId = placeholder.dataset.commandFieldId;
-    const field = /** @type {(Element & {renderChip?: (el: HTMLElement) => Node | null}) | undefined} */ (
-      fieldId ? this.triggerFields.get(fieldId) : undefined
+    const ownerId = placeholder.dataset.chipOwnerId;
+    if (!ownerId) return undefined;
+    const attachments = this.messageComposerElement?.attachmentsElement;
+    const owner = /** @type {(Element & {renderChip?: (el: HTMLElement) => Node | null}) | undefined} */ (
+      this.triggerFields.get(ownerId) ?? (attachments?.id === ownerId ? attachments : undefined)
     );
-    return field?.renderChip?.(placeholder);
+    return owner?.renderChip?.(placeholder);
   };
 
-  /** @param {CustomEvent<{value: string, html: string, attachments: File[], attachmentElements: HTMLElement[]}>} event */
+  /**
+   * Rebuilds an already-sent attachment part (header mode) — dispatches to the composer's single
+   * `chx-attachments`.
+   * @param {ChxMessagePart} part
+   * @returns {HTMLElement | null | undefined}
+   */
+  renderAttachment = (part) => {
+    return this.messageComposerElement?.attachmentsElement?.renderAttachment?.(part);
+  };
+
+  /** @param {CustomEvent<{value: string, html: string, attachments: File[]}>} event */
   handleSend(event) {
-    const { value, html, attachments = [], attachmentElements = [] } = event.detail;
+    const { value, html, attachments = [] } = event.detail;
     const id = crypto.randomUUID();
     /** @type {ChxMessage} */
     const message = {
@@ -304,12 +306,11 @@ export class ChxChat extends LitElement {
       status: "sending",
       parts: [
         { id: `${id}-t1`, type: "text", text: value, html },
-        ...attachments.map((attachment, index) => {
-          const partId = `${id}-a${index}`;
-          const element = attachmentElements[index];
-          if (element) this.#attachmentChipElements.set(partId, element);
-          return { id: partId, type: "attachment", attachment };
-        }),
+        ...attachments.map((attachment, index) => ({
+          id: `${id}-a${index}`,
+          type: "attachment",
+          attachment,
+        })),
       ],
     };
 
@@ -325,30 +326,8 @@ export class ChxChat extends LitElement {
     validateMessages(nextMessages);
     this.#internalMessages = nextMessages;
     this.#lastAnnounced = nextMessages;
-    this.#pruneChipElements(nextMessages);
     this.#announce(nextMessages);
     this.requestUpdate();
-  }
-
-  /**
-   * Evicts #attachmentChipElements entries whose owning message is gone from `messages` —
-   * otherwise it grows for the life of the page, since nothing else ever removes from it. Cheap
-   * early-out when it's never been touched (the common attachment-less case) — otherwise a single
-   * pass over `messages`.
-   * @param {ChxMessage[]} messages
-   */
-  #pruneChipElements(messages) {
-    if (this.#attachmentChipElements.size === 0) return;
-
-    const currentAttachmentPartIds = new Set();
-    for (const message of messages) {
-      for (const part of message.parts ?? []) {
-        if (part.type === "attachment") currentAttachmentPartIds.add(part.id);
-      }
-    }
-    for (const partId of this.#attachmentChipElements.keys()) {
-      if (!currentAttachmentPartIds.has(partId)) this.#attachmentChipElements.delete(partId);
-    }
   }
 
   /** @param {ChxMessage[]} messages */
@@ -495,12 +474,8 @@ export class ChxChat extends LitElement {
   };
 
   /**
-   * Sole discovery point for <chx-command-field>/<chx-command-picker> — chx-chat is the direct
-   * parent of both chx-message-composer and chx-message-list, so a plain property passed to both
-   * is enough; no `@lit/context` needed. Keyed by `element.id` (not the element itself) so
-   * `renderChip` can dispatch straight to the one field a chip's `data-command-field-id` names —
-   * chx-chat stays agnostic of what a "plugin" even is, doesn't read commandCharacter itself, just
-   * tracks connected elements by id.
+   * Sole discovery point for <chx-command-field>/<chx-command-picker>, keyed by `element.id` so
+   * `renderChip` can dispatch to the field a chip's `data-chip-owner-id` names.
    * @param {Event} event
    */
   handleCommandFieldSlotchange(event) {
@@ -544,7 +519,7 @@ export class ChxChat extends LitElement {
     list.messageElement = this.messageElement;
     list.partElements = this.partElements;
     list.renderChip = this.renderChip;
-    list.attachmentChipElements = this.#attachmentChipElementsView;
+    list.renderAttachment = this.renderAttachment;
     list.typing = this.#typing.isTyping();
     list.streaming = this.#isWaitingForReply();
     list.loading = this.#pagination.loading;

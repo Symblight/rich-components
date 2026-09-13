@@ -60,6 +60,13 @@ only ever runs for the live editing view, never for historical message content. 
 same call-signature shape as `chx-command-picker.buildChip`/`chx-attachments.buildAttachment`'s own
 `source` argument, not because it varies here today.
 
+If you want a pasted chip to render as a live component after send too (e.g. `chx-code-block`'s
+own syntax-highlighted look for pasted code, via `pasteHandlers`), that's the same
+`splitMessageParts`/`partElements` mechanism `commands.md`'s "Rendering a sent chip in the message
+list" describes for command chips — write an `InlinePartRule` matching whatever `data-*` markup
+your handler's `render()` puts on the chip, and a `partElements` entry to rebuild it. See
+`code-block.stories.js`'s `MockedMessages` for a complete example.
+
 Whatever element you return is mounted
 directly into the editor as the chip's DOM — style/behave it however you like, keeping in mind it's
 inert (`contenteditable="false"` is set on it automatically) and, per "Chip behavior" above, only

@@ -56,16 +56,19 @@ mechanism a resolved `chx-command-picker` chip uses:
 <chx-attachments id="files" mode="chip" slot="attachments"></chx-attachments>
 ```
 
-Chip mode requires this element to have an `id` (same requirement `chx-command-picker` has) — it's
-how the chip's `<template>` and its historical-rendering ownership are found again later. In chip
+Chip mode requires this element to have an `id` (same requirement `chx-command-picker` has) — the
+id is stamped onto the inserted chip's `data.chipOwnerId`, purely informational data your own
+`partElements.chip` renderer can key off of if you have multiple chip sources on the page. In chip
 mode, `addFiles`/picking/dropping a file never touches the header row at all — no card, no
 `chx-attach`-then-card flow; the file becomes a `chip` node in the document instead, and
 `getAttachments()`/the card-row methods stay empty. The default chip look is a plain `<chx-chip>`
 with the file name — override it with `slot="chip"` (a `<template>`, same convention as
-`chx-command-picker`'s own `slot="chip"`) or `buildChip`/`renderChip` (see Methods below) for a
-JS-built look, kept in sync between live and historical automatically the same way
-`chx-command-picker`'s `buildChip` is — see `commands.md`'s "Customizing the resolved chip" for the
-live/historical consistency reasoning, identical here.
+`chx-command-picker`'s own `slot="chip"`) or `buildChip` (see Methods below) for a JS-built look.
+
+Rendering a sent chip-mode attachment in the message list works exactly like a command-picker
+chip — same `chipPartRule`/`splitMessageParts`/`partElements.chip` mechanism, see `commands.md`'s
+"Rendering a sent chip in the message list". Pass `buildChip` (bound to this element) as your
+`partElements.chip` renderer for the same look live and historical.
 
 A chip-mode attachment does **not** carry the actual `File` through to the sent message the way a
 header-mode one does — once sent, only whatever metadata you put in the chip's `data` survives
@@ -176,6 +179,29 @@ Actually uploading files (as opposed to just tracking them) is your own responsi
 JS-driven example above. `attachments` on send is the current `File[]` snapshot, not upload
 results; nothing in this package prescribes a URL/attachment-id shape yet.
 
+## Rendering a sent attachment in the message list (header mode)
+
+`chx-chat.handleSend` already gives each attached file its own `{type: "attachment", attachment:
+File}` part directly — unlike chip mode, there's no `html` to split. Wire `partElements.attachment`
+straight to `buildAttachment`:
+
+```js
+chatEl.partElements = {
+  attachment: (part) => attachmentsEl.buildAttachment(part.attachment, "message"),
+};
+```
+
+Suppress the remove button yourself if you want an immutable look for sent cards — a plain
+override works, since `buildAttachment` doesn't decide `.slot`/actions for you either way:
+
+```js
+attachment: (part) => {
+  const card = attachmentsEl.buildAttachment(part.attachment, "message");
+  card.append(Object.assign(document.createElement("span"), { slot: "actions" }));
+  return card;
+},
+```
+
 ## `<chx-attachments>` reference
 
 ### Children (the cards)
@@ -199,8 +225,8 @@ at all — see "Two modes" above.
 | `open`             | `(): void`                                                                | Opens the native file picker via an internal hidden `<input type="file" multiple>`. Wire your own upload button's click to this.                                                                                                                                                             |
 | `addFiles`         | `(files: FileList \| File[], source?: "picker" \| "drop" \| "api"): void` | Converts each `File` into a card (header mode) or an inline chip (chip mode) — after firing `chx-attach` (see Events; `preventDefault()` suppresses creation in either mode). Called internally by the file input and by `chx-textbox`'s drop handling.                      |
 | `addAttachments`   | `(container: Element \| DocumentFragment): void`                          | Header mode only. JS-driven escape hatch — appends each of `container`'s children as a card, bypassing the File → default-card conversion. See "Custom card shape".                                                                                                                          |
-| `buildAttachment`  | `(file: File, source?: "composer" \| "message"): HTMLElement`             | Header mode's single card-drawing point — used by both `addFiles` (live, `source: "composer"`) and historical re-rendering of a sent attachment part (`renderAttachment`, `source: "message"`). Override to customize the look everywhere at once; does not decide `.slot` or the actions/remove-button slot, see the class-level doc comment in source.    |
-| `buildChip`        | `(attrs: {templateId, label, icon, data}, source: "composer" \| "message"): HTMLElement` | Chip mode's counterpart to `buildAttachment` — single draw point shared by live insertion (`insertChip`, `source: "composer"`) and historical hydration (`renderChip`, `source: "message"`). Override for a JS-built chip look instead of `slot="chip"`. Same shape as `chx-command-picker.buildChip`. |
+| `buildAttachment`  | `(file: File, source?: "composer" \| "message"): HTMLElement`             | Header mode's single card-drawing point — used by both `addFiles` (live, `source: "composer"`) and your own `partElements.attachment` renderer for historical re-rendering (`source: "message"`, `part.attachment` holds the `File`). Override to customize the look everywhere at once; does not decide `.slot`, see the class-level doc comment in source. |
+| `buildChip`        | `(attrs: {templateId, label, icon, data}, source: "composer" \| "message"): HTMLElement` | Chip mode's counterpart to `buildAttachment` — single draw point shared by live insertion (`insertChip`, `source: "composer"`) and your own `partElements.chip` renderer (`source: "message"`). Override for a JS-built chip look instead of `slot="chip"`. Same shape as `chx-command-picker.buildChip`. |
 | `removeAttachment` | `(element: Element): void`                                                | Header mode only. Removes one card without going through `chx-attachment-remove` — for programmatic cleanup, e.g. after a failed upload.                                                                                                                                                     |
 | `clearAttachments` | `(): void`                                                                | Header mode only. Removes all current cards.                                                                                                                                                                                                                                                 |
 | `getAttachments`   | `(): File[]`                                                              | Header mode only (chip-mode files aren't tracked as separate cards). Reads `.file` off every current card, in DOM order, skipping any that don't expose one. Backs `chx-send-message`/`chx-change`'s `attachments` field.                                                                    |

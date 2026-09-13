@@ -15,7 +15,7 @@ import { finalizeStreamingParts } from "../../stream/streamHelpers.js";
 
 import styles from "./chat.css?inline";
 
-/** @import { ChxMessage, ChxMessagePart } from "../../types/message.js" */
+/** @import { ChxMessage } from "../../types/message.js" */
 /** @import { ChxChatAdapter, ChxMessageRenderer, ChxPartRenderer } from "../../types/adapter.js" */
 
 /**
@@ -267,32 +267,6 @@ export class ChxChat extends LitElement {
     return this.#dropTarget.dragging;
   }
 
-  /**
-   * Rebuilds a historical chip by dispatching to whichever field owns it (by `data-chip-owner-id`)
-   * — a trigger field, or the composer's single `chx-attachments` for chip-mode.
-   * @param {HTMLElement} placeholder
-   * @returns {Node | null | undefined}
-   */
-  renderChip = (placeholder) => {
-    const ownerId = placeholder.dataset.chipOwnerId;
-    if (!ownerId) return undefined;
-    const attachments = this.messageComposerElement?.attachmentsElement;
-    const owner = /** @type {(Element & {renderChip?: (el: HTMLElement) => Node | null}) | undefined} */ (
-      this.triggerFields.get(ownerId) ?? (attachments?.id === ownerId ? attachments : undefined)
-    );
-    return owner?.renderChip?.(placeholder);
-  };
-
-  /**
-   * Rebuilds an already-sent attachment part (header mode) — dispatches to the composer's single
-   * `chx-attachments`.
-   * @param {ChxMessagePart} part
-   * @returns {HTMLElement | null | undefined}
-   */
-  renderAttachment = (part) => {
-    return this.messageComposerElement?.attachmentsElement?.renderAttachment?.(part);
-  };
-
   /** @param {CustomEvent<{value: string, html: string, attachments: File[]}>} event */
   handleSend(event) {
     const { value, html, attachments = [] } = event.detail;
@@ -474,8 +448,9 @@ export class ChxChat extends LitElement {
   };
 
   /**
-   * Sole discovery point for <chx-command-field>/<chx-command-picker>, keyed by `element.id` so
-   * `renderChip` can dispatch to the field a chip's `data-chip-owner-id` names.
+   * Sole discovery point for <chx-command-field>/<chx-command-picker>, keyed by `element.id` —
+   * pushed down to the composer/textbox as `getTriggerFields`/`getCommandFields` for live "@"/"/"
+   * query routing while typing (see `textbox.js`).
    * @param {Event} event
    */
   handleCommandFieldSlotchange(event) {
@@ -518,8 +493,6 @@ export class ChxChat extends LitElement {
     list.messages = this.#internalMessages;
     list.messageElement = this.messageElement;
     list.partElements = this.partElements;
-    list.renderChip = this.renderChip;
-    list.renderAttachment = this.renderAttachment;
     list.typing = this.#typing.isTyping();
     list.streaming = this.#isWaitingForReply();
     list.loading = this.#pagination.loading;

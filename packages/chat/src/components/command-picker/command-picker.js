@@ -5,10 +5,10 @@ import "@symblight/wc-material/menu";
 import "../chip/chip.js";
 
 import {
-  readChipAttrs,
   buildChipElement,
-  findChipElement,
   ensureTemplateId,
+  setupChipTemplate,
+  stampChipOwner,
 } from "../../editor/command-chip.js";
 
 import styles from "./command-picker.css?inline";
@@ -73,7 +73,7 @@ export class ChxCommandPicker extends LitElement {
   }
 
   firstUpdated() {
-    this.setupChipTemplate();
+    this.#chipTemplate = setupChipTemplate(this);
 
     const initial = [...this.children].filter(
       (element) => !(element instanceof HTMLTemplateElement),
@@ -88,46 +88,6 @@ export class ChxCommandPicker extends LitElement {
   /** @returns {MenuElement} */
   get menuElement() {
     return /** @type {MenuElement} */ (this.renderRoot?.querySelector(".command-picker__menu"));
-  }
-
-  setupChipTemplate() {
-    const slotted = /** @type {HTMLElement | null} */ (this.querySelector('[slot="chip"]'));
-
-    if (slotted instanceof HTMLTemplateElement) {
-      if (!slotted.id) slotted.id = `${this.id}-chip-template`;
-      const root = /** @type {HTMLElement | null} */ (slotted.content.firstElementChild);
-      if (root && !root.hasAttribute("data-template-id")) {
-        root.setAttribute("data-template-id", slotted.id);
-      }
-      this.#chipTemplate = slotted;
-      return;
-    }
-
-    // A plain element, not a <template> — adopt it into one, so
-    // ChipNodeView's document.getElementById(templateId) reclone still
-    // has a real <template> to find. Lets consumers author the chip shell
-    // as an ordinary element (Lit bindings and all — a <template> tag
-    // can't contain bindings) instead of hand-writing a <template>.
-    if (slotted) {
-      const template = /** @type {HTMLTemplateElement} */ (document.createElement("template"));
-      template.id = `${this.id}-chip-template`;
-      if (!slotted.hasAttribute("data-template-id")) {
-        slotted.setAttribute("data-template-id", template.id);
-      }
-      slotted.remove();
-      template.content.append(slotted);
-      this.appendChild(template);
-      this.#chipTemplate = template;
-      return;
-    }
-
-    const template = /** @type {HTMLTemplateElement} */ (document.createElement("template"));
-    template.id = `${this.id}-chip-template`;
-    const chip = document.createElement("chx-chip");
-    chip.setAttribute("data-template-id", template.id);
-    template.content.append(chip);
-    this.appendChild(template);
-    this.#chipTemplate = template;
   }
 
   clearOptions() {
@@ -239,26 +199,8 @@ export class ChxCommandPicker extends LitElement {
     if (!composer) return;
 
     const node = overrideNode ?? this.buildDefaultChip(optionElement, value);
-    this.#stampOwner(node);
+    stampChipOwner(node, this.id);
     composer.insertAtRange(this.#activeTarget, node);
-  }
-
-  /** Tags the node about to be inserted with this picker's own id, for renderChip to find later. @param {Node} node */
-  #stampOwner(node) {
-    const chip = findChipElement(node);
-    if (chip) chip.dataset.chipOwnerId = this.id;
-  }
-
-  /**
-   * Rebuilds a historical chip — called by chx-chat's renderChip dispatch. Delegates to
-   * `buildChip` so live and historical stay in sync.
-   * @param {HTMLElement} placeholder
-   * @returns {Node | null}
-   */
-  renderChip(placeholder) {
-    const attrs = readChipAttrs(placeholder);
-    if (attrs.data.chipOwnerId !== this.id) return null;
-    return ensureTemplateId(this.buildChip(attrs, "message"), attrs.templateId);
   }
 
   /**

@@ -73,6 +73,18 @@ export function ensureTemplateId(chip, templateId) {
 }
 
 /**
+ * Tags `node`'s chip-shaped element with `ownerId` — purely informational data a consumer's own
+ * `partElements.chip` renderer can key off of later (e.g. a per-source look), not a dispatch key
+ * the library resolves itself. Shared by `chx-command-picker`/`chx-attachments`' own `#stampOwner`.
+ * @param {Node} node
+ * @param {string} ownerId
+ */
+export function stampChipOwner(node, ownerId) {
+  const chip = findChipElement(node);
+  if (chip) chip.dataset.chipOwnerId = ownerId;
+}
+
+/**
  * Sets up a chip-shell `<template>` from a `slot="chip"` child, or builds a default `<chx-chip>`.
  * `host.id` must already be set — it derives the template's own id.
  * @param {HTMLElement} host

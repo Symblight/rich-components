@@ -1,0 +1,166 @@
+:host {
+  --chx-code-block-background-color: var(--md-sys-color-surface-container-high);
+  --chx-code-block-border-color: var(--md-sys-color-outline-variant);
+  --chx-code-block-header-color: var(--md-sys-color-on-surface-variant);
+  --chx-code-block-body-color: var(--md-sys-color-on-surface);
+  --chx-code-block-border-radius: 0.75rem;
+  --chx-code-block-font-family: "SF Mono", ui-monospace, "Cascadia Code", "Roboto Mono", Consolas, monospace;
+  --chx-code-block-font-size: 0.8125rem;
+
+  /* Default token palette — plain-language names, not CodeMirror's own tag jargon, so a consumer
+     can restyle without knowing @lezer/highlight's tagHighlighter internals. */
+  --chx-code-block-keyword-color: #ab47bc;
+  --chx-code-block-string-color: #2e7d32;
+  --chx-code-block-number-color: #d2691e;
+  --chx-code-block-comment-color: var(--md-sys-color-outline);
+  --chx-code-block-property-color: #1565c0;
+  --chx-code-block-type-color: #00897b;
+  --chx-code-block-tag-color: #c62828;
+  --chx-code-block-invalid-color: var(--md-sys-color-error);
+
+  display: flex;
+  flex-direction: column;
+}
+
+/* Distinct hues carry real information here (unlike most of this package's --md-sys-color-*-only
+   theming), so a separate hand-picked dark set beats forcing 7 token colors onto MD3's 3 hue tokens
+   — same reasoning any syntax-highlighting theme ships light/dark variants instead of one palette. */
+@media (prefers-color-scheme: dark) {
+  :host {
+    --chx-code-block-keyword-color: #ce93d8;
+    --chx-code-block-string-color: #81c784;
+    --chx-code-block-number-color: #ffb74d;
+    --chx-code-block-property-color: #64b5f6;
+    --chx-code-block-type-color: #4db6ac;
+    --chx-code-block-tag-color: #e57373;
+  }
+}
+
+.code-block {
+  display: flex;
+  flex-direction: column;
+  box-sizing: border-box;
+  overflow: hidden;
+  background-color: var(--chx-code-block-background-color);
+  border: 1px solid var(--chx-code-block-border-color);
+  border-radius: var(--chx-code-block-border-radius);
+}
+
+.code-block__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0.5rem 0.75rem;
+  color: var(--chx-code-block-header-color);
+  font-size: 0.75rem;
+}
+
+.code-block__label-group {
+  display: flex;
+  align-items: center;
+  min-width: 0;
+}
+
+.code-block__actions {
+  display: flex;
+  align-items: center;
+  flex: none;
+}
+
+.code-block__label-group ::slotted(*) {
+  margin-inline-start: 0.375rem;
+}
+
+.code-block__actions ::slotted(*) {
+  margin-inline-end: 0.25rem;
+}
+
+.code-block__label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.code-block__button {
+  --md-button-foreground-color: inherit;
+  --md-button-font-size: 0.8rem;
+  --md-button-font-weight: inherit;
+  --md-button-inline-start-space: 0.25rem;
+  --md-button-inline-end-space: 0.25rem;
+  --md-button-block-start-space: 0.125rem;
+  --md-button-block-end-space: 0.125rem;
+}
+
+.code-block__body {
+  margin: 0;
+  overflow-x: auto;
+  padding: 0 0.75rem 0.75rem;
+  color: var(--chx-code-block-body-color);
+  font-family: var(--chx-code-block-font-family);
+  font-size: var(--chx-code-block-font-size);
+  line-height: 1.5;
+
+  & code {
+    white-space: pre;
+  }
+}
+
+.code-block__body[contenteditable] {
+  white-space: pre;
+  outline: none;
+  cursor: text;
+}
+
+.code-block__body[contenteditable]:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: -2px;
+}
+
+.tok-keyword,
+.tok-controlKeyword,
+.tok-operatorKeyword,
+.tok-moduleKeyword {
+  color: var(--chx-code-block-keyword-color);
+}
+
+.tok-string,
+.tok-string2,
+.tok-regexp,
+.tok-atom,
+.tok-bool,
+.tok-null {
+  color: var(--chx-code-block-string-color);
+}
+
+.tok-number {
+  color: var(--chx-code-block-number-color);
+}
+
+.tok-comment,
+.tok-lineComment,
+.tok-blockComment {
+  color: var(--chx-code-block-comment-color);
+  font-style: italic;
+}
+
+.tok-propertyName,
+.tok-attributeName,
+.tok-variableName {
+  color: var(--chx-code-block-property-color);
+}
+
+.tok-typeName,
+.tok-className,
+.tok-namespace {
+  color: var(--chx-code-block-type-color);
+}
+
+.tok-tagName,
+.tok-heading,
+.tok-link {
+  color: var(--chx-code-block-tag-color);
+}
+
+.tok-invalid {
+  color: var(--chx-code-block-invalid-color);
+}

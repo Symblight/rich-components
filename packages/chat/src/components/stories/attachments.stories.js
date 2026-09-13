@@ -14,6 +14,9 @@ import "../../index.js";
 import "../attachments/attachments.js";
 import "../attachment/attachment.js";
 
+import { buildChipElement } from "../../editor/command-chip.js";
+import { chipPartRule, createSplitOnSendHandler } from "../../utils/split-message-parts.js";
+
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
   title: "Attachments API",
@@ -238,10 +241,14 @@ export const CustomCardShape = {
   `,
 };
 
+const handleChipAttachmentMessagesChange = createSplitOnSendHandler([chipPartRule]);
+
 /**
  * Chip mode — attaching a file inserts an inline chip in the text instead of a card. Requires an
- * `id` on `<chx-attachments>`. Seeded with a historical message already containing a chip-mode
- * attachment token, to demonstrate historical hydration.
+ * `id` on `<chx-attachments>`. `partElements.chip` (via `buildChipElement`, the same draw point
+ * live insertion uses) renders both the seeded historical `type: "chip"` part below and any chip
+ * sent live — `chx-messages-change` re-splits a freshly sent message into one via
+ * `createSplitOnSendHandler`/`splitMessageParts`, same mechanism as command-picker's own chips.
  */
 /** @type {Story} */
 export const ChipMode = {
@@ -249,6 +256,8 @@ export const ChipMode = {
     ${triggerStyles}
     <chx-chat
       label="Write your prompt..."
+      .partElements=${{ chip: buildChipElement }}
+      @chx-messages-change=${handleChipAttachmentMessagesChange}
       .messages=${[
         {
           id: "msg-1",
@@ -257,14 +266,16 @@ export const ChipMode = {
           createdAt: Date.now(),
           status: "sent",
           parts: [
+            { id: "msg-1-p1", type: "text", text: "Please review " },
             {
-              id: "msg-1-t1",
-              type: "text",
-              text: "Please review report.pdf before the meeting",
-              html:
-                'Please review <span data-template-id="files-chip-template" data-chip-owner-id="files" data-file-name="report.pdf">report.pdf</span>' +
-                " before the meeting",
+              id: "msg-1-p2",
+              type: "chip",
+              templateId: "files-chip-template",
+              label: "report.pdf",
+              icon: null,
+              data: { chipOwnerId: "files", fileName: "report.pdf" },
             },
+            { id: "msg-1-p3", type: "text", text: " before the meeting" },
           ],
         },
       ]}

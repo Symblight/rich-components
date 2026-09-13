@@ -141,6 +141,62 @@ this listener.
 The default chip (no `slot="chip"`, no `chx-command-picked` listener) is always plain text —
 varying the icon per option needs the `setChip` path above.
 
+## Rendering a sent chip in the message list
+
+`chx-chat.handleSend` always emits one flat `{type: "text", text, html}` part regardless of what
+was typed — a resolved chip doesn't survive as its own part automatically. Two pieces close that
+gap, both consumer-owned, both exported from `@symblight/chat`:
+
+- **`chipPartRule`** — an `InlinePartRule` (`{type: "chip", selector: "[data-template-id]",
+  toPart}`) matching the chip markup `schema.js`'s `chip` node serializes into `getHTML()`.
+- **`splitMessageParts(id, html, rules)`** — walks a message's `html` and splits any element
+  matching a rule into its own part, everything else into surrounding `type: "text"` parts.
+  `createSplitOnSendHandler(rules)` wraps this into a ready-made `chx-messages-change` listener.
+
+```js
+import { chipPartRule, createSplitOnSendHandler, buildChipElement } from "@symblight/chat";
+
+chatEl.partElements = { chip: buildChipElement };
+chatEl.addEventListener("chx-messages-change", createSplitOnSendHandler([chipPartRule]));
+```
+
+`buildChipElement` (also exported) is the same function `<chx-command-picker>`'s own live
+insertion draws from — pass it straight through for the picker's default look, or write your own
+`partElements.chip` renderer for something custom (branch on `part.data.chipOwnerId` if multiple
+pickers need different looks — see `MultiPickerHydration` in the Storybook stories).
+
+This is what replaced the old `renderChip`/`data-chip-owner-id`-dispatch mechanism: rendering a
+sent chip is no longer automatic just because `<chx-command-picker>` is on the page, it's explicit
+opt-in wiring like any other `partElements` entry — a hand-rolled `<chx-command-field>` no longer
+needs to implement anything special for historical rendering either, `chipPartRule` works off the
+DOM shape alone.
+
+### Same mechanism, for markdown/HTML text rendering
+
+`partElements` isn't chip-specific — `chx-message-list` checks it for **every** part type,
+including `"text"`, before any built-in fallback. That's the same hook MUI X Chat's headless core
+exposes as `renderText`: this package ships no markdown parser and never will — a `"text"` part's
+default rendering is always plain, unparsed text (`part.text`, or `part.html` dumped as-is if set).
+Parsing markdown (or any rich text format) is entirely the consumer's responsibility, wired the
+same way as the chip renderer above:
+
+```js
+import { marked } from "marked"; // or any markdown library — this package has no opinion
+
+chatEl.partElements = {
+  text: (part) => {
+    const div = document.createElement("div");
+    div.innerHTML = marked.parse(part.text ?? ""); // sanitize before trusting model/user output
+    return div;
+  },
+};
+```
+
+`part.text` is always the raw source string to parse — never `part.html`, which is ProseMirror's
+own serialized composer output and exists only to feed `splitMessageParts` (chip/code extraction
+above), not for display. The two fields coexist on the same part for different purposes: a
+markdown-focused `partElements.text` renderer reads `part.text` and ignores `part.html` entirely.
+
 ## `<chx-command-picker>` reference
 
 ### Properties
@@ -234,22 +290,14 @@ template, own options).
 
 - **Per-picker `placement`/`offset` customization** — currently fixed, not exposed as a public
   property yet.
-- **Rendering inside `chx-message-list` for already-sent messages** is supported for
-  `<chx-command-picker>` out of the box (via its own `renderChip`, dispatched to automatically —
-  see "Customizing the resolved chip" above). If you want a JS-built look (not a `slot="chip"`
-  template) for **both** live-typed and historical chips, override `buildChip(attrs, source)` instead
-  of `renderChip` directly — `buildChip` is the one draw point both paths share, so the two stay
-  visually identical automatically. Overriding `renderChip` itself only affects historical
-  rendering; live resolution keeps using `slot="chip"`/the auto-built default regardless, so the
-  two will visibly diverge unless you keep them in sync yourself. `source` is `"composer"` while an
-  option is being picked live, `"message"` when rebuilding a chip already sitting in a sent
-  message — use it if the two really do need to differ (e.g. only a live chip should carry a click
-  handler, since an immutable historical one has nothing for it to do). A hand-rolled
-  `<chx-command-field>` doesn't get either hook for free — it would need to implement its own
-  `renderChip(placeholder)` method for chx-chat's dispatcher to find and call.
-- **A defined format** for how a chip's structured data (e.g. a user id, not just display text)
-  should round-trip through `chx-send-message`/`getMessages` beyond the raw `html` field.
 - **No marks** (bold/italic/etc.) yet in the composer's text.
+
+Rendering a sent chip's JS-built look (`buildChip(attrs, source)`, not a `slot="chip"` template)
+consistently for both live-typed and historical chips: pass `buildChip` itself (bound to the
+picker instance) as your `partElements.chip` renderer, or wrap it, so both paths draw from the same
+place. `source` is `"composer"` while an option is being picked live, `"message"` when called from
+your `partElements.chip` renderer — use it if the two really do need to differ (e.g. only a live
+chip should carry a click handler, since an immutable historical one has nothing for it to do).
 
 ---
 

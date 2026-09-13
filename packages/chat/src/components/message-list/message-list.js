@@ -25,8 +25,6 @@ export class ChxMessageList extends LitElement {
     messages: { attribute: false },
     messageElement: { attribute: false },
     partElements: { attribute: false },
-    renderChip: { attribute: false },
-    renderAttachment: { attribute: false },
     messagesLabel: { type: String, attribute: "messages-label" },
     scrollBehavior: { type: String, attribute: "scroll-behavior" },
     contentAlign: { type: String, attribute: "content-align" },
@@ -72,12 +70,6 @@ export class ChxMessageList extends LitElement {
 
     /** @type {Record<string, ChxPartRenderer> | undefined} */
     this.partElements = undefined;
-
-    /** Rebuilds a historical `[data-template-id]` chip placeholder — pushed down from chx-chat. @type {((placeholder: HTMLElement) => Node | null | undefined) | undefined} */
-    this.renderChip = undefined;
-
-    /** Rebuilds an already-sent attachment part's card — pushed down from chx-chat. @type {((part: ChxMessagePart) => HTMLElement | null | undefined) | undefined} */
-    this.renderAttachment = undefined;
 
     /** @type {string} */
     this.messagesLabel = "Messages";
@@ -237,7 +229,9 @@ export class ChxMessageList extends LitElement {
       this.#focusBehavior.applyToElement(message.id, el);
       // a part missing `id` was already console.error'd by validateMessages — excluded here too
       el.replaceChildren(
-        ...message.parts.filter((part) => part.id).map((part) => this.#renderPart(part)),
+        ...message.parts
+          .filter((part) => part.id)
+          .map((part, index) => this.#renderPart(part, message, index)),
       );
       this.#messageElementCache.set(message.id, { key: undefined, element: el });
       return el;
@@ -252,29 +246,47 @@ export class ChxMessageList extends LitElement {
 
   /**
    * @param {ChxMessagePart} part
+   * @param {ChxMessage} message
+   * @param {number} index
    * @returns {string | HTMLElement}
    */
-  #renderPart(part) {
+  #renderPart(part, message, index) {
     /** @type {Set<string>} */ (this.#pendingRenderedPartIds).add(part.id);
     const renderer = this.partElements?.[part.type];
     if (renderer) {
       const cached = this.#partElementCache.get(part.id);
       const previous = cached?.key === part.type ? cached.element : undefined;
-      const element = renderer(part, previous);
+      const element = renderer(part, previous, message, index);
       if (part.type === "attachment" && element instanceof HTMLElement)
         element.slot = "attachments";
       this.#partElementCache.set(part.id, { key: part.type, part, element });
       return element;
     }
-    if (part.type === "attachment") return this.#renderAttachmentPart(part);
-    if (!part.html) return part.text ?? "";
-    return this.#renderHtmlPart(part);
+    if (part.html) return this.#renderHtmlPart(part);
+    if (part.text) return part.text;
+    return this.#renderUnknownPart(part);
   }
 
   /**
-   * Strict cache hit for the default (no `partElements[part.type]`) rendering paths below — unlike
-   * the custom-renderer branch above, these have no incremental-update mechanism of their own, so
-   * they only ever reuse a fully-unchanged part's element (same type AND same part reference).
+   * A registered `type` with neither `text`/`html` nor a `partElements` entry has nothing to
+   * render — an empty, inert, invisible marker tagged with `data-part-type` beats silently
+   * rendering nothing, so a misconfigured/forgotten `partElements` entry is at least visible in
+   * devtools instead of just missing.
+   * @param {ChxMessagePart} part @returns {HTMLElement} */
+  #renderUnknownPart(part) {
+    const cached = this.#getCachedElement(part);
+    if (cached !== undefined) return /** @type {HTMLElement} */ (cached);
+
+    const span = document.createElement("span");
+    span.dataset.partType = part.type;
+    this.#partElementCache.set(part.id, { key: part.type, part, element: span });
+    return span;
+  }
+
+  /**
+   * Strict cache hit for the default (no `partElements[part.type]`) rendering path below — unlike
+   * the custom-renderer branch above, this has no incremental-update mechanism of its own, so it
+   * only ever reuses a fully-unchanged part's element (same type AND same part reference).
    * @param {ChxMessagePart} part
    * @returns {string | HTMLElement | undefined}
    */
@@ -283,19 +295,12 @@ export class ChxMessageList extends LitElement {
     return cached?.key === part.type && cached.part === part ? cached.element : undefined;
   }
 
-  /** @param {ChxMessagePart} part @returns {string | HTMLElement} */
-  #renderAttachmentPart(part) {
-    const cached = this.#getCachedElement(part);
-    if (cached !== undefined) return cached;
-
-    const element = this.renderAttachment?.(part) ?? "";
-    // renders above .message__content via chx-message's own attachments slot
-    if (element instanceof HTMLElement) element.slot = "attachments";
-    this.#partElementCache.set(part.id, { key: part.type, part, element });
-    return element;
-  }
-
-  /** @param {ChxMessagePart} part @returns {HTMLElement} */
+  /**
+   * Plain HTML formatting (bold/italic/inline code/etc.) needs no rich hydration — it's rendered
+   * as-is. A part whose `html` embeds something that needs to become a *live* component (a chip, a
+   * code block) has to arrive already split into its own part — see `splitMessageParts` — and be
+   * rendered via `partElements`, not reconstructed from a placeholder here.
+   * @param {ChxMessagePart} part @returns {HTMLElement} */
   #renderHtmlPart(part) {
     const cached = this.#getCachedElement(part);
     if (cached !== undefined) return /** @type {HTMLElement} */ (cached);
@@ -304,10 +309,6 @@ export class ChxMessageList extends LitElement {
     // directive like unsafeHTML() has no meaning there, so the html fallback builds a real node
     const span = document.createElement("span");
     span.innerHTML = /** @type {string} */ (part.html);
-    for (const placeholder of span.querySelectorAll("[data-template-id]")) {
-      const node = this.renderChip?.(/** @type {HTMLElement} */ (placeholder));
-      if (node) placeholder.replaceWith(node);
-    }
     this.#partElementCache.set(part.id, { key: part.type, part, element: span });
     return span;
   }

@@ -34,8 +34,9 @@ export const schema = new Schema({
     /**
      * A resolved chip — shared by commands and chip-mode attachments. `toDOM` is a static
      * placeholder for clipboard/getHTML() only; command-node-view.js's NodeView renders the real
-     * chip by re-cloning the app's `<template>`. `data.chipOwnerId` is how historical `renderChip`
-     * dispatch finds the owning field back.
+     * chip by re-cloning the app's `<template>`. `data.chipOwnerId` is purely informational once
+     * sent — a consumer's own `partElements.chip` renderer can key off it (see
+     * `split-message-parts.js`'s `chipPartRule`, docs/commands.md's "Rendering a sent chip").
      */
     chip: {
       inline: true,

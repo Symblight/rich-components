@@ -21,6 +21,9 @@ import "@symblight/wc-material/menu";
 import "../command-picker/command-picker.js";
 import "../chip/chip.js";
 
+import { buildChipElement } from "../../editor/command-chip.js";
+import { chipPartRule, createSplitOnSendHandler } from "../../utils/split-message-parts.js";
+
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
   title: "Command API",
@@ -121,6 +124,11 @@ function createFileQueryHandler(tree) {
   };
 }
 
+/** @param {string} name @returns {string} */
+function fileTypeFromName(name) {
+  return name.endsWith(".js") ? "js" : name.endsWith(".css") ? "css" : "folder";
+}
+
 /**
  * Wires chx-command-picked to build a chip showing only the file's *name*
  * (matching the menu/chip visually), while stashing the full mocked path in
@@ -139,14 +147,33 @@ function createFilePickedHandler(templateId) {
     const clone = /** @type {HTMLElement} */ (fragment.firstElementChild);
 
     const name = path.split("/").pop() ?? path;
-    const type = name.endsWith(".js") ? "js" : name.endsWith(".css") ? "css" : "folder";
     const icon = clone.querySelector('[slot="icon"]');
-    if (icon) icon.innerHTML = FILE_TREE_ICONS[type] ?? descriptionIcon;
+    if (icon) icon.innerHTML = FILE_TREE_ICONS[fileTypeFromName(name)] ?? descriptionIcon;
 
     clone.dataset.path = path;
     clone.append(name);
     setChip(clone);
   };
+}
+
+/**
+ * Historical counterpart to `createFilePickedHandler` — same icon-from-name derivation, reading
+ * `part.data.path` (the `data-path` attribute `readChipAttrs`/`chipPartRule` already captured)
+ * instead of a live `chx-command-picked` event.
+ * @param {import("../../types/message.js").ChxMessagePart} part
+ * @returns {HTMLElement}
+ */
+function renderDynamicSearchChip(part) {
+  const template = /** @type {HTMLTemplateElement} */ (
+    document.getElementById(part.templateId ?? "")
+  );
+  const fragment = /** @type {DocumentFragment} */ (template.content.cloneNode(true));
+  const clone = /** @type {HTMLElement | null} */ (fragment.firstElementChild);
+  const icon = clone?.querySelector('[slot="icon"]');
+  if (icon) icon.innerHTML = FILE_TREE_ICONS[fileTypeFromName(part.label ?? "")] ?? descriptionIcon;
+  if (clone && part.data?.path) clone.dataset.path = /** @type {string} */ (part.data.path);
+  clone?.append(part.label ?? "");
+  return /** @type {HTMLElement} */ (clone);
 }
 
 /**
@@ -186,10 +213,24 @@ function createQueryHandler(items) {
   };
 }
 
+const handleChipMessagesChange = createSplitOnSendHandler([chipPartRule]);
+
+/**
+ * Default chip look, no override — `partElements.chip` rebuilds it via the same `buildChipElement`
+ * the picker's own live insertion draws from, once `chx-messages-change` has re-split the sent
+ * message's flat text part into a real `type: "chip"` part. Reused as-is by every story below that
+ * doesn't customize the chip's look (`CustomChip`, `CustomCommands`).
+ */
+const defaultChipPartElements = { chip: buildChipElement };
+
 /** @type {Story} */
 export const Basic = {
   render: () => html`
-    <chx-chat label="Write your prompt...">
+    <chx-chat
+      label="Write your prompt..."
+      .partElements=${defaultChipPartElements}
+      @chx-messages-change=${handleChipMessagesChange}
+    >
       <chx-message-list></chx-message-list>
       <chx-message-composer>
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
@@ -215,7 +256,11 @@ export const Basic = {
 /** @type {Story} */
 export const DynamicSearch = {
   render: () => html`
-    <chx-chat label="Write your prompt...">
+    <chx-chat
+      label="Write your prompt..."
+      .partElements=${{ chip: renderDynamicSearchChip }}
+      @chx-messages-change=${handleChipMessagesChange}
+    >
       <chx-message-list></chx-message-list>
       <chx-message-composer>
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
@@ -259,10 +304,35 @@ function createPickedHandler(templateId, iconMap) {
   };
 }
 
+/**
+ * Historical counterpart to `createPickedHandler` — `part.label` is exactly the `value` the live
+ * handler used as its `iconMap` key (it's what got `clone.append`ed as the chip's only text), so no
+ * extra `data-*` stash is needed to look the right icon back up.
+ * @param {Record<string, string>} iconMap
+ * @returns {(part: import("../../types/message.js").ChxMessagePart) => HTMLElement}
+ */
+function createHistoricalPickedRenderer(iconMap) {
+  return (part) => {
+    const template = /** @type {HTMLTemplateElement} */ (
+      document.getElementById(part.templateId ?? "")
+    );
+    const fragment = /** @type {DocumentFragment} */ (template.content.cloneNode(true));
+    const clone = /** @type {HTMLElement} */ (fragment.firstElementChild);
+    const icon = clone.querySelector('[slot="icon"]');
+    if (icon) icon.innerHTML = iconMap[part.label ?? ""] ?? descriptionIcon;
+    clone.append(part.label ?? "");
+    return clone;
+  };
+}
+
 /** @type {Story} */
 export const CustomChipPerOptionIcon = {
   render: () => html`
-    <chx-chat label="Write your prompt...">
+    <chx-chat
+      label="Write your prompt..."
+      .partElements=${{ chip: createHistoricalPickedRenderer(FILE_ICONS) }}
+      @chx-messages-change=${handleChipMessagesChange}
+    >
       <chx-message-list></chx-message-list>
       <chx-message-composer>
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
@@ -287,7 +357,11 @@ export const CustomChipPerOptionIcon = {
 /** @type {Story} */
 export const CustomChip = {
   render: () => html`
-    <chx-chat label="Write your prompt...">
+    <chx-chat
+      label="Write your prompt..."
+      .partElements=${defaultChipPartElements}
+      @chx-messages-change=${handleChipMessagesChange}
+    >
       <chx-message-list></chx-message-list>
       <chx-message-composer>
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
@@ -307,11 +381,21 @@ export const CustomChip = {
   `,
 };
 
-/** Default sent-chip rendering, no override — chx-command-picker's own renderChip rebuilds it by re-cloning the `<template slot="chip">` below, dispatched to by chx-chat once the chat's already sent. */
+/**
+ * Default sent-chip rendering, no override — no `slot="chip"` template either, just the picker's
+ * own auto-built `<chx-chip>`. `partElements.chip` rebuilds it via the same `buildChipElement` the
+ * picker's own live insertion draws from, once `chx-messages-change` has re-split the sent
+ * message's flat text part into a real `type: "chip"` part (see
+ * `createSplitOnSendHandler`/`splitMessageParts`).
+ */
 /** @type {Story} */
 export const ChipHydratesInMessageList = {
   render: () => html`
-    <chx-chat label="Write your prompt...">
+    <chx-chat
+      label="Write your prompt..."
+      .partElements=${defaultChipPartElements}
+      @chx-messages-change=${handleChipMessagesChange}
+    >
       <chx-message-list></chx-message-list>
       <chx-message-composer>
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
@@ -322,11 +406,7 @@ export const ChipHydratesInMessageList = {
         id="picker-hydration"
         slot="command-field"
         @chx-command-query=${createQueryHandler(FILES)}
-      >
-        <chx-chip slot="chip"
-          ><md-icon slot="icon">${unsafeSVG(descriptionIcon)}</md-icon></chx-chip
-        >
-      </chx-command-picker>
+      ></chx-command-picker>
     </chx-chat>
   `,
 };
@@ -334,7 +414,11 @@ export const ChipHydratesInMessageList = {
 /** @type {Story} */
 export const CustomCommands = {
   render: () => html`
-    <chx-chat label="Write your prompt...">
+    <chx-chat
+      label="Write your prompt..."
+      .partElements=${defaultChipPartElements}
+      @chx-messages-change=${handleChipMessagesChange}
+    >
       <chx-message-list></chx-message-list>
       <chx-message-composer>
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
@@ -389,15 +473,31 @@ function buildCommandsChip(attrs) {
 }
 
 /**
+ * Routes a `type: "chip"` part to whichever picker's own chip look owns it, via
+ * `part.data.chipOwnerId` — the same id `#stampOwner` tags the live-inserted node with, now purely
+ * informational data on the part rather than a dispatch key the library resolves for you.
+ * @param {import("../../types/message.js").ChxMessagePart} part
+ * @returns {HTMLElement}
+ */
+function renderMultiPickerChip(part) {
+  const build = part.data?.chipOwnerId === "commands" ? buildCommandsChip : buildFilesChip;
+  return build(/** @type {any} */ (part));
+}
+
+/**
  * Two independently-owned pickers ("@" files, "/" commands), each with its own `.buildChip` look.
- * Seeded with a historical message already containing resolved chip tokens, to demonstrate
- * multi-picker routing — try typing "@" or "/" too, the live chip matches the seeded ones exactly.
+ * Seeded with historical messages already split into `text`/`chip` parts (what `splitMessageParts`
+ * would produce from a real send) to demonstrate multi-picker routing purely through
+ * `partElements.chip` — try typing "@" or "/" too, the live-sent chip matches the seeded ones
+ * exactly.
  */
 /** @type {Story} */
 export const MultiPickerHydration = {
   render: () => html`
     <chx-chat
       label="Write your prompt..."
+      .partElements=${{ chip: renderMultiPickerChip }}
+      @chx-messages-change=${handleChipMessagesChange}
       .messages=${[
         {
           id: "msg-1",
@@ -406,14 +506,25 @@ export const MultiPickerHydration = {
           createdAt: Date.now(),
           status: "sent",
           parts: [
+            { id: "msg-1-p1", type: "text", text: "Check " },
             {
-              id: "msg-1-t1",
-              type: "text",
-              text: "Check chat.js and /summarize it for me",
-              html:
-                'Check <span data-template-id="files-chip-template" data-chip-owner-id="files" data-path="src/components/base/chat.js">chat.js</span>' +
-                ' and <span data-template-id="commands-chip-template" data-chip-owner-id="commands">summarize</span> it for me',
+              id: "msg-1-p2",
+              type: "chip",
+              templateId: "files-chip-template",
+              label: "chat.js",
+              icon: null,
+              data: { chipOwnerId: "files", path: "src/components/base/chat.js" },
             },
+            { id: "msg-1-p3", type: "text", text: " and " },
+            {
+              id: "msg-1-p4",
+              type: "chip",
+              templateId: "commands-chip-template",
+              label: "summarize",
+              icon: null,
+              data: { chipOwnerId: "commands" },
+            },
+            { id: "msg-1-p5", type: "text", text: " it for me" },
           ],
         },
         {
@@ -423,14 +534,25 @@ export const MultiPickerHydration = {
           createdAt: Date.now(),
           status: "sent",
           parts: [
+            { id: "msg-2-p1", type: "text", text: "On it — " },
             {
-              id: "msg-2-t1",
-              type: "text",
-              text: "On it — /explain coming up, referencing message-composer.js too.",
-              html:
-                'On it — <span data-template-id="commands-chip-template" data-chip-owner-id="commands">explain</span>' +
-                ' coming up, referencing <span data-template-id="files-chip-template" data-chip-owner-id="files" data-path="src/components/message-composer/message-composer.js">message-composer.js</span> too.',
+              id: "msg-2-p2",
+              type: "chip",
+              templateId: "commands-chip-template",
+              label: "explain",
+              icon: null,
+              data: { chipOwnerId: "commands" },
             },
+            { id: "msg-2-p3", type: "text", text: " coming up, referencing " },
+            {
+              id: "msg-2-p4",
+              type: "chip",
+              templateId: "files-chip-template",
+              label: "message-composer.js",
+              icon: null,
+              data: { chipOwnerId: "files", path: "src/components/message-composer/message-composer.js" },
+            },
+            { id: "msg-2-p5", type: "text", text: " too." },
           ],
         },
       ]}

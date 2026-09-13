@@ -5,11 +5,10 @@ import "../attachment/attachment.js";
 import "../chip/chip.js";
 
 import {
-  readChipAttrs,
   buildChipElement,
-  findChipElement,
   ensureTemplateId,
   setupChipTemplate,
+  stampChipOwner,
 } from "../../editor/command-chip.js";
 
 import styles from "./attachments.css?inline";
@@ -165,21 +164,6 @@ export class ChxAttachments extends LitElement {
   }
 
   /**
-   * Rebuilds an already-sent attachment part's card. Suppresses the actions slot — a remove
-   * button makes no sense on an immutable sent message.
-   * @param {import("../../types/message.js").ChxMessagePart} part
-   * @returns {HTMLElement | undefined}
-   */
-  renderAttachment(part) {
-    if (!(part.attachment instanceof File)) return undefined;
-    const card = this.buildAttachment(part.attachment, "message");
-    const actions = document.createElement("span");
-    actions.slot = "actions";
-    card.append(actions);
-    return card;
-  }
-
-  /**
    * Inserts a file as an inline chip at the current caret position — chip mode's counterpart to
    * buildAttachment/addAttachments. No-op if there's no composer/editor to insert into.
    * @param {File} file
@@ -198,7 +182,7 @@ export class ChxAttachments extends LitElement {
       data: { fileName: file.name, fileSize: String(file.size), fileType: file.type },
     };
     const node = ensureTemplateId(this.buildChip(attrs, "composer"), attrs.templateId);
-    this.#stampOwner(node);
+    stampChipOwner(node, this.id);
     editor.insertChip(node);
   }
 
@@ -211,23 +195,6 @@ export class ChxAttachments extends LitElement {
    */
   buildChip(attrs, _source) {
     return buildChipElement(attrs);
-  }
-
-  /**
-   * Rebuilds a historical chip-mode attachment placeholder — called by chx-chat's renderChip dispatch.
-   * @param {HTMLElement} placeholder
-   * @returns {Node | null}
-   */
-  renderChip(placeholder) {
-    const attrs = readChipAttrs(placeholder);
-    if (attrs.data.chipOwnerId !== this.id) return null;
-    return ensureTemplateId(this.buildChip(attrs, "message"), attrs.templateId);
-  }
-
-  /** Tags the chip about to be inserted with this instance's own id, for renderChip to find later. @param {Node} node */
-  #stampOwner(node) {
-    const chip = findChipElement(node);
-    if (chip) chip.dataset.chipOwnerId = this.id;
   }
 
   /**

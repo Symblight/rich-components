@@ -91,7 +91,8 @@ export class Editor {
       nodeViews: {
         chip: (node) => new ChipNodeView(node),
         ...(getRenderPasteChip && {
-          paste: (node) => new PasteNodeView(node, { getRenderPasteChip, getPasteHandlers }),
+          paste: (node, view, getPos) =>
+            new PasteNodeView(node, view, getPos, { getRenderPasteChip, getPasteHandlers }),
         }),
       },
       dispatchTransaction: (tr) => {

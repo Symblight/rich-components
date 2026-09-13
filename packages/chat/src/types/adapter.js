@@ -40,7 +40,9 @@
  */
 
 /**
- * @typedef {(part: ChxMessagePart, previousElement?: HTMLElement) => HTMLElement} ChxPartRenderer
+ * `message`/`index` are appended, not prepended — existing 2-arg renderers keep working
+ * unmodified, since JS ignores trailing args a function doesn't declare.
+ * @typedef {(part: ChxMessagePart, previousElement: HTMLElement | undefined, message: ChxMessage, index: number) => HTMLElement} ChxPartRenderer
  */
 
 /**

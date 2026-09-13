@@ -1,11 +1,16 @@
 /**
  * @typedef {Object} ChxMessagePart
  * @property {string} id
- * @property {"text" | "attachment" | string} type
+ * @property {"text" | "attachment" | "chip" | string} type
  * @property {string} [text]
  * @property {string} [html]
  * @property {unknown} [attachment]
  * @property {"streaming" | "done"} [state]
+ * @property {string} [templateId] - `type: "chip"` — see `readChipAttrs`/`buildChipElement`
+ * @property {string} [label] - `type: "chip"`
+ * @property {string | null} [icon] - `type: "chip"`
+ * @property {string} [lang] - `type: "code"` (app-defined, e.g. `chx-code-block`'s paste handler)
+ * @property {Record<string, unknown>} [data] - opaque bag, round-tripped by `type: "chip"`/`"code"` parts
  */
 
 /**

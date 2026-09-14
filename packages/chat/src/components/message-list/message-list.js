@@ -3,8 +3,10 @@ import { customElement } from "lit/decorators.js";
 import { when } from "lit/directives/when.js";
 import { ref } from "lit/directives/ref.js";
 
+import "@symblight/wc-material/progress-circular";
 import "../message/message.js";
 import "../infinity-scroll/infinity-scroll.js";
+import "../loading-history/loading-history.js";
 import { FocusBehaviorController } from "../../controllers/FocusBehaviorController.js";
 import styles from "./message-list.css?inline";
 
@@ -85,22 +87,10 @@ export class ChxMessageList extends LitElement {
     /** Forwarded straight through to chx-infinity-scroll. @type {"start" | "end"} */
     this.contentAlign = "end";
 
-    /**
-     * Forwarded straight through to chx-infinity-scroll — distance (px) from the bottom within
-     * which the list still counts as "at the bottom", for both the auto-scroll-pause threshold and
-     * the scroll-to-bottom slot's own visibility gate. @type {number}
-     */
+    /** Forwarded straight through to chx-infinity-scroll — "at the bottom" threshold, in px. @type {number} */
     this.buffer = 150;
 
-    /**
-     * Forwarded straight through to chx-infinity-scroll — a pre-measurement height guess for a
-     * message, used before the virtualizer has actually measured it. Content-aware rather than a flat
-     * constant: on a fast scroll into a history prepend, several items above the scroll anchor render
-     * at this estimate and only settle to their real size a frame later; the scroll shift you see at
-     * the top is the summed `(real − estimate)` error over those items, so a per-message estimate
-     * (roughly proportional to text length) keeps that error — and the shift — small regardless of
-     * scroll velocity. Overridable by a consumer. @type {(item: ChxMessage, index: number) => number}
-     */
+    /** Forwarded straight through to chx-infinity-scroll — content-aware pre-measurement estimate. @type {(item: ChxMessage, index: number) => number} */
     this.estimateItemSize = (message) => this.#estimateMessageSize(message);
 
     /** Forwarded straight through to chx-infinity-scroll. @type {number} */
@@ -115,19 +105,10 @@ export class ChxMessageList extends LitElement {
     /** Forwarded straight through to chx-infinity-scroll. @type {number} */
     this.scrollMargin = 0;
 
-    /**
-     * Forwarded straight through to chx-infinity-scroll — read once, at mount, not reactive
-     * afterwards (see chx-infinity-scroll's own property doc). @type {boolean}
-     */
+    /** Forwarded straight through to chx-infinity-scroll — read once at mount, not reactive. @type {boolean} */
     this.useScrollendEvent = false;
 
-    /**
-     * Whether the other side is currently typing — gates the `typing` slot in render(). No default
-     * content: unlike `messageElement`/`partElements`, an unslotted `typing`/`streaming` renders
-     * nothing at all, same as `<chx-command-picker>`'s own connection (a plain, standalone element a
-     * consumer imports and slots in themselves — nothing here auto-registers or auto-renders one).
-     * @type {boolean}
-     */
+    /** Gates the `typing` slot in render() — no default content. @type {boolean} */
     this.typing = false;
 
     /** Waiting for a reply with no message yet — gates the `streaming` slot, same no-default posture as `typing` above. @type {boolean} */
@@ -139,10 +120,7 @@ export class ChxMessageList extends LitElement {
     /** Forwarded straight to `chx-infinity-scroll` — pushed down from chx-chat's `PaginationController`. @type {boolean} */
     this.hasMore = true;
 
-    /**
-     * Fetches one older page — forwarded straight to `chx-infinity-scroll`'s own `onLoadMore`, which
-     * `LoadMoreController` awaits directly. @type {() => Promise<void>}
-     */
+    /** Forwarded straight to chx-infinity-scroll's own onLoadMore. @type {() => Promise<void>} */
     this.onLoadMore = () => Promise.resolve();
 
     this.#focusBehavior = new FocusBehaviorController(this, {
@@ -163,9 +141,7 @@ export class ChxMessageList extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    // chx-scroll-to-bottom-affordance is a light-DOM child (slotted), not part of this component's
-    // own render() template, so it's caught the same way chx-chat catches chx-send-message — a
-    // plain addEventListener on the host, not a template event binding
+    // slotted light-DOM child, so caught via addEventListener, not a template event binding
     this.addEventListener(
       "chx-scroll-to-bottom-click",
       /** @type {EventListener} */ (this.#handleScrollToBottomClick),
@@ -191,12 +167,8 @@ export class ChxMessageList extends LitElement {
     this.requestUpdate();
   };
 
-  /**
-   * Rough pre-measurement height for a message — text length → line count → px. Deliberately cheap
-   * and approximate; it only has to shrink the estimate-vs-real gap enough that a fast-scroll prepend
-   * doesn't visibly jump, not be exact (the virtualizer measures the real height right after).
-   * @param {ChxMessage} message
-   */
+  /** Rough pre-measurement height — text length → line count → px, cheap and approximate on purpose.
+   * @param {ChxMessage} message */
   #estimateMessageSize(message) {
     const chars = (message.parts ?? []).reduce((sum, part) => {
       if (part.type === "attachment") return sum + 220; // attachment cards are tall and text-less
@@ -206,13 +178,7 @@ export class ChxMessageList extends LitElement {
     return 32 + lines * 20; // meta + padding, then line-height per line
   }
 
-  /**
-   * Passed to `chx-infinity-scroll` as `.renderItem` — called once per currently-visible message,
-   * every time infinity-scroll re-renders for any reason (a `messages` change, a scroll, a resize
-   * settling). Owns message rendering entirely; infinity-scroll only knows it returns *something*
-   * to place inside its own positioning wrapper.
-   * @param {ChxMessage} message
-   */
+  /** Passed to chx-infinity-scroll as `.renderItem`. @param {ChxMessage} message */
   #renderItem = (message) => {
     if (!this.#pendingRenderedMessageIds) {
       this.#pendingRenderedMessageIds = new Set();
@@ -242,13 +208,9 @@ export class ChxMessageList extends LitElement {
           : /** @type {any} */ (document.createElement("chx-message"));
       el.own = message.own;
       el.busy = message.parts.some((part) => part.state === "streaming");
-      el.ariaLabel = message.own ? "Your message" : "Message"; // coarser than a display-name-based
-      //   label, pending author display metadata this package doesn't model yet
-      el.style.alignSelf = message.own ? "flex-end" : "flex-start"; // infinity-scroll's own
-      //   wrapper is a plain flex container with no own/not-own concept — this is the only place
-      //   that decides message alignment, applies uniformly to the built-in and custom paths alike
-      this.#focusBehavior.ensureSeeded(message.id); // first-ever render: seed a tab stop before
-      //   applyToElement below reads it — without one, Tab from outside the list has nowhere to land
+      el.ariaLabel = message.own ? "Your message" : "Message"; // no author display-name metadata yet
+      el.style.alignSelf = message.own ? "flex-end" : "flex-start"; // infinity-scroll has no own/not-own concept
+      this.#focusBehavior.ensureSeeded(message.id); // seed a tab stop before applyToElement reads it
       this.#focusBehavior.applyToElement(message.id, el);
       // a part missing `id` was already console.error'd by validateMessages — excluded here too
       el.replaceChildren(
@@ -290,11 +252,7 @@ export class ChxMessageList extends LitElement {
     return this.#renderUnknownPart(part);
   }
 
-  /**
-   * A registered `type` with neither `text`/`html` nor a `partElements` entry has nothing to
-   * render — an empty, inert, invisible marker tagged with `data-part-type` beats silently
-   * rendering nothing, so a misconfigured/forgotten `partElements` entry is at least visible in
-   * devtools instead of just missing.
+  /** No renderer, no text/html — an inert marker so a missing `partElements` entry is at least visible.
    * @param {ChxMessagePart} part @returns {HTMLElement} */
   #renderUnknownPart(part) {
     const cached = this.#getCachedElement(part);
@@ -306,30 +264,20 @@ export class ChxMessageList extends LitElement {
     return span;
   }
 
-  /**
-   * Strict cache hit for the default (no `partElements[part.type]`) rendering path below — unlike
-   * the custom-renderer branch above, this has no incremental-update mechanism of its own, so it
-   * only ever reuses a fully-unchanged part's element (same type AND same part reference).
-   * @param {ChxMessagePart} part
-   * @returns {string | HTMLElement | undefined}
-   */
+  /** Strict cache hit for the default rendering path — same type AND same part reference.
+   * @param {ChxMessagePart} part @returns {string | HTMLElement | undefined} */
   #getCachedElement(part) {
     const cached = this.#partElementCache.get(part.id);
     return cached?.key === part.type && cached.part === part ? cached.element : undefined;
   }
 
-  /**
-   * Plain HTML formatting (bold/italic/inline code/etc.) needs no rich hydration — it's rendered
-   * as-is. A part whose `html` embeds something that needs to become a *live* component (a chip, a
-   * code block) has to arrive already split into its own part — see `splitMessageParts` — and be
-   * rendered via `partElements`, not reconstructed from a placeholder here.
+  /** Plain HTML formatting (bold/italic/etc.) — rendered as-is, no rich hydration.
    * @param {ChxMessagePart} part @returns {HTMLElement} */
   #renderHtmlPart(part) {
     const cached = this.#getCachedElement(part);
     if (cached !== undefined) return /** @type {HTMLElement} */ (cached);
 
-    // built into el.replaceChildren() below (native DOM, not a Lit `html` template) — a Lit
-    // directive like unsafeHTML() has no meaning there, so the html fallback builds a real node
+    // native DOM, not a Lit template — unsafeHTML() has no meaning here
     const span = document.createElement("span");
     span.innerHTML = /** @type {string} */ (part.html);
     this.#partElementCache.set(part.id, { key: part.type, part, element: span });
@@ -349,14 +297,15 @@ export class ChxMessageList extends LitElement {
     }
   }
 
-  /**
-   * Diffs current part `state`s against the previous render's snapshot to detect a streaming
-   * start/complete edge — computed synchronously here (not from #renderPart, which runs lazily
-   * during chx-infinity-scroll's own later render pass) so this render's own status-region text is
-   * never one pass stale. Multiple simultaneous edges in one pass collapse to the last one seen —
-   * good enough for a concise, non-token-by-token announcement.
-   */
+  /** Diffs part states against the previous render's snapshot to detect a streaming start/complete edge. */
   #updateStatusText() {
+    // no edge-tracking needed — role="status" only re-announces on an actual text change
+    if (this.#isInitialLoading()) {
+      this.#statusText = "Loading messages";
+    } else if (this.#isLoadingHistory()) {
+      this.#statusText = "Loading older messages";
+    }
+
     /** @type {Map<string, ChxMessagePart["state"]>} */
     const currentPartStates = new Map();
     for (const message of this.messages) {
@@ -377,17 +326,22 @@ export class ChxMessageList extends LitElement {
     this.#previousPartStates = currentPartStates;
   }
 
-  /** The chx-infinity-scroll(-v3) instance rendering this list — public so a consumer can reach
-   * its own API (scrollToIndex, part-based styling) directly.
-   * @returns {ChxInfinityScroll | undefined} */
+  /** True while fetching with no messages rendered yet — gates the `initial-loading` slot. */
+  #isInitialLoading() {
+    return this.loading && this.messages.length === 0;
+  }
+
+  /** The complement of `#isInitialLoading()` — gates the `loading-history` slot. */
+  #isLoadingHistory() {
+    return this.loading && this.messages.length > 0;
+  }
+
+  /** The chx-infinity-scroll instance rendering this list. @returns {ChxInfinityScroll | undefined} */
   get list() {
     return this.#infinityScrollElement;
   }
 
-  /**
-   * Scrolls to the newest message — see chx-infinity-scroll.scrollToBottom, this forwards to it.
-   * @param {"auto" | "smooth" | "instant"} [behavior]
-   */
+  /** Forwards to chx-infinity-scroll.scrollToBottom. @param {"auto" | "smooth" | "instant"} [behavior] */
   scrollToBottom(behavior) {
     this.#infinityScrollElement?.scrollToBottom(behavior);
   }
@@ -402,34 +356,48 @@ export class ChxMessageList extends LitElement {
         () => html`<div class="message-list__drop-hint" part="drop-hint">${this.dropHint}</div>`,
       )}
       <div class="message-list__status" role="status">${this.#statusText}</div>
-      <chx-infinity-scroll
-        class="message-list__infinity-scroll"
-        role="log"
-        aria-live="polite"
-        aria-label=${this.messagesLabel}
-        .data=${this.messages}
-        .itemKey=${this.#itemKey}
-        .renderItem=${this.#renderItem}
-        .estimateItemSize=${this.estimateItemSize}
-        .overscan=${this.overscan}
-        .paddingStart=${this.paddingStart}
-        .paddingEnd=${this.paddingEnd}
-        .scrollMargin=${this.scrollMargin}
-        .useScrollendEvent=${this.useScrollendEvent}
-        .scrollBehavior=${this.scrollBehavior}
-        .contentAlign=${this.contentAlign}
-        .buffer=${this.buffer}
-        .hasMore=${this.hasMore}
-        .loading=${this.loading}
-        .onLoadMore=${this.onLoadMore}
-        .onScrollerKeydown=${this.#focusBehavior.handleKeyDown}
-        .onScrollerFocusin=${this.#focusBehavior.handleFocusIn}
-        .onAwayFromBottomChange=${this.#handleAwayFromBottomChange}
-        ${ref((el) => (this.#infinityScrollElement = /** @type {ChxInfinityScroll | undefined} */ (el)))}
-      >
-        ${when(this.streaming, () => html`<slot name="streaming" slot="footer"></slot>`)}
-        ${when(this.typing, () => html`<slot name="typing" slot="footer"></slot>`)}
-      </chx-infinity-scroll>
+      ${when(
+          this.#isInitialLoading(),
+          () => html`
+            <slot name="initial-loading" class="message-list__initial-loading">
+              <md-progress-circular></md-progress-circular>
+            </slot>
+          `,
+          () => html`
+            <chx-infinity-scroll
+                class="message-list__infinity-scroll"
+                role="log"
+                aria-live="polite"
+                aria-label=${this.messagesLabel}
+                .data=${this.messages}
+                .itemKey=${this.#itemKey}
+                .renderItem=${this.#renderItem}
+                .estimateItemSize=${this.estimateItemSize}
+                .overscan=${this.overscan}
+                .paddingStart=${this.paddingStart}
+                .paddingEnd=${this.paddingEnd}
+                .scrollMargin=${this.scrollMargin}
+                .useScrollendEvent=${this.useScrollendEvent}
+                .scrollBehavior=${this.scrollBehavior}
+                .contentAlign=${this.contentAlign}
+                .buffer=${this.buffer}
+                .hasMore=${this.hasMore}
+                .loading=${this.loading}
+                .onLoadMore=${this.onLoadMore}
+                .onScrollerKeydown=${this.#focusBehavior.handleKeyDown}
+                .onScrollerFocusin=${this.#focusBehavior.handleFocusIn}
+                .onAwayFromBottomChange=${this.#handleAwayFromBottomChange}
+                ${ref((el) => (this.#infinityScrollElement = /** @type {ChxInfinityScroll | undefined} */ (el)))}
+            >
+              ${when(this.streaming, () => html`<slot name="streaming" slot="footer"></slot>`)}
+              ${when(this.typing, () => html`<slot name="typing" slot="footer"></slot>`)}
+            </chx-infinity-scroll>
+          `
+      )}
+      ${when(
+        this.#isLoadingHistory(),
+        () => html`<slot name="loading-history"><chx-loading-history></chx-loading-history></slot>`,
+      )}
       ${when(this.#awayFromBottom, () => html`<slot name="scroll-to-bottom"></slot>`)}
     `;
   }

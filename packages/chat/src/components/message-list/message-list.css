@@ -35,8 +35,17 @@
 
 .message-list__infinity-scroll {
   flex: 1 1 auto;
-  min-height: 0; /* the classic flexbox gotcha: without this, an "auto" min-height on a flex item
-    can silently stop it from shrinking/scrolling at all inside :host's own column layout */
+  min-height: 0; /* without this, the item can't shrink/scroll inside :host's column layout */
+}
+
+.message-list__initial-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding-block: 0.5rem;
+  font-size: var(--chx-message-list-initial-loading-size, 1.5rem);
+  flex: 1 auto;
+  height: 100%;
 }
 
 .message-list__status {

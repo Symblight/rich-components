@@ -1,5 +1,4 @@
-import { html, LitElement } from "lit";
-import { customElement } from "lit/decorators.js";
+import { html } from "lit";
 
 import { ref } from "lit/directives/ref.js";
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
@@ -7,16 +6,17 @@ import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 import stop from "@material-design-icons/svg/outlined/stop.svg?raw";
 import plus from "@material-design-icons/svg/outlined/add.svg?raw";
 import contentCopyIcon from "@material-design-icons/svg/outlined/content_copy.svg?raw";
-import codeIcon from "@material-design-icons/svg/outlined/code.svg?raw";
 import "@symblight/wc-material/button";
 import "@symblight/wc-material/icon";
 import "@symblight/wc-material/icon-button";
 import "@symblight/wc-material/avatar";
+import "@symblight/wc-material/skeleton";
 
 import "../../index.js";
 import "../typing-indicator/typing-indicator.js";
 import "../streaming-indicator/streaming-indicator.js";
 import "../scroll-to-bottom-affordance/scroll-to-bottom-affordance.js";
+import "../loading-history/loading-history.js";
 import "../chip/chip.js";
 import "../paste-long-text/paste-long-text.js";
 import { createSplitOnSendHandler } from "../../utils/split-message-parts.js";
@@ -469,12 +469,15 @@ function makeHistoryMessage(index) {
  * `PAGINATION_PAGE_SIZE` at a time — `cursor` is just the (stringified) index to page backward
  * from. The first call (no cursor, made by chx-chat itself on connect) returns the newest page;
  * `loadMoreHistory()` (scroll to the top, or the composer's "Load older messages" button below)
- * walks backward one page at a time until `hasMore: false`.
+ * walks backward one page at a time until `hasMore: false`. `delayMs` defaults to the same 600ms
+ * `Pagination` story below uses — the initial-loading stories pass a longer one so the indicator
+ * stays comfortably visible while looking at the story, not just for one paint.
+ * @param {number} [delayMs]
  */
-function createPaginatedAdapter() {
+function createPaginatedAdapter(delayMs = 600) {
   return {
     listMessages: async (/** @type {{cursor?: string}} */ { cursor }) => {
-      await new Promise((resolve) => setTimeout(resolve, 600)); // simulated network latency
+      await new Promise((resolve) => setTimeout(resolve, delayMs)); // simulated network latency
       const end = cursor ? Number(cursor) : PAGINATION_TOTAL_HISTORY;
       const start = Math.max(0, end - PAGINATION_PAGE_SIZE);
       const messages = Array.from({ length: end - start }, (_, i) => makeHistoryMessage(start + i));
@@ -495,6 +498,14 @@ function createPaginatedAdapter() {
  * at which point the slotted `<chx-scroll-to-bottom-affordance slot="scroll-to-bottom">` appears on
  * its own, no story-level wiring needed (same automatic-eligibility, opt-in-content posture as
  * `streaming` above). Click it to jump back to the newest message.
+ *
+ * And `chx-message-list`'s `loading-history` slot — the second kind of loading, distinct from
+ * `InitialLoadingDefault`/`InitialLoadingCustom` below (those fire once, with no messages on screen
+ * yet; this one fires every subsequent older-page fetch, with messages already visible). Unlike
+ * `streaming`/`scroll-to-bottom` above, nothing is slotted here at all — the slot's own native
+ * fallback is a plain `<chx-loading-history>`, so it shows up with zero story-level wiring the
+ * instant a scroll-triggered (or button-triggered) `loadMoreHistory()` starts, and disappears the
+ * instant it settles. See `LoadingHistoryCustomDelay` below for overriding it explicitly.
  */
 /** @type {Story} */
 export const Pagination = {
@@ -538,6 +549,122 @@ export const Pagination = {
   `,
 };
 
+/**
+ * `chx-loading-history` is only ever touched directly to customize it — `Pagination` above shows it
+ * needs no wiring at all for the default look. Here the app slots its own instance with two
+ * customizations at once: `delay="800"` (ms to wait, once connected, before actually rendering —
+ * skips the flash entirely on a fetch that settles faster than that) and a custom `<md-skeleton
+ * variant="circular">` in place of the default `<md-progress-circular>`, via `chx-loading-history`'s
+ * own plain `<slot>`. `createPaginatedAdapter`'s delay here (3s) is well past `delay`, so the
+ * indicator is still visible — try setting `delay` above 3000 instead to see a fetch settle with the
+ * indicator never appearing at all.
+ */
+/** @type {Story} */
+export const LoadingHistoryCustomDelay = {
+  render: () => html`
+    <div
+      class="pagination-story"
+      style="height: 500px; display: flex; flex-direction: column; gap: 0.5rem;"
+      @click=${(/** @type {MouseEvent} */ event) => {
+        if (!(/** @type {HTMLElement} */ (event.target).closest(".pagination-story__load-more")))
+          return;
+        const container = /** @type {HTMLElement} */ (event.currentTarget);
+        /** @type {(HTMLElement & {loadMoreHistory: () => Promise<void>}) | null} */ (
+          container.querySelector("chx-chat")
+        )?.loadMoreHistory();
+      }}
+    >
+      <md-button
+        class="pagination-story__load-more"
+        variant="outlined"
+        style="align-self: flex-start;"
+      >
+        Load older messages
+      </md-button>
+      <chx-chat
+        .userId=${"me"}
+        .adapter=${createPaginatedAdapter(3000)}
+        style="flex: 1; min-height: 0;"
+      >
+        <chx-message-list slot="message-list">
+          <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
+          <chx-loading-history slot="loading-history" delay="800"></chx-loading-history>
+          <chx-scroll-to-bottom-affordance
+            slot="scroll-to-bottom"
+          ></chx-scroll-to-bottom-affordance>
+        </chx-message-list>
+        <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
+          <md-button slot="actions" variant="text">Opus 4.8</md-button>
+          <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+        </chx-message-composer>
+      </chx-chat>
+    </div>
+  `,
+};
+
+
+/**
+ * `chx-message-list`'s `initial-loading` slot overridden with a consumer-supplied element — the
+ * default `<md-progress-circular>` fallback only ever renders when the slot is empty (same
+ * slot-with-fallback-content mechanics as `chx-attachment`'s own `actions` slot), so slotting
+ * anything into `slot="initial-loading"` replaces it outright, no opt-out flag needed. Here it's
+ * seven `<md-skeleton variant="rectangular">` bubbles of varied width/height, sized/aligned to
+ * roughly preview a denser message history about to load, alternating side like `WithMessages`' real
+ * messages do — `chx-chat`
+ * doesn't know or care what's in the slot, it only toggles whether the slot renders at all. Fixed px
+ * widths, not percentages: once content is actually assigned (as opposed to the slot's own native
+ * fallback, which the sibling `InitialLoadingDefault` story exercises instead), it renders as a direct
+ * flex item of `chx-infinity-scroll`'s internal column rather than inheriting `.message-list__initial-
+ * loading`'s own sizing rules — a percentage width here has no definite containing block to resolve
+ * against and collapses to 0, confirmed live.
+ */
+/** @type {Story} */
+export const InitialLoadingCustom = {
+  render: () => html`
+    <chx-chat .userId=${"me"} .adapter=${createPaginatedAdapter(2500)} style="height: 500px;">
+      <chx-message-list slot="message-list">
+        <div
+          slot="initial-loading"
+          style="display: flex; flex-direction: column; gap: 0.5rem; padding: 0.5rem 0; width: 100%;"
+        >
+          <md-skeleton
+            variant="rectangular"
+            style="width: 220px; height: 2.5rem; border-radius: 1rem; align-self: flex-start;"
+          ></md-skeleton>
+          <md-skeleton
+            variant="rectangular"
+            style="width: 160px; height: 2rem; border-radius: 1rem; align-self: flex-end;"
+          ></md-skeleton>
+          <md-skeleton
+            variant="rectangular"
+            style="width: 780px; height: 4.5rem; border-radius: 1rem; align-self: flex-start;"
+          ></md-skeleton>
+          <md-skeleton
+            variant="rectangular"
+            style="width: 390px; height: 2.5rem; border-radius: 1rem; align-self: flex-end;"
+          ></md-skeleton>
+          <md-skeleton
+            variant="rectangular"
+            style="width: 440px; height: 3rem; border-radius: 1rem; align-self: flex-start;"
+          ></md-skeleton>
+          <md-skeleton
+            variant="rectangular"
+            style="width: 530px; height: 2rem; border-radius: 1rem; align-self: flex-end;"
+          ></md-skeleton>
+          <md-skeleton
+            variant="rectangular"
+            style="width: 260px; height: 3.5rem; border-radius: 1rem; align-self: flex-start;"
+          ></md-skeleton>
+        </div>
+        <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
+      </chx-message-list>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
+        <md-button slot="actions" variant="text">Opus 4.8</md-button>
+        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+      </chx-message-composer>
+    </chx-chat>
+  `,
+};
 
 
 /**

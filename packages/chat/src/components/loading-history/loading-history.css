@@ -1,0 +1,24 @@
+:host {
+  position: absolute;
+  inset-inline-start: var(--chx-loading-history-offset, 0.75rem);
+  inset-block-end: var(--chx-loading-history-offset, 0.75rem);
+  z-index: 1;
+  display: flex;
+  --chx-loading-history-background-color: var(--md-sys-color-surface-container-high);
+}
+
+.loading-history__bubble {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  border-radius: 50%;
+  background-color: var(--chx-loading-history-background-color);
+  box-shadow: var(--chx-loading-history-shadow, 0 2px 6px rgb(0 0 0 / 0.3));
+  font-size: 1.25rem;
+}
+
+.loading-history__bubble[hidden] {
+  display: flex;
+  visibility: hidden;
+}

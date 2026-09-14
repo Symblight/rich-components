@@ -16,7 +16,7 @@ export function countLines(text) {
 /**
  * Builds a `paste` node at the current selection and lands the caret one space after it.
  * @param {import("prosemirror-view").EditorView} view
- * @param {{text: string, lines: number, handlerId: string | null, data: Record<string, unknown>}} attrs
+ * @param {{text: string, lines: number, data: Record<string, unknown>}} attrs
  * @returns {true}
  */
 function insertPasteChip(view, attrs) {
@@ -36,22 +36,23 @@ function insertPasteChip(view, attrs) {
  * splitting the current `line` block between them — so paste merges with
  * whatever text already surrounds the cursor instead of overwriting it.
  *
- * Precedence (see `.claude/plans/paste-handlers.spec.md`):
+ * Precedence, driven entirely by chx-paste-long-text (see Editor.js's
+ * `configurePasteLongText`) — this plugin itself has no opinion:
  *  1. A paste of at least `getPasteThreshold()` lines always collapses to
- *     the plain "N lines" chip — no pasteHandler ever runs in this branch,
+ *     the plain "N lines" chip — `classify()` never runs in this branch,
  *     however it would have classified the content. `threshold <= 0`
- *     disables collapsing entirely.
- *  2. Otherwise, `getPasteHandlers()` run in order; the first whose
- *     `match()` returns non-null claims the paste and its `render()`
- *     draws the chip instead of the plain default.
+ *     disables collapsing entirely (the default when no chx-paste-long-text
+ *     is registered).
+ *  2. Otherwise, `getClassify()` (e.g. chx-paste-long-text's code detector)
+ *     is checked once; a non-null result collapses to a classified chip.
  *  3. Otherwise, the existing inline plain-text insertion — unchanged.
  * @param {{
  *   getPasteThreshold?: () => number,
- *   getPasteHandlers?: () => import("../types/paste-handler.js").PasteHandler[],
+ *   getClassify?: () => ((text: string, lines: number) => Record<string, unknown> | null) | undefined,
  * }} [options]
  * @returns {import("prosemirror-state").Plugin}
  */
-export function createPastePlugin({ getPasteThreshold, getPasteHandlers } = {}) {
+export function createPastePlugin({ getPasteThreshold, getClassify } = {}) {
   return new Plugin({
     props: {
       handlePaste(view, event) {
@@ -61,15 +62,12 @@ export function createPastePlugin({ getPasteThreshold, getPasteHandlers } = {}) 
         const threshold = getPasteThreshold?.() ?? 0;
         const lineCount = countLines(text);
         if (threshold > 0 && lineCount >= threshold) {
-          return insertPasteChip(view, { text, lines: lineCount, handlerId: null, data: {} });
+          return insertPasteChip(view, { text, lines: lineCount, data: {} });
         }
 
-        const html = event.clipboardData?.getData("text/html") || null;
-        for (const handler of getPasteHandlers?.() ?? []) {
-          const data = handler.match({ text, lines: lineCount, html, event });
-          if (data != null) {
-            return insertPasteChip(view, { text, lines: lineCount, handlerId: handler.id, data });
-          }
+        const data = getClassify?.()?.(text, lineCount);
+        if (data != null) {
+          return insertPasteChip(view, { text, lines: lineCount, data });
         }
 
         const lines = text.split("\n");

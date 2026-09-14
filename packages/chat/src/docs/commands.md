@@ -1,8 +1,7 @@
 # Commands
 
-"Type a trigger character, pick from a menu, get a chip" — entirely opt-in. Neither `chx-chat`
-nor `chx-message-composer` know anything about commands unless you slot something into
-`slot="command-field"` yourself.
+"Type a trigger character, pick from a menu, get a chip" — entirely opt-in. `chx-message-composer`
+knows nothing about commands unless you slot something into its `slot="command-field"` yourself.
 
 Two ways to do that:
 
@@ -22,12 +21,14 @@ The minimal case needs zero JavaScript — options are just light-DOM children, 
 model as native `<select>`/`<option>`:
 
 ```html
-<chx-chat label="Write your prompt...">
-  <chx-command-picker commandCharacter="@" id="files" slot="command-field">
-    <md-menu-item value="index.js">index.js</md-menu-item>
-    <md-menu-item value="chat.js">chat.js</md-menu-item>
-    <md-menu-item value="command-field.js">command-field.js</md-menu-item>
-  </chx-command-picker>
+<chx-chat>
+  <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
+    <chx-command-picker commandCharacter="@" id="files" slot="command-field">
+      <md-menu-item value="index.js">index.js</md-menu-item>
+      <md-menu-item value="chat.js">chat.js</md-menu-item>
+      <md-menu-item value="command-field.js">command-field.js</md-menu-item>
+    </chx-command-picker>
+  </chx-message-composer>
 </chx-chat>
 ```
 
@@ -310,9 +311,11 @@ yourself.
 ### Quick start
 
 ```html
-<chx-chat label="Write your prompt...">
-  <chx-command-field commandCharacter="@" id="files" slot="command-field"></chx-command-field>
-  <chx-command-field commandCharacter="/" id="commands" slot="command-field"></chx-command-field>
+<chx-chat>
+  <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
+    <chx-command-field commandCharacter="@" id="files" slot="command-field"></chx-command-field>
+    <chx-command-field commandCharacter="/" id="commands" slot="command-field"></chx-command-field>
+  </chx-message-composer>
 </chx-chat>
 
 <!-- for="..." is a harmless static fallback, not the active anchor —
@@ -430,7 +433,7 @@ than inserting into the wrong place. This is chat-agnostic plumbing shared with 
 | `id`                 | `string` | —       | Plain DOM id — used to tell registered instances apart in event handlers and to derive your `<md-menu>`/`<template>` ids by convention (`{id}-menu`, `{id}-chip-template`). |
 
 Pure trigger/config, nothing more — it never renders anything itself and has no `.value`. It
-exists purely so `chx-chat` can discover it (`slot="command-field"`). The inserted chip is a
+exists purely so `chx-message-composer` can discover it (`slot="command-field"`). The inserted chip is a
 completely separate, app-defined `Node`, not an instance of this component. Your `<md-menu>`
 doesn't need to anchor to this field at all — `chx-command-query`'s `x`/`y` (see Events) let
 you open it right at the caret via `openAtPoint`.

@@ -27,8 +27,6 @@ export class ChxChat extends LitElement {
   /** @type {import("lit").PropertyDeclarations} */
   static properties = {
     loading: { type: Boolean, reflect: true, attribute: true },
-    label: { type: String, attribute: true },
-    triggerFields: { attribute: false },
     userId: { type: String, attribute: true },
     messages: { attribute: false },
     messageElement: { attribute: false },
@@ -56,14 +54,8 @@ export class ChxChat extends LitElement {
   constructor() {
     super();
 
-    /** @type {String} */
-    this.label = "";
-
     /** @type {Boolean} */
     this.loading = false;
-
-    /** @type {Map<string, Element>} Keyed by element.id — see handleCommandFieldSlotchange. */
-    this.triggerFields = new Map();
 
     /** @type {String | undefined} */
     this.userId = undefined;
@@ -121,7 +113,7 @@ export class ChxChat extends LitElement {
      * shadow nesting depth — kept in sync via `chx-attachments-change`
      * (below), not by chx-chat computing anything itself. Chosen over the
      * manual per-level property-push pattern already used for
-     * label/loading/triggerFields specifically because chx-textbox (the
+     * loading specifically because chx-textbox (the
      * consumer that needs this, for its `textbox_attached` row-gap) sits
      * two shadow levels down (chx-chat → chx-message-composer's shadow →
      * chx-textbox) — context crosses that in one hop, no relay through
@@ -211,9 +203,10 @@ export class ChxChat extends LitElement {
   }
 
   /**
-   * chx-message-composer is now consumer-authored light DOM (see
-   * handleDefaultSlotchange) rather than something chx-chat renders itself,
-   * so this is a light-DOM query, not a shadow-root one.
+   * chx-message-composer is consumer-authored light DOM, assigned to the
+   * `message-composer` slot (see handleMessageComposerSlotchange) rather
+   * than something chx-chat renders itself, so this is a light-DOM query,
+   * not a shadow-root one.
    * @returns {import("../message-composer/message-composer.js").ChxMessageComposer}
    */
   get messageComposerElement() {
@@ -224,7 +217,7 @@ export class ChxChat extends LitElement {
 
   /**
    * Same status as messageComposerElement above — consumer-authored,
-   * optional light DOM.
+   * optional light DOM, assigned to the `message-list` slot.
    * @returns {import("../message-list/message-list.js").ChxMessageList}
    */
   get messageListElement() {
@@ -448,35 +441,26 @@ export class ChxChat extends LitElement {
   };
 
   /**
-   * Sole discovery point for <chx-command-field>/<chx-command-picker>, keyed by `element.id` —
-   * pushed down to the composer/textbox as `getTriggerFields`/`getCommandFields` for live "@"/"/"
-   * query routing while typing (see `textbox.js`).
-   * @param {Event} event
+   * chx-message-list/chx-message-composer are consumer-authored light DOM,
+   * each required to carry its own `slot="message-list"`/
+   * `slot="message-composer"` attribute — chx-chat only orchestrates layout
+   * (see chat.css's ::slotted() rules) and pushes its own config onto
+   * whatever composer/list shows up here, since it can no longer bind
+   * properties onto them via its own template.
    */
-  handleCommandFieldSlotchange(event) {
-    const slot = /** @type {HTMLSlotElement} */ (event.target);
-    this.triggerFields = new Map(
-      slot.assignedElements({ flatten: true }).map((element) => [element.id, element]),
-    );
+  handleMessageListSlotchange() {
+    this.pushMessageListProperties();
   }
 
-  /**
-   * chx-message-list/chx-message-composer are consumer-authored light DOM —
-   * chx-chat only orchestrates layout (see chat.css's ::slotted() rules) and
-   * pushes its own config onto whatever composer/list shows up here, since
-   * it can no longer bind properties onto them via its own template.
-   */
-  handleDefaultSlotchange() {
+  /** @see handleMessageListSlotchange */
+  handleMessageComposerSlotchange() {
     this.pushComposerProperties();
-    this.pushMessageListProperties();
   }
 
   pushComposerProperties() {
     const composer = this.messageComposerElement;
     if (!composer) return;
-    composer.label = this.label;
     composer.loading = this.loading;
-    composer.triggerFields = this.triggerFields;
     composer.dragging = this.dragging;
     composer.messagesEmpty = this.#internalMessages.length === 0;
   }
@@ -484,7 +468,7 @@ export class ChxChat extends LitElement {
   /**
    * The message list only needs the drag-overlay state (see
    * message-list.js's own `dragging`/`dropHint`) — it has no
-   * label/loading/triggerFields concept of its own.
+   * loading concept of its own.
    */
   pushMessageListProperties() {
     const list = this.messageListElement;
@@ -534,8 +518,8 @@ export class ChxChat extends LitElement {
    * Runs on every update, not gated to specific changedProperties keys —
    * `dragging` is controller-driven (DropTargetController calls
    * requestUpdate() directly, not through a declared reactive property), so
-   * it never shows up in changedProperties the way label/loading/
-   * triggerFields do. Cheap enough to just always re-push.
+   * it never shows up in changedProperties the way loading does. Cheap
+   * enough to just always re-push.
    * @param {import("lit").PropertyValues} changedProperties
    */
   updated(changedProperties) {
@@ -546,8 +530,8 @@ export class ChxChat extends LitElement {
 
   render() {
     return html`
-      <slot @slotchange=${this.handleDefaultSlotchange}></slot>
-      <slot name="command-field" @slotchange=${this.handleCommandFieldSlotchange}></slot>
+      <slot name="message-list" @slotchange=${this.handleMessageListSlotchange}></slot>
+      <slot name="message-composer" @slotchange=${this.handleMessageComposerSlotchange}></slot>
     `;
   }
 }

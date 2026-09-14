@@ -84,9 +84,9 @@ function makeMessages(count) {
 /** @type {Story} */
 export const Basic = {
   render: () => html`
-    <chx-chat label="Write your prompt..." .userId=${"me"} .adapter=${createReplyAdapter()}>
-      <chx-message-list></chx-message-list>
-      <chx-message-composer>
+    <chx-chat .userId=${"me"} .adapter=${createReplyAdapter()}>
+      <chx-message-list slot="message-list"></chx-message-list>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <chx-suggestion-list slot="suggestions">
           <chx-suggestion value="Write an email">Write an email</chx-suggestion>
           <chx-suggestion value="Summarize a document">Summarize a document</chx-suggestion>
@@ -107,9 +107,9 @@ export const Basic = {
 /** @type {Story} */
 export const AutoSubmit = {
   render: () => html`
-    <chx-chat label="Write your prompt..." .userId=${"me"} .adapter=${createReplyAdapter()}>
-      <chx-message-list></chx-message-list>
-      <chx-message-composer>
+    <chx-chat .userId=${"me"} .adapter=${createReplyAdapter()}>
+      <chx-message-list slot="message-list"></chx-message-list>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <chx-suggestion-list slot="suggestions" auto-submit>
           <chx-suggestion value="What's the weather like today?">What's the weather?</chx-suggestion>
           <chx-suggestion value="Tell me a fun fact">Tell me a fun fact</chx-suggestion>
@@ -130,13 +130,12 @@ export const AutoSubmit = {
 export const AlwaysVisible = {
   render: () => html`
     <chx-chat
-      label="Write your prompt..."
       .userId=${"me"}
       .messages=${makeMessages(4)}
       .adapter=${createReplyAdapter()}
     >
-      <chx-message-list></chx-message-list>
-      <chx-message-composer>
+      <chx-message-list slot="message-list"></chx-message-list>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <chx-suggestion-list slot="suggestions" always-visible>
           <chx-suggestion value="Write an email">Write an email</chx-suggestion>
           <chx-suggestion value="Summarize a document">Summarize a document</chx-suggestion>
@@ -156,9 +155,9 @@ export const AlwaysVisible = {
 /** @type {Story} */
 export const ValueDiffersFromLabel = {
   render: () => html`
-    <chx-chat label="Write your prompt..." .userId=${"me"} .adapter=${createReplyAdapter()}>
-      <chx-message-list></chx-message-list>
-      <chx-message-composer>
+    <chx-chat .userId=${"me"} .adapter=${createReplyAdapter()}>
+      <chx-message-list slot="message-list"></chx-message-list>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <chx-suggestion-list slot="suggestions">
           <chx-suggestion
             value="Write a professional email to a client explaining a shipping delay"
@@ -248,9 +247,9 @@ export const Dynamic = {
     };
 
     return html`
-      <chx-chat label="Write your prompt..." .userId=${"me"} .adapter=${createReplyAdapter()}>
-        <chx-message-list></chx-message-list>
-        <chx-message-composer>
+      <chx-chat .userId=${"me"} .adapter=${createReplyAdapter()}>
+        <chx-message-list slot="message-list"></chx-message-list>
+        <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
           <chx-suggestion-list slot="suggestions" ${ref(fetchInitialSuggestions)}></chx-suggestion-list>
           <md-button slot="actions" variant="text" @click=${cycleTopic}>Different topic</md-button>
           <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>

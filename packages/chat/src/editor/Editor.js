@@ -43,6 +43,20 @@ export class Editor {
   #onChange;
   /** @type {((detail: {target: string | null, id: string | undefined}) => void) | undefined} */
   #onCommandSelected;
+  /**
+   * Live config the always-present paste plugin/node-view read from — starts fully inert (same
+   * "present but no-op until something registers" shape command-plugin.js's own
+   * `getCommandFields ?? (() => new Map())` already has). `chx-paste-long-text` mutates this
+   * directly via `configurePasteLongText`, no ProseMirror `reconfigure()` needed since the plugin's
+   * own getters are called live at paste time. `buildElement` is named generically, not `buildChip`
+   * — a collapsed paste can resolve to any element (e.g. `chx-code-block`), not just a chip.
+   * @type {{getPasteThreshold: () => number, classify: (text: string, lines: number) => Record<string, unknown> | null, buildElement: ((attrs: {text: string, lines: number, data: Record<string, unknown>}, source: "composer") => HTMLElement) | undefined}}
+   */
+  #pasteConfig = {
+    getPasteThreshold: () => 0,
+    classify: () => null,
+    buildElement: undefined,
+  };
 
   /**
    * @param {HTMLElement} mount
@@ -53,25 +67,9 @@ export class Editor {
    *   onCommandSelected?: (detail: {target: string | null, id: string | undefined}) => void,
    *   attributes?: Record<string, string>,
    *   placeholder?: string,
-   *   getPasteThreshold?: () => number,
-   *   getRenderPasteChip?: () => (detail: {text: string, lines: number, data: Record<string, unknown>, source: "composer"}) => HTMLElement,
-   *   getPasteHandlers?: () => import("../types/paste-handler.js").PasteHandler[],
    * }} options
    */
-  constructor(
-    mount,
-    {
-      onChange,
-      onSubmit,
-      getCommandFields,
-      onCommandSelected,
-      attributes,
-      placeholder,
-      getPasteThreshold,
-      getRenderPasteChip,
-      getPasteHandlers,
-    },
-  ) {
+  constructor(mount, { onChange, onSubmit, getCommandFields, onCommandSelected, attributes, placeholder }) {
     this.#onChange = onChange;
     this.#onCommandSelected = onCommandSelected;
 
@@ -80,7 +78,10 @@ export class Editor {
       plugins: [
         createCommandPlugin({ getCommandFields: getCommandFields ?? (() => new Map()) }),
         createKeymap({ onSubmit }),
-        createPastePlugin({ getPasteThreshold, getPasteHandlers }),
+        createPastePlugin({
+          getPasteThreshold: () => this.#pasteConfig.getPasteThreshold(),
+          getClassify: () => this.#pasteConfig.classify,
+        }),
         createPlaceholderPlugin(placeholder ?? ""),
       ],
     });
@@ -90,10 +91,10 @@ export class Editor {
       attributes,
       nodeViews: {
         chip: (node) => new ChipNodeView(node),
-        ...(getRenderPasteChip && {
-          paste: (node, view, getPos) =>
-            new PasteNodeView(node, view, getPos, { getRenderPasteChip, getPasteHandlers }),
-        }),
+        paste: (node, view, getPos) =>
+          new PasteNodeView(node, view, getPos, {
+            getBuildElement: () => this.#pasteConfig.buildElement,
+          }),
       },
       dispatchTransaction: (tr) => {
         const oldState = this.view.state;
@@ -204,5 +205,24 @@ export class Editor {
     const tr = landCaretAfterNode(this.view.state.tr.replaceWith(from, to, chipNode), from, chipNode);
     this.view.dispatch(tr);
     this.view.focus();
+  }
+
+  /**
+   * Called by chx-paste-long-text on connect/disconnect (see its own #registerWithEditor) — the
+   * paste plugin/node-view are always present (see `#pasteConfig`'s own doc comment above), this
+   * just mutates the live config they already read from. `null` resets to fully disabled, same as
+   * before any chx-paste-long-text ever registered.
+   * @param {{
+   *   getPasteThreshold: () => number,
+   *   classify: (text: string, lines: number) => Record<string, unknown> | null,
+   *   buildElement: (attrs: {text: string, lines: number, data: Record<string, unknown>}, source: "composer") => HTMLElement,
+   * } | null} config
+   */
+  configurePasteLongText(config) {
+    this.#pasteConfig = {
+      getPasteThreshold: config?.getPasteThreshold ?? (() => 0),
+      classify: config?.classify ?? (() => null),
+      buildElement: config?.buildElement,
+    };
   }
 }

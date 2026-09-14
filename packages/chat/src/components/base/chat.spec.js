@@ -9,7 +9,7 @@ describe("chx-chat", () => {
   describe("messages", () => {
     it("sending a message updates the internal store and fires chx-messages-change synchronously", async () => {
       const el = /** @type {ChxChat} */ (
-        await fixture(html`<chx-chat><chx-message-list></chx-message-list></chx-chat>`)
+        await fixture(html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`)
       );
       el.userId = "me"; // userId's default Lit attribute name is lowercased, not kebab-cased —
       //   "user-id" as a plain attribute never binds, so this is set as a property instead
@@ -43,7 +43,7 @@ describe("chx-chat", () => {
 
     it("assigning a new messages array externally replaces internal state", async () => {
       const el = /** @type {ChxChat} */ (
-        await fixture(html`<chx-chat><chx-message-list></chx-message-list></chx-chat>`)
+        await fixture(html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`)
       );
       await el.updateComplete;
 
@@ -67,7 +67,7 @@ describe("chx-chat", () => {
       // validateMessages' console.error, since the mutation below introduces an id-less message
       // that would otherwise be flagged.
       const el = /** @type {ChxChat} */ (
-        await fixture(html`<chx-chat><chx-message-list></chx-message-list></chx-chat>`)
+        await fixture(html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`)
       );
       await el.updateComplete;
 
@@ -827,7 +827,7 @@ describe("chx-chat", () => {
     it("chx-message-list's onLoadMore (wired by chx-chat) triggers loadMoreHistory", async () => {
       let calls = 0;
       const el = /** @type {ChxChat} */ (
-        await fixture(html`<chx-chat><chx-message-list></chx-message-list></chx-chat>`)
+        await fixture(html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`)
       );
       el.adapter = {
         listMessages: async () => {
@@ -847,7 +847,7 @@ describe("chx-chat", () => {
   describe("setTyping", () => {
     it("pushes typing down to chx-message-list and fires chx-typing-change", async () => {
       const el = /** @type {ChxChat} */ (
-        await fixture(html`<chx-chat><chx-message-list></chx-message-list></chx-chat>`)
+        await fixture(html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`)
       );
       const list = /** @type {ChxMessageList} */ (el.messageListElement);
       expect(list.typing).to.be.false;
@@ -867,7 +867,7 @@ describe("chx-chat", () => {
 
     it("is a no-op (no re-fired event) when called with the value already in effect", async () => {
       const el = /** @type {ChxChat} */ (
-        await fixture(html`<chx-chat><chx-message-list></chx-message-list></chx-chat>`)
+        await fixture(html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`)
       );
       el.setTyping(true);
       await el.updateComplete;
@@ -913,7 +913,7 @@ describe("chx-chat", () => {
       /** @type {(stream: ReadableStream) => void} */
       let resolveSendMessage = () => {};
       const el = /** @type {ChxChat} */ (
-        await fixture(html`<chx-chat><chx-message-list></chx-message-list></chx-chat>`)
+        await fixture(html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`)
       );
       el.userId = "me";
       el.adapter = {
@@ -974,7 +974,7 @@ describe("chx-chat", () => {
 
     it("stays false once a message exists, even while its parts are still streaming", async () => {
       const el = /** @type {ChxChat} */ (
-        await fixture(html`<chx-chat><chx-message-list></chx-message-list></chx-chat>`)
+        await fixture(html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`)
       );
       el.userId = "me";
       el.adapter = {

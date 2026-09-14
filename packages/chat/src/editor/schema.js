@@ -71,13 +71,13 @@ export const schema = new Schema({
     },
     /**
      * A collapsed long paste — the full text lives in `attrs.text`, only a
-     * chip renders (see paste-plugin.js / paste-node-view.js). `handlerId` +
-     * `data` are `null`/`{}` for the plain "N lines" chip (threshold hit, or
-     * no pasteHandler claimed it); otherwise they name which app-registered
-     * pasteHandler rendered it and carry whatever it returned from its own
-     * `match()`, round-tripped the same way `command`'s `data` bag is —
-     * opaque to the schema, only meaningful to that handler's own `render()`
-     * (see `.claude/plans/paste-handlers.spec.md`).
+     * chip renders (see paste-plugin.js / paste-node-view.js, both driven by
+     * chx-paste-long-text). `data` is `{}` for the plain "N lines" chip
+     * (threshold hit, or chx-paste-long-text.classify() didn't match);
+     * otherwise it carries whatever `classify()` returned (e.g. `{lang}` for
+     * a detected code paste), round-tripped the same way `command`'s `data`
+     * bag is — opaque to the schema, only meaningful to
+     * chx-paste-long-text's own `buildElement()`.
      *
      * `leafText` feeds ProseMirror's own clipboard text/plain serialization,
      * so copying a selection containing a chip yields the full text;
@@ -89,7 +89,6 @@ export const schema = new Schema({
       attrs: {
         text: { default: "" },
         lines: { default: 0 },
-        handlerId: { default: null },
         data: { default: {} },
       },
       leafText: (node) => node.attrs.text,
@@ -97,7 +96,6 @@ export const schema = new Schema({
         "span",
         {
           "data-paste-lines": String(node.attrs.lines),
-          ...(node.attrs.handlerId ? { "data-handler-id": node.attrs.handlerId } : {}),
           ...Object.fromEntries(
             Object.entries(node.attrs.data ?? {}).map(([key, value]) => [
               toDataAttrName(key),
@@ -111,11 +109,10 @@ export const schema = new Schema({
         {
           tag: "span[data-paste-lines]",
           getAttrs: (dom) => {
-            const { pasteLines, handlerId, ...data } = /** @type {HTMLElement} */ (dom).dataset;
+            const { pasteLines, ...data } = /** @type {HTMLElement} */ (dom).dataset;
             return {
               text: dom.textContent ?? "",
               lines: Number(pasteLines) || 0,
-              handlerId: handlerId ?? null,
               data,
             };
           },

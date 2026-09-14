@@ -165,15 +165,14 @@ function createStreamingCodeAgentAdapter() {
 export const StreamingCodeReply = {
   render: () => html`
     <chx-chat
-      label="Write your prompt..."
       .userId=${"me"}
       .partElements=${{ code: renderCodePart }}
       .adapter=${createStreamingCodeAgentAdapter()}
     >
-      <chx-message-list scroll-behavior="smooth">
+      <chx-message-list slot="message-list" scroll-behavior="smooth">
         <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
       </chx-message-list>
-      <chx-message-composer>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Send</md-button>
       </chx-message-composer>
     </chx-chat>

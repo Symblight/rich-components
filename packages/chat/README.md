@@ -16,15 +16,15 @@ Built on top of [`@symblight/wc-material`](https://www.npmjs.com/package/@symbli
 
 ## Public API
 
-`<chx-chat>` is the package's single public export — everything below is reachable directly on it;
-it forwards to `chx-message-composer`/`chx-textbox` internally so you never need to reach into
-either yourself.
+`<chx-chat>` is the package's single public export — everything below is reachable directly on it.
+`chx-message-composer`/`chx-message-list` are consumer-authored light-DOM children (`slot="message-
+composer"`/`slot="message-list"`) — properties specific to them, like the composer's `placeholder`,
+are set directly on those elements rather than forwarded through `chx-chat`.
 
 ### Properties
 
 | Property  | Type      | Notes                                                                                       |
 | --------- | --------- | ------------------------------------------------------------------------------------------- |
-| `label`   | `string`  | Applied as the composer's textbox `aria-label`.                                             |
 | `loading` | `boolean` | Reflected attribute — switches the composer's send button to its loading/flight-icon state. |
 
 ### Methods
@@ -45,9 +45,9 @@ either yourself.
 Commands (`chx-command-query`/`chx-command-confirm`/`chx-command-navigate`/`chx-command-selected`)
 and attachments (`chx-attach`/`chx-attachment-remove`) each have their own event contract, covered
 in their respective docs linked above rather than duplicated here. The paste chip feature has no
-events of its own — `paste-threshold`/`renderPasteChip` are set on `<chx-message-composer>`
-directly (see [Paste chip API](./src/docs/paste-chip.md)); `chx-send-message`/`chx-change`'s
-`value`/`html` already contain the full pasted text regardless of whether a chip is currently shown.
+events of its own — it's opt-in via `<chx-paste-long-text>` slotted into `<chx-message-composer>`
+(see [Paste chip API](./src/docs/paste-chip.md)); `chx-send-message`/`chx-change`'s `value`/`html`
+already contain the full pasted text regardless of whether a chip is currently shown.
 
 ## Install
 

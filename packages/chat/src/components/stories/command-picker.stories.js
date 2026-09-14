@@ -226,21 +226,17 @@ const defaultChipPartElements = { chip: buildChipElement };
 /** @type {Story} */
 export const Basic = {
   render: () => html`
-    <chx-chat
-      label="Write your prompt..."
-      .partElements=${defaultChipPartElements}
-      @chx-messages-change=${handleChipMessagesChange}
-    >
-      <chx-message-list></chx-message-list>
-      <chx-message-composer>
+    <chx-chat .partElements=${defaultChipPartElements} @chx-messages-change=${handleChipMessagesChange}>
+      <chx-message-list slot="message-list"></chx-message-list>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
         <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+        <chx-command-picker commandCharacter="@" id="picker-basic" slot="command-field">
+          <md-menu-item value="index.js">index.js</md-menu-item>
+          <md-menu-item value="chat.js">chat.js</md-menu-item>
+          <md-menu-item value="command-field.js">command-field.js</md-menu-item>
+        </chx-command-picker>
       </chx-message-composer>
-      <chx-command-picker commandCharacter="@" id="picker-basic" slot="command-field">
-        <md-menu-item value="index.js">index.js</md-menu-item>
-        <md-menu-item value="chat.js">chat.js</md-menu-item>
-        <md-menu-item value="command-field.js">command-field.js</md-menu-item>
-      </chx-command-picker>
     </chx-chat>
   `,
 };
@@ -257,22 +253,21 @@ export const Basic = {
 export const DynamicSearch = {
   render: () => html`
     <chx-chat
-      label="Write your prompt..."
       .partElements=${{ chip: renderDynamicSearchChip }}
       @chx-messages-change=${handleChipMessagesChange}
     >
-      <chx-message-list></chx-message-list>
-      <chx-message-composer>
+      <chx-message-list slot="message-list"></chx-message-list>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
         <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+        <chx-command-picker
+          commandCharacter="@"
+          id="picker-dynamic"
+          slot="command-field"
+          @chx-command-query=${createFileQueryHandler(FILE_TREE)}
+          @chx-command-picked=${createFilePickedHandler("picker-dynamic-chip-template")}
+        ></chx-command-picker>
       </chx-message-composer>
-      <chx-command-picker
-        commandCharacter="@"
-        id="picker-dynamic"
-        slot="command-field"
-        @chx-command-query=${createFileQueryHandler(FILE_TREE)}
-        @chx-command-picked=${createFilePickedHandler("picker-dynamic-chip-template")}
-      ></chx-command-picker>
     </chx-chat>
     <template id="picker-dynamic-chip-template">
       <chx-chip data-template-id="picker-dynamic-chip-template">
@@ -329,22 +324,21 @@ function createHistoricalPickedRenderer(iconMap) {
 export const CustomChipPerOptionIcon = {
   render: () => html`
     <chx-chat
-      label="Write your prompt..."
       .partElements=${{ chip: createHistoricalPickedRenderer(FILE_ICONS) }}
       @chx-messages-change=${handleChipMessagesChange}
     >
-      <chx-message-list></chx-message-list>
-      <chx-message-composer>
+      <chx-message-list slot="message-list"></chx-message-list>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
         <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+        <chx-command-picker
+          commandCharacter="@"
+          id="picker-per-option-icon"
+          slot="command-field"
+          @chx-command-query=${createQueryHandler(FILES)}
+          @chx-command-picked=${createPickedHandler("picker-per-option-icon-icon-template", FILE_ICONS)}
+        ></chx-command-picker>
       </chx-message-composer>
-      <chx-command-picker
-        commandCharacter="@"
-        id="picker-per-option-icon"
-        slot="command-field"
-        @chx-command-query=${createQueryHandler(FILES)}
-        @chx-command-picked=${createPickedHandler("picker-per-option-icon-icon-template", FILE_ICONS)}
-      ></chx-command-picker>
     </chx-chat>
     <template id="picker-per-option-icon-icon-template">
       <chx-chip data-template-id="picker-per-option-icon-icon-template">
@@ -357,26 +351,22 @@ export const CustomChipPerOptionIcon = {
 /** @type {Story} */
 export const CustomChip = {
   render: () => html`
-    <chx-chat
-      label="Write your prompt..."
-      .partElements=${defaultChipPartElements}
-      @chx-messages-change=${handleChipMessagesChange}
-    >
-      <chx-message-list></chx-message-list>
-      <chx-message-composer>
+    <chx-chat .partElements=${defaultChipPartElements} @chx-messages-change=${handleChipMessagesChange}>
+      <chx-message-list slot="message-list"></chx-message-list>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
         <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
-      </chx-message-composer>
-      <chx-command-picker
-        commandCharacter="@"
-        id="picker-custom-chip"
-        slot="command-field"
-        @chx-command-query=${createQueryHandler(FILES)}
-      >
-        <chx-chip slot="chip"
-          ><md-icon slot="icon">${unsafeSVG(descriptionIcon)}</md-icon></chx-chip
+        <chx-command-picker
+          commandCharacter="@"
+          id="picker-custom-chip"
+          slot="command-field"
+          @chx-command-query=${createQueryHandler(FILES)}
         >
-      </chx-command-picker>
+          <chx-chip slot="chip"
+            ><md-icon slot="icon">${unsafeSVG(descriptionIcon)}</md-icon></chx-chip
+          >
+        </chx-command-picker>
+      </chx-message-composer>
     </chx-chat>
   `,
 };
@@ -391,22 +381,18 @@ export const CustomChip = {
 /** @type {Story} */
 export const ChipHydratesInMessageList = {
   render: () => html`
-    <chx-chat
-      label="Write your prompt..."
-      .partElements=${defaultChipPartElements}
-      @chx-messages-change=${handleChipMessagesChange}
-    >
-      <chx-message-list></chx-message-list>
-      <chx-message-composer>
+    <chx-chat .partElements=${defaultChipPartElements} @chx-messages-change=${handleChipMessagesChange}>
+      <chx-message-list slot="message-list"></chx-message-list>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
         <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+        <chx-command-picker
+          commandCharacter="@"
+          id="picker-hydration"
+          slot="command-field"
+          @chx-command-query=${createQueryHandler(FILES)}
+        ></chx-command-picker>
       </chx-message-composer>
-      <chx-command-picker
-        commandCharacter="@"
-        id="picker-hydration"
-        slot="command-field"
-        @chx-command-query=${createQueryHandler(FILES)}
-      ></chx-command-picker>
     </chx-chat>
   `,
 };
@@ -414,28 +400,24 @@ export const ChipHydratesInMessageList = {
 /** @type {Story} */
 export const CustomCommands = {
   render: () => html`
-    <chx-chat
-      label="Write your prompt..."
-      .partElements=${defaultChipPartElements}
-      @chx-messages-change=${handleChipMessagesChange}
-    >
-      <chx-message-list></chx-message-list>
-      <chx-message-composer>
+    <chx-chat .partElements=${defaultChipPartElements} @chx-messages-change=${handleChipMessagesChange}>
+      <chx-message-list slot="message-list"></chx-message-list>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
         <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+        <chx-command-picker
+          commandCharacter="@"
+          id="files"
+          slot="command-field"
+          @chx-command-query=${createQueryHandler(FILES)}
+        ></chx-command-picker>
+        <chx-command-picker
+          commandCharacter="/"
+          id="commands"
+          slot="command-field"
+          @chx-command-query=${createQueryHandler(COMMANDS)}
+        ></chx-command-picker>
       </chx-message-composer>
-      <chx-command-picker
-        commandCharacter="@"
-        id="files"
-        slot="command-field"
-        @chx-command-query=${createQueryHandler(FILES)}
-      ></chx-command-picker>
-      <chx-command-picker
-        commandCharacter="/"
-        id="commands"
-        slot="command-field"
-        @chx-command-query=${createQueryHandler(COMMANDS)}
-      ></chx-command-picker>
     </chx-chat>
   `,
 };
@@ -495,7 +477,6 @@ function renderMultiPickerChip(part) {
 export const MultiPickerHydration = {
   render: () => html`
     <chx-chat
-      label="Write your prompt..."
       .partElements=${{ chip: renderMultiPickerChip }}
       @chx-messages-change=${handleChipMessagesChange}
       .messages=${[
@@ -557,25 +538,25 @@ export const MultiPickerHydration = {
         },
       ]}
     >
-      <chx-message-list></chx-message-list>
-      <chx-message-composer>
+      <chx-message-list slot="message-list"></chx-message-list>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
         <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+        <chx-command-picker
+          commandCharacter="@"
+          id="files"
+          slot="command-field"
+          @chx-command-query=${createQueryHandler(FILES)}
+          .buildChip=${buildFilesChip}
+        ></chx-command-picker>
+        <chx-command-picker
+          commandCharacter="/"
+          id="commands"
+          slot="command-field"
+          @chx-command-query=${createQueryHandler(COMMANDS)}
+          .buildChip=${buildCommandsChip}
+        ></chx-command-picker>
       </chx-message-composer>
-      <chx-command-picker
-        commandCharacter="@"
-        id="files"
-        slot="command-field"
-        @chx-command-query=${createQueryHandler(FILES)}
-        .buildChip=${buildFilesChip}
-      ></chx-command-picker>
-      <chx-command-picker
-        commandCharacter="/"
-        id="commands"
-        slot="command-field"
-        @chx-command-query=${createQueryHandler(COMMANDS)}
-        .buildChip=${buildCommandsChip}
-      ></chx-command-picker>
     </chx-chat>
   `,
 };

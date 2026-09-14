@@ -68,9 +68,9 @@ function createOpenHandler(selector) {
 export const Basic = {
   render: () => html`
     ${triggerStyles}
-    <chx-chat label="Write your prompt...">
-      <chx-message-list></chx-message-list>
-      <chx-message-composer>
+    <chx-chat>
+      <chx-message-list slot="message-list"></chx-message-list>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-icon-button
           slot="leading"
           class="attach-trigger"
@@ -131,9 +131,9 @@ async function handleValidatedAttach(event) {
 export const JsDrivenWithLoading = {
   render: () => html`
     ${triggerStyles}
-    <chx-chat label="Write your prompt...">
-      <chx-message-list></chx-message-list>
-      <chx-message-composer>
+    <chx-chat>
+      <chx-message-list slot="message-list"></chx-message-list>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-icon-button
           slot="leading"
           class="attach-trigger"
@@ -224,9 +224,9 @@ export const CustomCardShape = {
         opacity: 0.7;
       }
     </style>
-    <chx-chat label="Write your prompt...">
-      <chx-message-list></chx-message-list>
-      <chx-message-composer>
+    <chx-chat>
+      <chx-message-list slot="message-list"></chx-message-list>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-icon-button
           slot="leading"
           class="attach-trigger"
@@ -255,7 +255,6 @@ export const ChipMode = {
   render: () => html`
     ${triggerStyles}
     <chx-chat
-      label="Write your prompt..."
       .partElements=${{ chip: buildChipElement }}
       @chx-messages-change=${handleChipAttachmentMessagesChange}
       .messages=${[
@@ -280,8 +279,8 @@ export const ChipMode = {
         },
       ]}
     >
-      <chx-message-list></chx-message-list>
-      <chx-message-composer>
+      <chx-message-list slot="message-list"></chx-message-list>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-icon-button
           slot="leading"
           class="attach-trigger"

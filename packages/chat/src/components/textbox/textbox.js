@@ -11,30 +11,14 @@ import styles from "./textbox.css?inline";
 
 import "@symblight/wc-material/icon-button";
 import "@symblight/wc-material/icon";
-import "../paste-chip/paste-chip.js";
 
 import send from "@material-design-icons/svg/outlined/arrow_upward.svg?raw";
 
 /**
- * Built-in `paste` chip — used when no pasteHandler claimed the paste (or
- * the app hasn't set `renderPasteChip`). See chx-paste-chip for the
- * icon/label slots this leaves to their own defaults.
- * @param {{text: string, lines: number, data: Record<string, unknown>, source: "composer"}} detail
- * @returns {HTMLElement}
- */
-function renderDefaultPasteChip({ lines }) {
-  const chip = /** @type {import("../paste-chip/paste-chip.js").ChxPasteChip} */ (
-    document.createElement("chx-paste-chip")
-  );
-  chip.lines = lines;
-  return chip;
-}
-
-/**
  * @tag chx-textbox
  * @summary MD3 filled-field container that owns the ProseMirror `EditorView`
- * directly, configured via `label`/`placeholder`/`getTriggerFields` and
- * reacting to `chx-textbox-change`/`chx-command-selected`.
+ * directly, configured via `placeholder`/`getTriggerFields` and reacting to
+ * `chx-textbox-change`/`chx-command-selected`.
  */
 @customElement("chx-textbox")
 export class ChxTextbox extends FormControlMixin(LitElement) {
@@ -42,14 +26,10 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
   static properties = {
     name: { type: String, attribute: true },
     required: { type: Boolean, attribute: true, reflect: true },
-    label: { type: String, attribute: true },
     placeholder: { type: String, attribute: true },
     dropHint: { type: String, attribute: "drop-hint" },
     dragging: { type: Boolean, reflect: true, attribute: true },
     getTriggerFields: { attribute: false },
-    pasteThreshold: { type: Number, attribute: "paste-threshold" },
-    renderPasteChip: { attribute: false },
-    pasteHandlers: { attribute: false },
     loading: { type: Boolean, reflect: true, attribute: true },
     simplified: { state: true },
     value: { state: true },
@@ -69,10 +49,7 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     this.name = "";
     this.required = false;
 
-    /** @type {String} */
-    this.label = "";
-
-    /** @type {String} */
+    /** @type {String} Applied as the editor's aria-label too — see #mountEditor/updated. */
     this.placeholder = "";
 
     /** @type {String} Shown in place of the placeholder while an OS file drag is over the field. */
@@ -83,15 +60,6 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
 
     /** @type {() => Map<string, Element>} */
     this.getTriggerFields = () => new Map();
-
-    /** @type {number} Pastes of at least this many lines collapse to a chip; <= 0 disables. */
-    this.pasteThreshold = 205;
-
-    /** @type {((detail: {text: string, lines: number, data: Record<string, unknown>, source: "composer"}) => HTMLElement) | undefined} App override for the paste chip's DOM. */
-    this.renderPasteChip = undefined;
-
-    /** @type {import("../../types/paste-handler.js").PasteHandler[]} Ordered — first match() to claim a paste wins. See .claude/plans/paste-handlers.spec.md. */
-    this.pasteHandlers = [];
 
     /** @type {Editor | undefined} */
     this.editor = undefined;
@@ -153,9 +121,6 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
       getCommandFields: () => this.getTriggerFields(),
       onCommandSelected: this.handleCommandSelected,
       placeholder: this.placeholder,
-      getPasteThreshold: () => this.pasteThreshold,
-      getRenderPasteChip: () => this.renderPasteChip ?? renderDefaultPasteChip,
-      getPasteHandlers: () => this.pasteHandlers,
       attributes: {
         role: "textbox",
         dir: "ltr",
@@ -167,7 +132,7 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
         autocorrect: "off",
       },
     });
-    this.editor.view.dom.setAttribute("aria-label", this.label);
+    this.editor.view.dom.setAttribute("aria-label", this.placeholder);
     // Restore the draft across a disconnect/reconnect (e.g. the element being moved).
     if (this.value) this.editor.setText(this.value);
 
@@ -178,8 +143,8 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
   /** @param {import("lit").PropertyValues} changedProperties */
   updated(changedProperties) {
     super.updated(changedProperties);
-    if (changedProperties.has("label") && this.editor) {
-      this.editor.view.dom.setAttribute("aria-label", this.label);
+    if (changedProperties.has("placeholder") && this.editor) {
+      this.editor.view.dom.setAttribute("aria-label", this.placeholder);
     }
   }
 

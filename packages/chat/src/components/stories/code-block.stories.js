@@ -14,7 +14,7 @@ import { marked } from "marked";
 
 import "../../index.js";
 import "../code-block/code-block.js";
-import { createCodeBlockPasteHandler } from "../code-block-paste/code-block-paste-handler.js";
+import "../paste-long-text/paste-long-text.js";
 import { createSplitOnSendHandler } from "../../utils/split-message-parts.js";
 
 /** @type {import("@storybook/web-components").Meta} */
@@ -190,15 +190,15 @@ const handleMessagesChange = createSplitOnSendHandler([codePartRule]);
 
 /**
  * A mocked historical conversation with code-block parts mixed into ordinary text parts, wired up
- * entirely through `partElements` — no new chat/composer API involved. Also wires `pasteHandlers` +
- * `handleMessagesChange` so pasting/sending a new code snippet through the composer below stays a
- * `<chx-code-block>` after send too, not just in the pre-authored history above.
+ * entirely through `partElements` — no new chat/composer API involved. Also slots in
+ * `<chx-paste-long-text>` + `handleMessagesChange` so pasting/sending a new code snippet through the
+ * composer below stays a `<chx-code-block>` after send too, not just in the pre-authored history
+ * above.
  */
 /** @type {Story} */
 export const MockedMessages = {
   render: () => html`
     <chx-chat
-      label="Write your prompt..."
       .partElements=${{ code: renderCodePart }}
       @chx-messages-change=${handleMessagesChange}
       .messages=${[
@@ -244,8 +244,10 @@ export const MockedMessages = {
         },
       ]}
     >
-      <chx-message-list></chx-message-list>
-      <chx-message-composer .pasteHandlers=${[createCodeBlockPasteHandler()]}></chx-message-composer>
+      <chx-message-list slot="message-list"></chx-message-list>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
+        <chx-paste-long-text slot="paste-long-text"></chx-paste-long-text>
+      </chx-message-composer>
     </chx-chat>
   `,
 };
@@ -267,25 +269,26 @@ function renderMarkdownText(part) {
 }
 
 /**
- * `createCodeBlockPasteHandler()` assigned straight to the composer's existing `pasteHandlers`
- * property — no new API, no slot, no component. Paste a multi-line snippet (JS, TS, JSON, Python,
- * or CSS — see detect-language.js's default candidates) into the field below and it collapses to a
- * `<chx-code-block>` chip automatically; paste plain prose and it stays plain text. Detection has
- * nothing to do with chx-chat/chx-message-composer — neither imports code-block-paste-handler.js.
- * Also wires `partElements` for both `code` (survives send, via `handleMessagesChange` above) and
- * `text` (rendered as markdown via `renderMarkdownText`) — try typing "**bold**, _italic_, or a
+ * `<chx-paste-long-text>` slotted into `chx-message-composer` — code detection is built in, no
+ * consumer wiring needed. Paste a multi-line snippet (JS, TS, JSON, Python, or CSS — see
+ * detect-language.js's default candidates) into the field below and it collapses to a
+ * `<chx-code-block>` chip automatically; paste plain prose and it stays plain text (or, at 205+
+ * lines, the generic "N lines" chip — same threshold precedence either way). Also wires
+ * `partElements` for both `code` (survives send, via `handleMessagesChange` above) and `text`
+ * (rendered as markdown via `renderMarkdownText`) — try typing "**bold**, _italic_, or a
  * [link](https://example.com)" alongside a pasted snippet in the same message.
  */
 /** @type {Story} */
 export const PasteRecognizesCode = {
   render: () => html`
     <chx-chat
-      label="Paste some code..."
       .partElements=${{ code: renderCodePart, text: renderMarkdownText }}
       @chx-messages-change=${handleMessagesChange}
     >
-      <chx-message-list></chx-message-list>
-      <chx-message-composer .pasteHandlers=${[createCodeBlockPasteHandler()]}></chx-message-composer>
+      <chx-message-list slot="message-list"></chx-message-list>
+      <chx-message-composer slot="message-composer" placeholder="Paste some code...">
+        <chx-paste-long-text slot="paste-long-text"></chx-paste-long-text>
+      </chx-message-composer>
     </chx-chat>
   `,
 };

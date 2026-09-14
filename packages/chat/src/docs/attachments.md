@@ -18,8 +18,8 @@ import "@symblight/chat";
 ```
 
 ```html
-<chx-chat label="Write your prompt...">
-  <chx-message-composer>
+<chx-chat>
+  <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
     <md-icon-button slot="leading" id="upload-trigger">
       <md-icon>${unsafeSVG(attachFileIcon)}</md-icon>
     </md-icon-button>

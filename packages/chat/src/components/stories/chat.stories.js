@@ -18,6 +18,8 @@ import "../typing-indicator/typing-indicator.js";
 import "../streaming-indicator/streaming-indicator.js";
 import "../scroll-to-bottom-affordance/scroll-to-bottom-affordance.js";
 import "../chip/chip.js";
+import "../paste-long-text/paste-long-text.js";
+import { createSplitOnSendHandler } from "../../utils/split-message-parts.js";
 
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
@@ -31,9 +33,9 @@ export default meta;
 /** @type {Story} */
 export const Basic = {
   render: () => html`
-    <chx-chat label="Write your prompt...">
-      <chx-message-list></chx-message-list>
-      <chx-message-composer>
+    <chx-chat>
+      <chx-message-list slot="message-list"></chx-message-list>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <div slot="leading">
           <md-icon-button variant="tonal" selected> ${unsafeSVG(plus)} </md-icon-button>
         </div>
@@ -125,15 +127,14 @@ function createSlowReplyAdapter() {
 export const WithMessages = {
   render: () => html`
     <chx-chat
-      label="Write your prompt..."
       .userId=${"me"}
       .messages=${makeMessages(20)}
       .adapter=${createSlowReplyAdapter()}
     >
-      <chx-message-list scroll-behavior="smooth">
+      <chx-message-list slot="message-list" scroll-behavior="smooth">
         <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
       </chx-message-list>
-      <chx-message-composer>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
         <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>
@@ -228,16 +229,15 @@ function renderCustomMessage(message, previousElement) {
 export const CustomizedMessages = {
   render: () => html`
     <chx-chat
-      label="Write your prompt..."
       .userId=${"me"}
       .messages=${makeMessages(8)}
       .messageElement=${renderCustomMessage}
       .adapter=${createSlowReplyAdapter()}
     >
-      <chx-message-list scroll-behavior="smooth">
+      <chx-message-list slot="message-list" scroll-behavior="smooth">
         <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
       </chx-message-list>
-      <chx-message-composer>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>
     </chx-chat>
@@ -277,16 +277,15 @@ export const Typing = {
           Toggle "the other side is typing"
         </md-button>
         <chx-chat
-          label="Write your prompt..."
           .userId=${"me"}
           .messages=${makeMessages(6)}
           style="flex: 1; min-height: 0;"
           ${ref((el) => (chatEl = /** @type {import("../base/chat.js").ChxChat} */ (el)))}
         >
-          <chx-message-list>
+          <chx-message-list slot="message-list">
             <chx-typing-indicator value="Alice is typing..." slot="typing"></chx-typing-indicator>
           </chx-message-list>
-          <chx-message-composer>
+          <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
             <md-button slot="actions" variant="text">Opus 4.8</md-button>
             <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
           </chx-message-composer>
@@ -309,15 +308,14 @@ export const Typing = {
 export const Streaming = {
   render: () => html`
     <chx-chat
-      label="Write your prompt..."
       .userId=${"me"}
       .messages=${makeMessages(6)}
       .adapter=${createSlowReplyAdapter()}
     >
-      <chx-message-list>
+      <chx-message-list slot="message-list">
         <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
       </chx-message-list>
-      <chx-message-composer>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
         <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>
@@ -367,19 +365,18 @@ export const ScrollToBottomAffordance = {
           Scroll away from bottom
         </md-button>
         <chx-chat
-          label="Write your prompt..."
           .userId=${"me"}
           .messages=${makeMessages(40)}
           style="flex: 1; min-height: 0;"
           ${ref((el) => (chatEl = /** @type {import("../base/chat.js").ChxChat} */ (el)))}
         >
-          <chx-message-list buffer="150">
+          <chx-message-list slot="message-list" buffer="150">
             <chx-scroll-to-bottom-affordance
               slot="scroll-to-bottom"
               scroll-behavior="instant"
             ></chx-scroll-to-bottom-affordance>
           </chx-message-list>
-          <chx-message-composer>
+          <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
             <md-button slot="actions" variant="text">Opus 4.8</md-button>
             <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
           </chx-message-composer>
@@ -522,18 +519,17 @@ export const Pagination = {
         Load older messages
       </md-button>
       <chx-chat
-        label="Write your prompt..."
         .userId=${"me"}
         .adapter=${createPaginatedAdapter()}
         style="flex: 1; min-height: 0;"
       >
-        <chx-message-list>
+        <chx-message-list slot="message-list">
           <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
           <chx-scroll-to-bottom-affordance
             slot="scroll-to-bottom"
           ></chx-scroll-to-bottom-affordance>
         </chx-message-list>
-        <chx-message-composer>
+        <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
           <md-button slot="actions" variant="text">Opus 4.8</md-button>
           <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
         </chx-message-composer>
@@ -555,16 +551,15 @@ export const Pagination = {
 export const ContentAlignStart = {
   render: () => html`
     <chx-chat
-      label="Write your prompt..."
       .userId=${"me"}
       .messages=${makeMessages(2)}
       .adapter=${createSlowReplyAdapter()}
       style="height: 500px;"
     >
-      <chx-message-list content-align="start">
+      <chx-message-list slot="message-list" content-align="start">
         <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
       </chx-message-list>
-      <chx-message-composer>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
         <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>
@@ -576,8 +571,8 @@ export const ContentAlignStart = {
 /** @type {Story} */
 export const ComposerOnly = {
   render: () => html`
-    <chx-chat label="Write your prompt...">
-      <chx-message-composer>
+    <chx-chat>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
         <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>
@@ -586,17 +581,161 @@ export const ComposerOnly = {
 };
 
 /**
+ * Rule for `paste` nodes (`schema.js`) — matches the `<span data-paste-lines>` chip
+ * `paste-plugin.js` serializes into `getHTML()`, feeding `splitMessageParts` (see
+ * `handlePasteChipMessagesChange` below) the same way `chipPartRule` does for command-picker chips.
+ * @type {import("../../types/inline-part-rule.js").InlinePartRule}
+ */
+const longTextPartRule = {
+  type: "longText",
+  selector: "span[data-paste-lines]",
+  toPart: (element) => ({
+    text: element.textContent ?? "",
+    lines: Number(element.dataset.pasteLines) || 0,
+  }),
+};
+
+const handlePasteChipMessagesChange = createSplitOnSendHandler([longTextPartRule]);
+
+/**
+ * Renders a `type: "longText"` message part as a native `<details>` disclosure — collapsed by
+ * default, showing the pasted line count; expand to read the full text. A `chx-chat.partElements`
+ * entry, the same generic extension point `messageElement`/other part types already use.
+ * @param {import("../../types/message.js").ChxMessagePart} part
+ * @param {HTMLElement} [previous]
+ * @returns {HTMLElement}
+ */
+function renderLongTextPart(part, previous) {
+  const details = /** @type {HTMLDetailsElement} */ (previous ?? document.createElement("details"));
+  details.replaceChildren();
+
+  const summary = document.createElement("summary");
+  summary.textContent = `${/** @type {any} */ (part).lines ?? 0} lines`;
+  details.append(summary);
+
+  const pre = document.createElement("pre");
+  pre.textContent = part.text ?? "";
+  details.append(pre);
+
+  return details;
+}
+
+/**
  * A paste of `paste-threshold`+ lines collapses to a "N lines" chip instead of flooding the field
  * (threshold lowered from the 205 default so it's demoable — paste any 3+-line text). The chip is
- * an atom: Backspace removes it whole, and on send `value` expands back to the full text. Override
- * its rendering with the `renderPasteChip` property on chx-message-composer.
+ * an atom: Backspace removes it whole, and on send `value` expands back to the full text. Sending
+ * also re-splits the message via `partElements.longText` (`renderLongTextPart` above), so the
+ * pasted text stays a collapsed native `<details>` disclosure in the message list too, instead of
+ * flooding the conversation with a wall of text. Override the live composer chip's own look by
+ * overriding `<chx-paste-long-text>`'s `.buildElement()`.
  */
 /** @type {Story} */
 export const PasteChip = {
   render: () => html`
-    <chx-chat label="Write your prompt...">
-      <chx-message-list></chx-message-list>
-      <chx-message-composer paste-threshold="200">
+    <chx-chat
+      .partElements=${{ longText: renderLongTextPart }}
+      @chx-messages-change=${handlePasteChipMessagesChange}
+    >
+      <chx-message-list slot="message-list"></chx-message-list>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
+        <chx-paste-long-text slot="paste-long-text" paste-threshold="200"></chx-paste-long-text>
+        <md-button slot="actions" variant="text">Opus 4.8</md-button>
+        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+      </chx-message-composer>
+    </chx-chat>
+  `,
+};
+
+/**
+ * `chx-chat.partElements` is this library's equivalent of MUI X Chat's `partRenderers`
+ * (https://mui.com/x/react-chat/display/message-parts/custom-parts/) — a `Record<partType,
+ * renderer>` keyed by `part.type`, consumed by `chx-message-list` (`#renderPart`) ahead of the
+ * built-in `text`/`html` fallback. `part.type` accepts any string (see `ChxMessagePart`), so a
+ * custom type needs no library-side registration — just a `partElements` entry.
+ *
+ * Unlike a chip/paste chip, a custom part isn't typed live in the composer — it arrives already
+ * structured, straight from the adapter/model (a tool-call result, typically), so there's no
+ * `splitMessageParts` step involved at all; this story seeds it directly via `.messages` for the
+ * demo, and `partElements` alone is what renders it.
+ */
+/**
+ * @param {import("../../types/message.js").ChxMessagePart} part
+ * @param {HTMLElement} [previous]
+ * @returns {HTMLElement}
+ */
+function renderTicketSummaryPart(part, previous) {
+  const card = /** @type {HTMLElement} */ (previous ?? document.createElement("div"));
+  card.replaceChildren();
+  card.style.border = "1px solid var(--md-sys-color-outline-variant)";
+  card.style.borderRadius = "12px";
+  card.style.padding = "0.75rem 1rem";
+  card.style.background = "var(--md-sys-color-surface-container)";
+  card.style.display = "flex";
+  card.style.flexDirection = "column";
+  card.style.gap = "0.25rem";
+
+  const header = document.createElement("div");
+  header.style.display = "flex";
+  header.style.alignItems = "center";
+  header.style.gap = "0.5rem";
+
+  const title = document.createElement("span");
+  title.style.fontWeight = "600";
+  title.textContent = `Ticket ${/** @type {any} */ (part).ticketId}`;
+  header.append(title);
+
+  const status = document.createElement("span");
+  status.textContent = /** @type {any} */ (part).status;
+  status.style.fontSize = "0.75rem";
+  status.style.color = "var(--md-sys-color-on-surface-variant)";
+  header.append(status);
+
+  card.append(header);
+
+  const summary = document.createElement("p");
+  summary.style.margin = "0";
+  summary.textContent = /** @type {any} */ (part).summary;
+  card.append(summary);
+
+  return card;
+}
+
+/** @type {Story} */
+export const CustomParts = {
+  render: () => html`
+    <chx-chat
+      .userId=${"me"}
+      .partElements=${{ "ticket-summary": renderTicketSummaryPart }}
+      .messages=${[
+        {
+          id: "msg-1",
+          authorId: "me",
+          own: true,
+          createdAt: Date.now(),
+          status: "sent",
+          parts: [{ id: "msg-1-t1", type: "text", text: "What's the status on my last ticket?" }],
+        },
+        {
+          id: "msg-2",
+          authorId: "assistant",
+          own: false,
+          createdAt: Date.now(),
+          status: "sent",
+          parts: [
+            { id: "msg-2-t1", type: "text", text: "Here's the latest:" },
+            {
+              id: "msg-2-c1",
+              type: "ticket-summary",
+              ticketId: "SUP-4821",
+              status: "blocked",
+              summary: "Waiting on a screen recording from the customer to reproduce the issue.",
+            },
+          ],
+        },
+      ]}
+    >
+      <chx-message-list slot="message-list"></chx-message-list>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
         <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>

@@ -14,24 +14,16 @@ export class ChxMessageComposer extends LitElement {
   /** @type {import("lit").PropertyDeclarations} */
   static properties = {
     loading: { type: Boolean, reflect: true },
-    label: { type: String },
     placeholder: { type: String },
     dropHint: { type: String, attribute: "drop-hint" },
     dragging: { type: Boolean, reflect: true },
-    triggerFields: { attribute: false },
-    pasteThreshold: { type: Number, attribute: "paste-threshold" },
-    renderPasteChip: { attribute: false },
-    pasteHandlers: { attribute: false },
     messagesEmpty: { type: Boolean },
   };
 
   constructor() {
     super();
 
-    /** @type {string} */
-    this.label = "";
-
-    /** @type {string} */
+    /** @type {string} Applied as the editor's aria-label too — see chx-textbox. */
     this.placeholder = "Put your text...";
 
     /** @type {string} Pushed down to chx-textbox — shown while an OS file drag is over the field. */
@@ -43,18 +35,6 @@ export class ChxMessageComposer extends LitElement {
     /** @type {boolean} */
     this.loading = false;
 
-    /** @type {Map<string, Element>} Set by chx-chat — see its handleCommandFieldSlotchange. */
-    this.triggerFields = new Map();
-
-    /** @type {number} Pastes of at least this many lines collapse to a chip; <= 0 disables. */
-    this.pasteThreshold = 205;
-
-    /** @type {((detail: {text: string, lines: number, data: Record<string, unknown>, source: "composer"}) => HTMLElement) | undefined} App override for the paste chip's DOM — see chx-textbox. */
-    this.renderPasteChip = undefined;
-
-    /** @type {import("../../types/paste-handler.js").PasteHandler[]} Ordered — first match() to claim a paste wins. See .claude/plans/paste-handlers.spec.md. */
-    this.pasteHandlers = [];
-
     /** @type {boolean} Pushed down by chx-chat — true while #internalMessages is empty. See pushSuggestionListProperties. */
     this.messagesEmpty = true;
   }
@@ -64,8 +44,24 @@ export class ChxMessageComposer extends LitElement {
     return [styles];
   }
 
+  /** @type {Map<string, Element>} Keyed by element.id — see handleCommandFieldSlotchange. */
+  #triggerFields = new Map();
+
   /** Stable identity — an inline arrow in the template would dirty chx-textbox on every render. */
-  #getTriggerFields = () => this.triggerFields;
+  #getTriggerFields = () => this.#triggerFields;
+
+  /**
+   * Sole discovery point for <chx-command-field>/<chx-command-picker>, keyed by `element.id` —
+   * read live by chx-textbox via `#getTriggerFields` for "@"/"/" query routing while typing (see
+   * `textbox.js`).
+   * @param {Event} event
+   */
+  handleCommandFieldSlotchange(event) {
+    const slot = /** @type {HTMLSlotElement} */ (event.target);
+    this.#triggerFields = new Map(
+      slot.assignedElements({ flatten: true }).map((element) => [element.id, element]),
+    );
+  }
 
   /**
    * Replaces the tracked range identified by `target` with `node` — see chx-textbox.insertAtRange.
@@ -249,18 +245,16 @@ export class ChxMessageComposer extends LitElement {
         @slotchange=${this.pushSuggestionListProperties}
         @chx-suggestion-select=${this.#handleSuggestionSelect}
       ></slot>
+      <slot name="command-field" @slotchange=${this.handleCommandFieldSlotchange}></slot>
+      <slot name="paste-long-text"></slot>
       <form class="message-composer__form" @submit=${this.#handleSend}>
         <chx-textbox
           name="message"
           class="message-composer__field"
           part="textbox"
-          .label=${this.label}
           .placeholder=${this.placeholder}
           .dropHint=${this.dropHint}
           .getTriggerFields=${this.#getTriggerFields}
-          .pasteThreshold=${this.pasteThreshold}
-          .renderPasteChip=${this.renderPasteChip}
-          .pasteHandlers=${this.pasteHandlers}
           ?loading=${this.loading}
           ?dragging=${this.dragging}
           @chx-textbox-change=${this.#handleTextboxChange}

@@ -8,9 +8,9 @@ scroll behavior all work out of the box. `<chx-message-list>` is where messages 
 ## Quick start
 
 ```html
-<chx-chat label="Write your prompt..." id="chat">
-  <chx-message-list></chx-message-list>
-  <chx-message-composer>
+<chx-chat id="chat">
+  <chx-message-list slot="message-list"></chx-message-list>
+  <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
     <md-button slot="actions" variant="text">Send</md-button>
   </chx-message-composer>
 </chx-chat>
@@ -45,8 +45,8 @@ no `chx-send-message` listener needed just to see your own message appear.
 `messages` is a **controlled override**, not the only way messages get in — a local send, a
 streamed reply, or an ingested `adapter.subscribe`/`addMessage` message all update the same
 internal store directly. Reassign `messages` only when you want to replace the whole array
-yourself (bulk load, external edit/delete) — always with a **new array reference**, the same
-identity rule `triggerFields` already has.
+yourself (bulk load, external edit/delete) — always with a **new array reference**, so Lit's
+own dirty-check actually notices the change.
 
 ```js
 chatEl.addEventListener("chx-messages-change", (event) => {

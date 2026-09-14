@@ -1,12 +1,30 @@
 import { Selection } from "prosemirror-state";
 
+import "../components/paste-chip/paste-chip.js";
+
 /**
- * Renders a collapsed `paste` node — the matched pasteHandler's `render`, or
- * `getRenderPasteChip()` as fallback. `source` is always `"composer"`: paste chips have no
- * historical form, they unfold to full text once sent. Syncs `chx-code-block-change`/
- * `chx-code-block-lang-change`/`chx-code-block-boundary` (e.g. chx-code-block's
- * `editable`/`langMenu`) back into the outer editor, so an in-place edit survives into
- * getValue()/getHTML() on send and arrowing out of the block returns focus to the textbox.
+ * Last-resort default — only reached if a `paste` node exists (e.g. a restored draft, or undo)
+ * without any chx-paste-long-text ever having registered via `Editor.js`'s `configurePasteLongText`.
+ * @param {{lines: number}} detail
+ * @returns {HTMLElement}
+ */
+function defaultBuildElement({ lines }) {
+  const chip = /** @type {import("../components/paste-chip/paste-chip.js").ChxPasteChip} */ (
+    document.createElement("chx-paste-chip")
+  );
+  chip.lines = lines;
+  return chip;
+}
+
+/**
+ * Renders a collapsed `paste` node — chx-paste-long-text's own `buildElement()` once registered (see
+ * Editor.js's `configurePasteLongText`), or `defaultBuildElement` above otherwise. Named generically,
+ * not `buildChip`: the resolved element can be anything (e.g. `chx-code-block` for a detected code
+ * paste), not just a chip. `source` is always `"composer"`: paste chips have no historical form,
+ * they unfold to full text once sent. Syncs `chx-code-block-change`/`chx-code-block-lang-change`/
+ * `chx-code-block-boundary` (e.g. chx-code-block's `editable`/`langMenu`) back into the outer
+ * editor, so an in-place edit survives into getValue()/getHTML() on send and arrowing out of the
+ * block returns focus to the textbox.
  */
 export class PasteNodeView {
   /**
@@ -14,18 +32,16 @@ export class PasteNodeView {
    * @param {import("prosemirror-view").EditorView} view
    * @param {() => number | undefined} getPos
    * @param {{
-   *   getRenderPasteChip: () => (detail: {text: string, lines: number, data: Record<string, unknown>, source: "composer"}) => HTMLElement,
-   *   getPasteHandlers?: () => import("../types/paste-handler.js").PasteHandler[],
+   *   getBuildElement: () => ((attrs: {text: string, lines: number, data: Record<string, unknown>}, source: "composer") => HTMLElement) | undefined,
    * }} options
    */
-  constructor(node, view, getPos, { getRenderPasteChip, getPasteHandlers }) {
+  constructor(node, view, getPos, { getBuildElement }) {
     this.view = view;
     this.getPos = getPos;
 
-    const { text, lines, handlerId, data } = node.attrs;
-    const handler = handlerId ? getPasteHandlers?.()?.find((h) => h.id === handlerId) : undefined;
-    const render = handler?.render ?? getRenderPasteChip();
-    this.dom = render({ text, lines, data, source: "composer" });
+    const { text, lines, data } = node.attrs;
+    const buildElement = getBuildElement() ?? defaultBuildElement;
+    this.dom = buildElement({ text, lines, data }, "composer");
     this.dom.setAttribute("contenteditable", "false");
 
     this.dom.addEventListener("chx-code-block-change", /** @type {EventListener} */ (this.#handleCodeChange));

@@ -19,6 +19,10 @@ export class ChxInfinityScroll extends LitElement {
     renderItem: { attribute: false },
     estimateItemSize: { attribute: false },
     overscan: { type: Number },
+    paddingStart: { type: Number, attribute: "padding-start" },
+    paddingEnd: { type: Number, attribute: "padding-end" },
+    scrollMargin: { type: Number, attribute: "scroll-margin" },
+    useScrollendEvent: { type: Boolean, attribute: "use-scrollend-event" },
     scrollBehavior: { type: String, attribute: "scroll-behavior" },
     contentAlign: { type: String, attribute: "content-align", reflect: true },
     buffer: { type: Number },
@@ -58,6 +62,22 @@ export class ChxInfinityScroll extends LitElement {
     /** @type {number} */
     this.overscan = 6;
 
+    /** px inserted before the first item in the scrollable range. @type {number} */
+    this.paddingStart = 0;
+
+    /** px inserted after the last item in the scrollable range. @type {number} */
+    this.paddingEnd = 0;
+
+    /** px offset applied when this list is nested inside another scrollable ancestor. @type {number} */
+    this.scrollMargin = 0;
+
+    /**
+     * Use the native `scrollend` event instead of a debounce heuristic to detect scroll settling.
+     * Read once, at mount — `@tanstack/virtual-core` only consults it the one time it subscribes to
+     * the scroll element, so changing this after the list has rendered content has no effect. @type {boolean}
+     */
+    this.useScrollendEvent = false;
+
     /** Governs `scrollToBottom()` only. @type {"auto" | "smooth"} */
     this.scrollBehavior = "auto";
 
@@ -93,6 +113,10 @@ export class ChxInfinityScroll extends LitElement {
       getItemKey: (item, index) => this.itemKey(item, index),
       getEstimateItemSize: () => this.estimateItemSize,
       getOverscan: () => this.overscan,
+      getPaddingStart: () => this.paddingStart,
+      getPaddingEnd: () => this.paddingEnd,
+      getScrollMargin: () => this.scrollMargin,
+      getUseScrollendEvent: () => this.useScrollendEvent,
       getBuffer: () => this.buffer,
       getHasMore: () => this.hasMore,
       getOnLoadMore: () => this.onLoadMore,

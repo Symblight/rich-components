@@ -30,6 +30,11 @@ export class ChxMessageList extends LitElement {
     contentAlign: { type: String, attribute: "content-align" },
     buffer: { type: Number },
     estimateItemSize: { attribute: false },
+    overscan: { type: Number },
+    paddingStart: { type: Number, attribute: "padding-start" },
+    paddingEnd: { type: Number, attribute: "padding-end" },
+    scrollMargin: { type: Number, attribute: "scroll-margin" },
+    useScrollendEvent: { type: Boolean, attribute: "use-scrollend-event" },
     typing: { type: Boolean, reflect: true, attribute: true },
     streaming: { type: Boolean, reflect: true, attribute: true },
     loading: { type: Boolean },
@@ -97,6 +102,24 @@ export class ChxMessageList extends LitElement {
      * scroll velocity. Overridable by a consumer. @type {(item: ChxMessage, index: number) => number}
      */
     this.estimateItemSize = (message) => this.#estimateMessageSize(message);
+
+    /** Forwarded straight through to chx-infinity-scroll. @type {number} */
+    this.overscan = 6;
+
+    /** Forwarded straight through to chx-infinity-scroll. @type {number} */
+    this.paddingStart = 0;
+
+    /** Forwarded straight through to chx-infinity-scroll. @type {number} */
+    this.paddingEnd = 0;
+
+    /** Forwarded straight through to chx-infinity-scroll. @type {number} */
+    this.scrollMargin = 0;
+
+    /**
+     * Forwarded straight through to chx-infinity-scroll — read once, at mount, not reactive
+     * afterwards (see chx-infinity-scroll's own property doc). @type {boolean}
+     */
+    this.useScrollendEvent = false;
 
     /**
      * Whether the other side is currently typing — gates the `typing` slot in render(). No default
@@ -388,6 +411,11 @@ export class ChxMessageList extends LitElement {
         .itemKey=${this.#itemKey}
         .renderItem=${this.#renderItem}
         .estimateItemSize=${this.estimateItemSize}
+        .overscan=${this.overscan}
+        .paddingStart=${this.paddingStart}
+        .paddingEnd=${this.paddingEnd}
+        .scrollMargin=${this.scrollMargin}
+        .useScrollendEvent=${this.useScrollendEvent}
         .scrollBehavior=${this.scrollBehavior}
         .contentAlign=${this.contentAlign}
         .buffer=${this.buffer}

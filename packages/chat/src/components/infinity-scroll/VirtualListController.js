@@ -19,6 +19,9 @@ export class VirtualListController {
   #controller;
   #getData;
   #getOverscan;
+  #getPaddingStart;
+  #getPaddingEnd;
+  #getScrollMargin;
 
   /**
    * @param {import("lit").ReactiveControllerHost} host
@@ -28,11 +31,18 @@ export class VirtualListController {
    *   getItemKey: (item: unknown, index: number) => string | number,
    *   getEstimateItemSize: () => (item: unknown, index: number) => number,
    *   getOverscan: () => number,
+   *   getPaddingStart: () => number,
+   *   getPaddingEnd: () => number,
+   *   getScrollMargin: () => number,
+   *   getUseScrollendEvent: () => boolean,
    * }} config
    */
   constructor(host, config) {
     this.#getData = config.getData;
     this.#getOverscan = config.getOverscan;
+    this.#getPaddingStart = config.getPaddingStart;
+    this.#getPaddingEnd = config.getPaddingEnd;
+    this.#getScrollMargin = config.getScrollMargin;
 
     this.#controller = new VirtualizerController(host, {
       count: 0,
@@ -40,6 +50,10 @@ export class VirtualListController {
       getItemKey: (index) => config.getItemKey(this.#getData()[index], index),
       estimateSize: (index) => config.getEstimateItemSize()(this.#getData()[index], index),
       overscan: this.#getOverscan(),
+      paddingStart: this.#getPaddingStart(),
+      paddingEnd: this.#getPaddingEnd(),
+      scrollMargin: this.#getScrollMargin(),
+      useScrollendEvent: config.getUseScrollendEvent(),
       anchorTo: "end",
       followOnAppend: true,
       scrollEndThreshold: SCROLL_END_THRESHOLD,
@@ -55,8 +69,25 @@ export class VirtualListController {
     const virtualizer = this.virtualizer;
     const count = this.#getData().length;
     const overscan = this.#getOverscan();
-    if (virtualizer.options.count !== count || virtualizer.options.overscan !== overscan) {
-      virtualizer.setOptions({ ...virtualizer.options, count, overscan });
+    const paddingStart = this.#getPaddingStart();
+    const paddingEnd = this.#getPaddingEnd();
+    const scrollMargin = this.#getScrollMargin();
+
+    if (
+      virtualizer.options.count !== count ||
+      virtualizer.options.overscan !== overscan ||
+      virtualizer.options.paddingStart !== paddingStart ||
+      virtualizer.options.paddingEnd !== paddingEnd ||
+      virtualizer.options.scrollMargin !== scrollMargin
+    ) {
+      virtualizer.setOptions({
+        ...virtualizer.options,
+        count,
+        overscan,
+        paddingStart,
+        paddingEnd,
+        scrollMargin,
+      });
     }
   }
 }

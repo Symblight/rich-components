@@ -64,6 +64,10 @@ export class InfinityScrollController {
    *   getItemKey: (item: unknown, index: number) => string | number,
    *   getEstimateItemSize: () => (item: unknown, index: number) => number,
    *   getOverscan: () => number,
+   *   getPaddingStart: () => number,
+   *   getPaddingEnd: () => number,
+   *   getScrollMargin: () => number,
+   *   getUseScrollendEvent: () => boolean,
    *   getBuffer: () => number,
    *   getHasMore: () => boolean,
    *   getOnLoadMore: () => () => Promise<unknown>,
@@ -83,6 +87,10 @@ export class InfinityScrollController {
       getItemKey: config.getItemKey,
       getEstimateItemSize: config.getEstimateItemSize,
       getOverscan: config.getOverscan,
+      getPaddingStart: config.getPaddingStart,
+      getPaddingEnd: config.getPaddingEnd,
+      getScrollMargin: config.getScrollMargin,
+      getUseScrollendEvent: config.getUseScrollendEvent,
     });
 
     this.#stick = new StickToBottom({
@@ -127,7 +135,8 @@ export class InfinityScrollController {
     this.#measurer.schedule();
     this.#loader.maybeLoad();
     // once the list first has content, keep it welded to the bottom through the measurement settle
-    if (!this.#initialPinStarted && this.#list.virtualizer.options.count > 0) this.#startInitialPin();
+    if (!this.#initialPinStarted && this.#list.virtualizer.options.count > 0)
+      this.#startInitialPin();
     // hostUpdated runs after Lit has committed the canvas height for this render but before the
     // browser paints — and on *every* render, including the ones the virtualizer's own
     // ResizeObserver triggers (which never pass through afterMeasure). Correcting the undershoot
@@ -213,7 +222,8 @@ export class InfinityScrollController {
     const distance = el.scrollHeight - el.clientHeight - el.scrollTop;
     // the canvas is at its rendered height for this frame, so a real gap here is the undershoot —
     // scrollToEnd now lands unclamped and pulls the view the rest of the way down
-    if (distance > InfinityScrollController.#PIN_EPSILON) virtualizer.scrollToEnd({ behavior: "auto" });
+    if (distance > InfinityScrollController.#PIN_EPSILON)
+      virtualizer.scrollToEnd({ behavior: "auto" });
 
     if (total === this.#lastTotalSize && distance <= InfinityScrollController.#PIN_EPSILON) {
       if (++this.#settleFrames >= InfinityScrollController.#PIN_SETTLE_FRAMES) {

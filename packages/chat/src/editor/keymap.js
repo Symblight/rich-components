@@ -9,6 +9,7 @@ import {
   selectNodeForward,
   splitBlock,
 } from "prosemirror-commands";
+import { redo, undo } from "prosemirror-history";
 
 import { findEditableDescendant, focusEditableEdge } from "./find-editable.js";
 
@@ -61,6 +62,9 @@ export function createKeymap({ onSubmit }) {
     Backspace: chainCommands(deleteSelection, joinBackward, selectNodeBackward),
     Delete: chainCommands(deleteSelection, joinForward, selectNodeForward),
     "Mod-a": selectAll,
+    "Mod-z": undo,
+    "Shift-Mod-z": redo,
+    "Mod-y": redo,
     ArrowLeft: arrowHandler("left", -1),
     ArrowRight: arrowHandler("right", 1),
     ArrowUp: arrowHandler("up", -1),

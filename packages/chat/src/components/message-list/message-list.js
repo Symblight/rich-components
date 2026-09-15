@@ -396,7 +396,7 @@ export class ChxMessageList extends LitElement {
       )}
       ${when(
         this.#isLoadingHistory(),
-        () => html`<slot name="loading-history"><chx-loading-history></chx-loading-history></slot>`,
+        () => html`<slot name="loading-history"></slot>`,
       )}
       ${when(this.#awayFromBottom, () => html`<slot name="scroll-to-bottom"></slot>`)}
     `;

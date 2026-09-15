@@ -1,6 +1,7 @@
 import { EditorState, Selection } from "prosemirror-state";
 import { EditorView } from "prosemirror-view";
 import { ReplaceStep } from "prosemirror-transform";
+import { history } from "prosemirror-history";
 
 import { schema } from "./schema.js";
 import { createKeymap } from "./keymap.js";
@@ -77,6 +78,7 @@ export class Editor {
       schema,
       plugins: [
         createCommandPlugin({ getCommandFields: getCommandFields ?? (() => new Map()) }),
+        history(),
         createKeymap({ onSubmit }),
         createPastePlugin({
           getPasteThreshold: () => this.#pasteConfig.getPasteThreshold(),

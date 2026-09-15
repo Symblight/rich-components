@@ -105,7 +105,7 @@ export class ChxAttachments extends LitElement {
    * listener calling `preventDefault()` suppresses the default-card
    * creation, leaving file handling entirely to the app.
    * @param {FileList | File[]} files
-   * @param {"picker" | "drop" | "api"} [source]
+   * @param {"picker" | "drop" | "api" | "paste"} [source]
    */
   addFiles(files, source = "picker") {
     const fileArray = [...files];

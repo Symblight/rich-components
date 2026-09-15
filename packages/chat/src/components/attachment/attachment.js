@@ -59,9 +59,9 @@ export class ChxAttachment extends LitElement {
     return this.file?.name ?? "";
   }
 
-  /** @returns {string} */
+  /** @returns {string | Bytes} */
   get displaySize() {
-    return this.file == null ? "" : formatBytes(this.file.size);
+    return this.file == null ? "" : new Bytes(this.file.size);
   }
 
   handleRemoveClick = () => {
@@ -114,17 +114,28 @@ export class ChxAttachment extends LitElement {
 }
 
 /**
- * @param {number} bytes
- * @returns {string}
+ * A byte count that coerces to a plain number for comparisons (`size > maxUpload`)
+ * and to a formatted string for display (`` `${size}` ``).
  */
-function formatBytes(bytes) {
-  if (bytes < 1024) return `${bytes} B`;
-  const units = ["KB", "MB", "GB"];
-  let value = bytes / 1024;
-  let unitIndex = 0;
-  while (value >= 1024 && unitIndex < units.length - 1) {
-    value /= 1024;
-    unitIndex += 1;
+export class Bytes {
+  /** @param {number} n */
+  constructor(n) {
+    this.n = n;
   }
-  return `${value.toFixed(value < 10 ? 1 : 0)} ${units[unitIndex]}`;
+
+  /**
+   * @param {"number" | "string" | "default"} hint
+   * @returns {number | string}
+   */
+  [Symbol.toPrimitive](hint) {
+    if (hint === "number") return this.n;
+    const units = ["B", "KB", "MB", "GB"];
+    let i = 0;
+    let v = this.n;
+    while (v >= 1024 && i < units.length - 1) {
+      v /= 1024;
+      i += 1;
+    }
+    return `${v.toFixed(1)} ${units[i]}`;
+  }
 }

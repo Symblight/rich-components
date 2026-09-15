@@ -44,6 +44,33 @@ export class ChxMessageComposer extends LitElement {
     return [styles];
   }
 
+  connectedCallback() {
+    super.connectedCallback();
+    this.addEventListener("paste", this.#handlePasteFiles);
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this.removeEventListener("paste", this.#handlePasteFiles);
+  }
+
+  /**
+   * Pasted files bypass the editor doc, same as an OS drop — guarded to the textbox so other
+   * slotted editable content isn't hijacked.
+   * @param {ClipboardEvent} event
+   */
+  #handlePasteFiles = (event) => {
+    const files = event.clipboardData?.files;
+    if (!files || files.length === 0) return;
+    const textbox = this.textboxElement;
+    if (!textbox || !event.composedPath().includes(textbox)) return;
+    const attachments = this.attachmentsElement;
+    if (!attachments) return;
+
+    event.preventDefault();
+    attachments.addFiles(files, "paste");
+  };
+
   /** @type {Map<string, Element>} Keyed by element.id — see handleCommandFieldSlotchange. */
   #triggerFields = new Map();
 

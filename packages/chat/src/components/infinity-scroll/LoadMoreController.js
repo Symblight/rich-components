@@ -8,11 +8,17 @@ const LOAD_THRESHOLD = 450;
  * reports `hasMore: false`. Owns `loading`; the host mirrors it for rendering.
  */
 export class LoadMoreController {
+  /** @type {() => Element | undefined} */
   #getScrollElement;
+  /** @type {() => unknown[]} */
   #getData;
+  /** @type {() => boolean} */
   #getHasMore;
+  /** @type {() => () => Promise<unknown>} */
   #getOnLoadMore;
+  /** @type {() => Promise<unknown>} */
   #settled;
+  /** @type {(type: string, detail?: unknown) => void} */
   #emit;
 
   /** @type {number | null} */
@@ -22,6 +28,7 @@ export class LoadMoreController {
   #blockedAtCount = null;
   #disposed = false;
 
+  /** Whether a page fetch is in flight — the host mirrors this for rendering. */
   loading = false;
 
   /**
@@ -92,6 +99,7 @@ export class LoadMoreController {
     this.#blockedAtCount = null;
   }
 
+  /** Cancels any pending re-chain frame and stops `maybeLoad()` acting past this point. */
   dispose() {
     this.#disposed = true;
     if (this.#frame !== null) cancelAnimationFrame(this.#frame);

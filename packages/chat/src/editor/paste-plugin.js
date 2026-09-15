@@ -55,6 +55,10 @@ function insertPasteChip(view, attrs) {
 export function createPastePlugin({ getPasteThreshold, getClassify } = {}) {
   return new Plugin({
     props: {
+      /**
+       * @param {import("prosemirror-view").EditorView} view
+       * @param {ClipboardEvent} event
+       */
       handlePaste(view, event) {
         const text = event.clipboardData?.getData("text/plain");
         if (!text) return false;

@@ -13,9 +13,13 @@
  * @implements {ReactiveController}
  */
 export class PaginationController {
+  /** @type {ReactiveControllerHost} */
   #host;
+  /** @type {() => ChxChatAdapter | undefined} */
   #getAdapter;
+  /** @type {() => ChxMessage[]} */
   #getMessages;
+  /** @type {(messages: ChxMessage[]) => void} */
   #applyMessages;
   /** @type {string | undefined} */
   #cursor; // opaque, from the last listMessages result — undefined before the first call

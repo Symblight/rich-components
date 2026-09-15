@@ -95,7 +95,8 @@ export class PasteNodeView {
     this.view.focus();
   };
 
-  /** @param {CustomEvent<{lang: string}>} event */
+  /** Mirrors a language change from chx-code-block's own picker into this node's `data.lang`.
+   *  @param {CustomEvent<{lang: string}>} event */
   #handleLangChange = (event) => {
     const pos = this.getPos();
     if (pos === undefined) return;
@@ -136,6 +137,7 @@ export class PasteNodeView {
     return inside;
   }
 
+  /** Reverses the constructor's event wiring. */
   destroy() {
     this.dom.removeEventListener(
       "chx-code-block-change",

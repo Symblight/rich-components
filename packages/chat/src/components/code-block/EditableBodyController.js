@@ -12,12 +12,19 @@ const HIGHLIGHT_DEBOUNCE_MS = 150;
  * is true — the host stays a thin rendering shell for everything else.
  */
 export class EditableBodyController {
+  /** @type {import("lit").ReactiveControllerHost & EventTarget} */
   #host;
+  /** @type {() => HTMLElement | null} */
   #getContainer;
+  /** @type {() => string} */
   #getCode;
+  /** @type {(code: string) => void} */
   #setCode;
+  /** @type {() => string} */
   #getHighlightedHTML;
+  /** @type {(html: string) => void} */
   #setHighlightedHTML;
+  /** @type {() => string} */
   #highlight;
 
   #undo = new UndoController();
@@ -49,6 +56,7 @@ export class EditableBodyController {
     host.addController(this);
   }
 
+  /** Cancels a pending debounced re-highlight so it doesn't fire against a gone host. */
   hostDisconnected() {
     clearTimeout(this.#debounceTimer);
   }
@@ -88,6 +96,7 @@ export class EditableBodyController {
     this.#emit("chx-code-block-change", { code: this.#getCode() });
   }
 
+  /** Restores the previous undo step, if any, placing the caret at the end. */
   undo() {
     const value = this.#undo.undo(this.#getCode());
     if (value === undefined) return;
@@ -96,6 +105,7 @@ export class EditableBodyController {
     this.#emit("chx-code-block-change", { code: value });
   }
 
+  /** Re-applies the next redo step, if any, placing the caret at the end. */
   redo() {
     const value = this.#undo.redo(this.#getCode());
     if (value === undefined) return;
@@ -130,6 +140,7 @@ export class EditableBodyController {
     this.#applyEdit(/** @type {HTMLElement} */ (event.currentTarget));
   };
 
+  /** Marks an IME composition as in progress, so `handleInput` defers to `handleCompositionEnd`. */
   handleCompositionStart = () => {
     this.#isComposing = true;
   };

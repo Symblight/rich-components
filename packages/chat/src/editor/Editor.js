@@ -131,6 +131,7 @@ export class Editor {
     return this.view.state.doc.childCount > 1;
   }
 
+  /** Resets to an empty document — a fresh `EditorState`, so undo history is discarded too. */
   clear() {
     this.view.updateState(EditorState.create({ schema, plugins: this.view.state.plugins }));
   }

@@ -21,8 +21,11 @@
  * signal woke it up.
  */
 export class RowMeasurer {
+  /** @type {{virtualizer: any}} */
   #list;
+  /** @type {() => Iterable<HTMLElement>} */
   #rows;
+  /** @type {() => void} */
   #afterMeasure;
   /** el -> index it was last measured at. @type {WeakMap<Element, number>} */
   #measured = new WeakMap();
@@ -48,6 +51,7 @@ export class RowMeasurer {
     this.#afterMeasure = config.afterMeasure;
   }
 
+  /** Queues a measurement pass for the next animation frame; a no-op while one's already pending. */
   schedule() {
     if (this.#disposed || this.#frame !== null) return;
     this.#frame = requestAnimationFrame(() => {
@@ -57,6 +61,7 @@ export class RowMeasurer {
     });
   }
 
+  /** Measures every ready, not-yet-measured-at-its-current-index row. */
   #measure() {
     const virtualizer = this.#list.virtualizer;
     /** @type {[HTMLElement, number][]} */
@@ -132,7 +137,8 @@ export class RowMeasurer {
     return null;
   }
 
-  /** @param {HTMLElement} row @param {Element} child */
+  /** Awaits `child`'s readiness signal, then re-schedules a measurement pass.
+   *  @param {HTMLElement} row @param {Element} child */
   async #awaitChild(row, child) {
     if (this.#awaiting.has(row)) return;
     this.#awaiting.add(row);
@@ -156,7 +162,8 @@ export class RowMeasurer {
     this.schedule();
   }
 
-  /** @param {Element} row */
+  /** Registers `row` with the resize observer so it's measured once it gains a box.
+   *  @param {Element} row */
   #park(row) {
     if (this.#parked.has(row)) return;
     const observer = this.#resizeObserver();
@@ -214,6 +221,7 @@ export class RowMeasurer {
     this.#observer?.disconnect();
   }
 
+  /** Tears the observer down and cancels any pending frame; call from `hostDisconnected`. */
   dispose() {
     this.#disposed = true;
     if (this.#frame !== null) cancelAnimationFrame(this.#frame);

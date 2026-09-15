@@ -58,7 +58,8 @@ export function setCaretOffset(container, offset) {
   if (lastNode) placeCaret(selection, lastNode, lastNode.length);
 }
 
-/** @param {Selection} selection @param {Text} node @param {number} offset */
+/** Collapses the selection to a single point at `node`/`offset`.
+ * @param {Selection} selection @param {Text} node @param {number} offset */
 function placeCaret(selection, node, offset) {
   const range = document.createRange();
   range.setStart(node, offset);

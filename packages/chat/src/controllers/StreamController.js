@@ -10,9 +10,13 @@ import { processStream } from "../stream/processStream.js";
  * src/stream/, this just glues it to a host's lifecycle.
  */
 export class StreamController {
+  /** @type {() => ChxMessage[]} */
   #getMessages;
+  /** @type {() => string | undefined} */
   #getUserId;
+  /** @type {Set<string>} */
   #seenEventIds;
+  /** @type {ReturnType<typeof createChunkBuffer>} */
   #buffer;
 
   /**
@@ -69,6 +73,7 @@ export class StreamController {
     });
   }
 
+  /** Flushes any buffered chunks before the host goes away, so a debounced batch isn't lost. */
   hostDisconnected() {
     this.#buffer.flushAll();
   }

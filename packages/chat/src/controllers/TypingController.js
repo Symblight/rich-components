@@ -9,6 +9,7 @@
  * lifecycle hook to hang off, just a small stateful helper that calls back into `host` on change.
  */
 export class TypingController {
+  /** @type {ReactiveControllerHost & EventTarget} */
   #host;
   #typing = false;
 
@@ -17,6 +18,7 @@ export class TypingController {
     this.#host = host;
   }
 
+  /** Whether the other side is currently typing. */
   isTyping() {
     return this.#typing;
   }

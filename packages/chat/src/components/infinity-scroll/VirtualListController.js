@@ -16,11 +16,17 @@ const SCROLL_END_THRESHOLD = 8;
  * case this doesn't: a prepend landing into a not-yet-full viewport.
  */
 export class VirtualListController {
+  /** @type {any} */
   #controller;
+  /** @type {() => unknown[]} */
   #getData;
+  /** @type {() => number} */
   #getOverscan;
+  /** @type {() => number} */
   #getPaddingStart;
+  /** @type {() => number} */
   #getPaddingEnd;
+  /** @type {() => number} */
   #getScrollMargin;
 
   /**
@@ -60,6 +66,7 @@ export class VirtualListController {
     });
   }
 
+  /** The underlying `@tanstack/virtual-core` instance. */
   get virtualizer() {
     return this.#controller.getVirtualizer();
   }

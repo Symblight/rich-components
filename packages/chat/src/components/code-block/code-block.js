@@ -30,8 +30,10 @@ export class ChxCodeBlock extends LitElement {
     highlightedHTML: { state: true },
   };
 
+  /** Links the label button to its `md-menu`, one per instance. @type {string} */
   #labelId = `chx-code-block-label-${crypto.randomUUID()}`;
 
+  /** @type {EditableBodyController} */
   #editableBody = new EditableBodyController(this, {
     getContainer: () => {
       const el = this.renderRoot.querySelector(".code-block__body[contenteditable]");
@@ -51,7 +53,7 @@ export class ChxCodeBlock extends LitElement {
   constructor() {
     super();
 
-    /** @type {string} */
+    /** @type {string} The block's plain-text source. */
     this.code = "";
 
     /** @type {string} See LANGUAGES in highlight.js. */
@@ -60,10 +62,10 @@ export class ChxCodeBlock extends LitElement {
     /** @type {boolean} Header label becomes an md-menu trigger for picking `lang`. */
     this.langMenu = false;
 
-    /** @type {boolean} */
+    /** @type {boolean} Switches the body from a read-only `<pre>` to a `contenteditable` div. */
     this.editable = false;
 
-    /** @type {string} */
+    /** @type {string} Cached highlighted markup for the read-only `<pre>`, recomputed in `willUpdate`. */
     this.highlightedHTML = "";
   }
 
@@ -88,7 +90,8 @@ export class ChxCodeBlock extends LitElement {
     this.#editableBody.scheduleHighlight();
   }
 
-  /** @param {import("lit").PropertyValues} changedProperties */
+  /** Pushes freshly highlighted markup into the contenteditable body once it changes.
+   *  @param {import("lit").PropertyValues} changedProperties */
   updated(changedProperties) {
     super.updated(changedProperties);
     if (!this.editable) return;
@@ -96,7 +99,8 @@ export class ChxCodeBlock extends LitElement {
     this.#editableBody.syncDOM();
   }
 
-  /** @param {CustomEvent<{value: string}>} event */
+  /** Applies the picked language from the `md-menu` and fires `chx-code-block-lang-change`.
+   *  @param {CustomEvent<{value: string}>} event */
   handleLanguageSelect = (event) => {
     this.lang = event.detail.value;
     this.dispatchEvent(

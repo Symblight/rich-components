@@ -124,6 +124,10 @@ export function createCommandPlugin({ getCommandFields }) {
 
     view() {
       return {
+        /**
+         * @param {import("prosemirror-view").EditorView} view
+         * @param {import("prosemirror-state").EditorState} prevState
+         */
         update(view, prevState) {
           const prev = commandPluginKey.getState(prevState);
           const next = commandPluginKey.getState(view.state);
@@ -159,6 +163,10 @@ export function createCommandPlugin({ getCommandFields }) {
     },
 
     props: {
+      /**
+       * @param {import("prosemirror-view").EditorView} view
+       * @param {KeyboardEvent} event
+       */
       handleKeyDown(view, event) {
         const state = commandPluginKey.getState(view.state);
         if (!state?.active) return false;

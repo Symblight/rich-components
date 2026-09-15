@@ -8,10 +8,12 @@ import { Decoration, DecorationSet } from "prosemirror-view";
  * see textbox.js) is a plain contenteditable `<div>`, not a native `<input>`
  * with its own `placeholder` attribute support.
  * @param {string} text
+ * @returns {import("prosemirror-state").Plugin}
  */
 export function createPlaceholderPlugin(text) {
   return new Plugin({
     props: {
+      /** @param {import("prosemirror-state").EditorState} state */
       decorations(state) {
         const { doc } = state;
         if (doc.childCount !== 1 || doc.child(0).content.size !== 0) return null;

@@ -124,6 +124,8 @@ export class InfinityScrollController {
     this.#loader.revive();
     // the teardown disconnected the ResizeObserver; rows must re-register
     this.#measurer.reset();
+    // a stale pre-disconnect size snapshot must not read as "grew" once reconnected
+    this.#stick.reset();
   }
 
   hostUpdate() {

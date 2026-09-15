@@ -47,19 +47,19 @@ export class ChxInfinityScroll extends LitElement {
   constructor() {
     super();
 
-    /** @type {unknown[]} */
+    /** The items to virtualize. @type {unknown[]} */
     this.data = [];
 
-    /** @type {(item: unknown, index: number) => string | number} */
+    /** Stable per-item key, for measurement/DOM reuse across re-renders. @type {(item: unknown, index: number) => string | number} */
     this.itemKey = (_item, index) => index;
 
-    /** @type {(item: unknown, index: number) => unknown} */
+    /** Builds the DOM for one item — message-agnostic, the consumer owns what a row is. @type {(item: unknown, index: number) => unknown} */
     this.renderItem = () => nothing;
 
-    /** @type {(item: unknown, index: number) => number} */
+    /** Pre-measurement height guess, refined once the row actually renders. @type {(item: unknown, index: number) => number} */
     this.estimateItemSize = () => 80;
 
-    /** @type {number} */
+    /** Extra items rendered past each viewport edge, absorbing fast scrolls before a blank gap shows. @type {number} */
     this.overscan = 6;
 
     /** px inserted before the first item in the scrollable range. @type {number} */
@@ -96,12 +96,11 @@ export class ChxInfinityScroll extends LitElement {
     /** Fetches one older page. @type {() => Promise<unknown>} */
     this.onLoadMore = () => Promise.resolve();
 
-    // bound inside this shadow root: a composed event retargets to the host, so an outside listener
-    // can't tell which row dispatched it
-    /** @type {(event: KeyboardEvent) => void} */
+    /** Keydown on the scroller div — a callback since the composed event retargets to the host, so
+     *  an outside listener can't tell which row dispatched it. @type {(event: KeyboardEvent) => void} */
     this.onScrollerKeydown = () => {};
 
-    /** @type {(event: FocusEvent) => void} */
+    /** Focusin on the scroller div, same reasoning as `onScrollerKeydown`. @type {(event: FocusEvent) => void} */
     this.onScrollerFocusin = () => {};
 
     /** Fires on an actual flip only. @type {(awayFromBottom: boolean) => void} */
@@ -133,6 +132,7 @@ export class ChxInfinityScroll extends LitElement {
     return [styles];
   }
 
+  /** Mirrors the controller's own `loading` onto the reactive property `render()` reads. */
   willUpdate() {
     this.loading = this.#controller.loading;
   }
@@ -143,6 +143,7 @@ export class ChxInfinityScroll extends LitElement {
   };
 
   /**
+   * Scrolls to a specific item index — forwarded straight through to the virtualizer.
    * @param {number} index
    * @param {{align?: "auto" | "start" | "center" | "end", behavior?: "auto" | "smooth" | "instant"}} [options]
    */

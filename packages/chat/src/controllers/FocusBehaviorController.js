@@ -19,9 +19,13 @@
 export class FocusBehaviorController {
   static #INTERIOR_FOCUSABLE_SELECTOR = "button, a[href], input, select, textarea, [tabindex]";
 
+  /** @type {() => import("../types/message.js").ChxMessage[]} */
   #getMessages;
+  /** @type {() => DocumentFragment | Element | undefined} */
   #getRenderRoot;
+  /** @type {(index: number) => void} */
   #scrollToIndex;
+  /** @type {() => void} */
   #requestRerender;
   /** @type {string | null} */
   #focusedId = null; // the single roving tab stop
@@ -110,7 +114,8 @@ export class FocusBehaviorController {
     }
   }
 
-  /** @param {HTMLElement} messageElement */
+  /** Reverses `#suppressInteriorTabbing`, restoring each element's original tabindex.
+   *  @param {HTMLElement} messageElement */
   #restoreInteriorTabbing(messageElement) {
     for (const el of messageElement.querySelectorAll("[data-roving-hidden-tabindex]")) {
       const original = el.getAttribute("data-roving-hidden-tabindex");
@@ -183,7 +188,8 @@ export class FocusBehaviorController {
     this.#requestRerender(); // repaints old tabIndex=-1 / new tabIndex=0 via applyToElement
   }
 
-  /** @param {number} index */
+  /** Moves the roving tab stop to `index`, scrolling/polling it into view first if not yet mounted.
+   *  @param {number} index */
   #moveFocusTo(index) {
     const target = this.#getMessages()[index];
     if (!target) return;
@@ -224,6 +230,8 @@ export class FocusBehaviorController {
   }
 
   /**
+   * Enters interior-focus mode for `id`, restoring its Tab order and focusing the first interior
+   * control.
    * @param {string} id
    * @param {HTMLElement} messageElement
    */
@@ -237,6 +245,7 @@ export class FocusBehaviorController {
     first?.focus();
   }
 
+  /** Leaves interior-focus mode, re-suppressing interior tabbing and returning focus to the article. */
   #exitDrillIn() {
     const el = this.#actionableId
       ? this.#getRenderRoot()?.querySelector(`[data-message-id="${this.#actionableId}"]`)

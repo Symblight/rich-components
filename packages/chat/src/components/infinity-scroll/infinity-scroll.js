@@ -151,9 +151,20 @@ export class ChxInfinityScroll extends LitElement {
     this.#controller.virtualizer.scrollToIndex(index, options);
   }
 
-  /** Jump to the bottom (clears padding + `footer`) and fire `chx-scroll-to-bottom`. @param {"auto" | "smooth" | "instant"} [behavior] */
+  /**
+   * Jump to the bottom (clears padding + `footer`) and fire `chx-scroll-to-bottom`.
+   * `virtualizer.scrollToEnd()` only knows about virtualized rows — it aligns the *last row* with
+   * the viewport edge, oblivious to any non-virtualized trailing content in the `footer` slot (e.g.
+   * a typing/streaming indicator). Following it with a plain `scrollTop = scrollHeight` snap corrects
+   * for that: `scrollHeight` is a real DOM measurement that already includes the footer, no
+   * virtualizer involvement needed. A no-op in the common no-footer case (both already agree on the
+   * same offset), so this stays cheap and doesn't need a conditional.
+   * @param {"auto" | "smooth" | "instant"} [behavior]
+   */
   scrollToBottom(behavior) {
-    this.#controller.virtualizer.scrollToEnd({ behavior: behavior ?? this.scrollBehavior });
+    const resolvedBehavior = behavior ?? this.scrollBehavior;
+    this.#controller.virtualizer.scrollToEnd({ behavior: resolvedBehavior });
+    this.#scrollElement?.scrollTo({ top: this.#scrollElement.scrollHeight, behavior: resolvedBehavior });
     this.dispatchEvent(new CustomEvent("chx-scroll-to-bottom", { bubbles: true, composed: true }));
   }
 

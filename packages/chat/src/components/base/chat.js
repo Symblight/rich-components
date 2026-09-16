@@ -11,6 +11,7 @@ import { validateMessages } from "../../utils/validate-messages.js";
 import { StreamController } from "../../controllers/StreamController.js";
 import { PaginationController } from "../../controllers/PaginationController.js";
 import { TypingController } from "../../controllers/TypingController.js";
+import { RealtimeSyncController } from "../../controllers/RealtimeSyncController.js";
 import { finalizeStreamingParts } from "../../stream/streamHelpers.js";
 
 import styles from "./chat.css?inline";
@@ -58,6 +59,7 @@ export class ChxChat extends LitElement {
   #pendingScrollRestore = false;
   #pagination; // PaginationController, assigned in the constructor
   #typing; // TypingController, assigned in the constructor
+  #realtimeSync; // RealtimeSyncController, assigned in the constructor
   /** @type {DropTargetController} */
   #dropTarget;
   /** @type {ContextProvider<typeof attachmentsContext>} */
@@ -148,6 +150,21 @@ export class ChxChat extends LitElement {
 
     this.#typing = new TypingController(this);
 
+    this.#realtimeSync = new RealtimeSyncController({
+      getActiveConversationId: () => this.activeConversationId,
+      setTyping: (isTyping) => this.setTyping(isTyping),
+      clearActiveConversation: () => {
+        this.activeConversationId = undefined;
+        this.dispatchEvent(
+          new CustomEvent("chx-active-conversation-change", {
+            detail: { conversationId: undefined },
+            bubbles: true,
+            composed: true,
+          }),
+        );
+      },
+    });
+
     /**
      * Registered on chx-chat itself, not chx-message-composer — chx-chat is
      * the common light-DOM ancestor of both chx-message-list and
@@ -221,6 +238,7 @@ export class ChxChat extends LitElement {
       onMessage: (message) => this.addMessage(message),
       onChunk: (item) => this.#stream.applyChunk(item),
       onTyping: (isTyping) => this.#typing.setTyping(isTyping),
+      onEvent: (event) => this.#realtimeSync.handleEvent(event),
       onConnectionChange: (state, error) => {
         this.connectionState = state;
         this.dispatchEvent(
@@ -238,10 +256,10 @@ export class ChxChat extends LitElement {
    * Lets any descendant — a future `<chx-conversations>`, or a consumer's own bespoke picker UI —
    * drive the active conversation purely by dispatching a standard event, the same "action bubbles
    * up, chx-chat listens on itself" shape `chx-send-message`/`chx-attachments-change` already use.
-   * No corresponding outward announce: whoever dispatched this already knows the new id, and a
-   * programmatic `chatEl.activeConversationId = …` assignment is already observable to its own
-   * caller — matching `messages`' own "no echo on assignment" convention.
-   * @param {CustomEvent<{conversationId: string}>} event
+   * Was in-only; `RealtimeSyncController`'s `clearActiveConversation` now also dispatches this same
+   * event outward (`conversationId: undefined`) when a realtime `conversation-removed` clears the
+   * active conversation — see `.claude/plans/messages/realtime-sync.md`.
+   * @param {CustomEvent<{conversationId: string | undefined}>} event
    */
   handleActiveConversationChange(event) {
     this.activeConversationId = event.detail.conversationId;
@@ -688,6 +706,10 @@ export class ChxChat extends LitElement {
       if (this.restoreScrollPosition && previousId !== undefined) {
         this.#scrollOffsets.set(previousId, this.messageListElement?.list?.getScrollOffset());
       }
+      // A `typing` realtime event is filtered to the active conversation on the way in (see
+      // RealtimeSyncController), but the resulting boolean has no memory of which conversation it
+      // was last true for — reset it here so a stale `true` doesn't bleed into the newly-active one.
+      this.setTyping(false);
       if (this.activeConversationId !== undefined && !this.#pagination.hasVisited(this.activeConversationId)) {
         this.#pagination.loadInitial();
       }

@@ -4,6 +4,7 @@ import { ref } from "lit/directives/ref.js";
 import "@symblight/wc-material/button";
 
 import "../../index.js";
+import "../typing-indicator/typing-indicator.js";
 
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
@@ -88,8 +89,20 @@ function makeConversationMessage(conversationId, index) {
  * `conversationId` threaded through each call, not a separate adapter per conversation. Each
  * conversation has its own independent `cursor`/`hasMore` — paged out to `HISTORY_SIZE` messages,
  * `PAGE_SIZE` at a time — tracked internally by `chx-chat`'s own `PaginationController`, not here.
+ *
+ * Also implements `subscribe` purely so this story can simulate an inbound realtime channel (see
+ * `.claude/plans/messages/realtime-sync.md`) — `emit`/`emitRealtimeEvent` are test-only hooks this
+ * demo calls from its own buttons/timers, mirroring MUI X Chat's own demo `emit(event)` pattern; a
+ * real adapter would call the captured `onMessage`/`onEvent` itself from whatever socket/channel
+ * handler it owns, never exposing methods like these. Kept as two separate hooks, not one combined
+ * `emit`, because this package keeps `onMessage`/`onEvent` as two separate `subscribe` handlers
+ * (Decision 1 in the spec doc) rather than MUI's single `onEvent` covering `message-added` too.
  */
 function createConversationsAdapter() {
+  /** @type {((message: import("../../types/message.js").ChxMessage) => void) | undefined} */
+  let onMessage;
+  /** @type {((event: import("../../types/realtime.js").ChxRealtimeEvent) => void) | undefined} */
+  let onEvent;
   return {
     listMessages: async (
       /** @type {{conversationId?: string, cursor?: string}} */ { conversationId, cursor },
@@ -102,6 +115,18 @@ function createConversationsAdapter() {
       );
       return { messages, cursor: String(start), hasMore: start > 0 };
     },
+    subscribe: (/** @type {{onMessage: typeof onMessage, onEvent: typeof onEvent}} */ handlers) => {
+      onMessage = handlers.onMessage;
+      onEvent = handlers.onEvent;
+      return () => {
+        onMessage = undefined;
+        onEvent = undefined;
+      };
+    },
+    /** Fake incoming message push — used by "Start flood chats" instead of calling `chatEl.addMessage()` directly. @param {import("../../types/message.js").ChxMessage} message */
+    emit: (message) => onMessage?.(message),
+    /** Fake incoming realtime event — used by the "Simulate…" buttons. @param {import("../../types/realtime.js").ChxRealtimeEvent} event */
+    emitRealtimeEvent: (event) => onEvent?.(event),
   };
 }
 
@@ -156,11 +181,32 @@ function createConversationsAdapter() {
  * the next time you switch to them, since `cache.clear()` also cleared their own `hasVisited` mark.
  *
  * "Start flood chats" fires a bounded burst of fake incoming messages at random conversations via
- * `chatEl.addMessage({conversationId, ...})` — the same method `adapter.subscribe`'s `onMessage`
- * itself funnels through, so a message for a conversation you're not currently looking at lands
- * silently in that conversation's cache (see `chat.js`'s `#applyMessages`/background-delivery
- * doc) without disturbing whatever's on screen. Switch to a different conversation mid-flood to see
- * this live: its messages keep accumulating in the background exactly as if you'd never left.
+ * `adapter.emit({conversationId, ...})` — the story's own stand-in for a real backend pushing
+ * through `adapter.subscribe`'s `onMessage`, the same handler `chx-chat` itself forwards straight
+ * into `addMessage()` (see `chat.js`'s `#subscribeAdapter()`). A message for a conversation you're
+ * not currently looking at lands silently in that conversation's cache (see `chat.js`'s
+ * `#applyMessages`/background-delivery doc) without disturbing whatever's on screen. Switch to a
+ * different conversation mid-flood to see this live: its messages keep accumulating in the
+ * background exactly as if you'd never left.
+ *
+ * The three "Simulate…" buttons drive `adapter.subscribe`'s new `onEvent` handler (see
+ * `.claude/plans/messages/realtime-sync.md`), via `createConversationsAdapter`'s own
+ * `emitRealtimeEvent` test hook — not a real transport, just a stand-in for "the app's own socket
+ * handler called `onEvent(...)`":
+ * - "Simulate typing (this chat)" fires a `typing` event scoped to whichever conversation is
+ *   currently active — `RealtimeSyncController` forwards it straight to the existing
+ *   `chx-typing-indicator`, slotted into `chx-message-list` below, exactly as `setTyping()` would.
+ * - "Simulate typing (background chat)" fires the same event for a *different* conversation and is
+ *   the negative case: nothing visibly changes, since `chx-message-list` only ever renders the
+ *   active conversation and `RealtimeSyncController` filters on `conversationId` before touching
+ *   any state.
+ * - "Simulate conversation removed" fires `conversation-removed` for the active conversation.
+ *   `chx-chat` clears its own `activeConversationId` and dispatches `chx-active-conversation-change`
+ *   outward (now bidirectional, see the same spec doc) — this story listens for that and clears the
+ *   header/highlight the same way a real app would. The conversation deliberately **stays** in the
+ *   sidebar `<ul>` afterwards: actually removing it from `conversations` is explicitly out of scope
+ *   for what's implemented today (`<chx-conversations>` territory, not built yet) — only the
+ *   `activeConversationId` reset is live.
  */
 /** @type {Story} */
 export const ConversationsList = {
@@ -171,8 +217,42 @@ export const ConversationsList = {
     let headerTitleEl;
     /** @type {HTMLElement | undefined} */
     let headerSubtitleEl;
+    /** @type {HTMLElement | undefined} */
+    let listEl;
     /** @type {Map<string, HTMLElement>} */
     const previewEls = new Map();
+    const adapter = createConversationsAdapter();
+
+    // Only reacts to chx-chat clearing the active conversation itself (a realtime
+    // conversation-removed event, see "Simulate conversation removed" below) — a click-originated
+    // switch is already handled synchronously inside the <ul>'s own click handler further down.
+    const handleActiveConversationChange = (
+      /** @type {CustomEvent<{conversationId?: string}>} */ event,
+    ) => {
+      if (event.detail.conversationId !== undefined) return;
+      for (const li of Array.from(listEl?.children ?? [])) {
+        /** @type {HTMLElement} */ (li).style.background = "";
+      }
+      if (headerTitleEl) headerTitleEl.textContent = "No conversation selected";
+      if (headerSubtitleEl) headerSubtitleEl.textContent = "";
+    };
+
+    const handleSimulateTyping = (/** @type {string | undefined} */ conversationId) => {
+      if (!conversationId) return;
+      adapter.emitRealtimeEvent({ type: "typing", conversationId, userId: "them", isTyping: true });
+      setTimeout(
+        () => adapter.emitRealtimeEvent({ type: "typing", conversationId, userId: "them", isTyping: false }),
+        2500,
+      );
+    };
+
+    const handleSimulateConversationRemoved = () => {
+      if (!chatEl?.activeConversationId) return;
+      adapter.emitRealtimeEvent({
+        type: "conversation-removed",
+        conversationId: chatEl.activeConversationId,
+      });
+    };
     /** @param {any} message */
     const formatPreview = (message) => {
       if (!message) return "No messages yet";
@@ -212,11 +292,18 @@ export const ConversationsList = {
         const conversation = CONVERSATIONS[Math.floor(Math.random() * CONVERSATIONS.length)];
         const own = Math.random() < 0.3;
         const id = `flood-${conversation.id}-${Date.now()}-${count}`;
-        chatEl?.addMessage({
+        // Pushed through the simulated subscribe channel's `onMessage` (via `adapter.emit`), not
+        // `chatEl.addMessage()` directly — `onMessage` already just calls `addMessage` internally
+        // (see `chat.js`'s `#subscribeAdapter()`), so the observable effect is identical, but this
+        // way the flood is a realistic stand-in for "the backend pushed these," same as the
+        // "Simulate…" buttons above do for `onEvent`.
+        adapter.emit({
           id,
           conversationId: conversation.id,
           authorId: own ? "me" : "assistant",
           own,
+          createdAt: Date.now(),
+          status: "sent",
           parts: [
             {
               id: `${id}-t1`,
@@ -233,13 +320,30 @@ export const ConversationsList = {
     };
 
     return html`
-      <div style="display: flex; gap: 0.5rem; padding-bottom: 0.75rem;">
+      <div style="display: flex; gap: 0.5rem; padding-bottom: 0.75rem; flex-wrap: wrap;">
         <md-button variant="outlined" @click=${handleResetAll}>Reset all chats</md-button>
         <md-button variant="outlined" @click=${handleStartFlood}>Start flood chats</md-button>
+        <md-button
+          variant="outlined"
+          @click=${() => handleSimulateTyping(chatEl?.activeConversationId)}
+        >
+          Simulate typing (this chat)
+        </md-button>
+        <md-button
+          variant="outlined"
+          @click=${() =>
+            handleSimulateTyping(CONVERSATIONS.find((c) => c.id !== chatEl?.activeConversationId)?.id)}
+        >
+          Simulate typing (background chat)
+        </md-button>
+        <md-button variant="outlined" @click=${handleSimulateConversationRemoved}>
+          Simulate conversation removed
+        </md-button>
       </div>
       <div style="display: flex; gap: 0; height: 500px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; overflow: hidden;">
         <ul
           style="list-style: none; margin: 0; padding: 0; width: 220px; border-right: 1px solid var(--md-sys-color-outline-variant); overflow-y: auto;"
+          ${ref((el) => (listEl = /** @type {HTMLElement} */ (el)))}
           @click=${(/** @type {MouseEvent} */ event) => {
             const target = /** @type {HTMLElement} */ (event.target);
             const li = /** @type {HTMLElement | null} */ (target.closest("li[data-conversation-id]"));
@@ -318,12 +422,15 @@ export const ConversationsList = {
             active-conversation-id=${CONVERSATIONS[0].id}
             initial-conversations=${JSON.stringify(DECOY_INITIAL_CONVERSATIONS)}
             initial-active-conversation-id=${DECOY_INITIAL_ACTIVE_CONVERSATION_ID}
-            .adapter=${createConversationsAdapter()}
+            .adapter=${adapter}
             style="flex: 1; min-height: 0;"
             @chx-messages-change=${handleMessagesChange}
+            @chx-active-conversation-change=${handleActiveConversationChange}
             ${ref((el) => (chatEl = /** @type {import("../base/chat.js").ChxChat} */ (el)))}
           >
-            <chx-message-list slot="message-list"></chx-message-list>
+            <chx-message-list slot="message-list">
+              <chx-typing-indicator value="Typing..." slot="typing"></chx-typing-indicator>
+            </chx-message-list>
             <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
               <md-button slot="actions" variant="text">Opus 4.8</md-button>
             </chx-message-composer>

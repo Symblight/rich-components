@@ -346,6 +346,23 @@ export class ChxMessageList extends LitElement {
     this.#infinityScrollElement?.scrollToBottom(behavior);
   }
 
+  /**
+   * `typing`/`streaming` land in chx-infinity-scroll's `footer` slot, which the virtualizer has no
+   * concept of (see `scrollToBottom()`'s own doc) — appearing/growing there doesn't move
+   * `chx-infinity-scroll`'s own reactive properties, so nothing auto-follows it the way a new message
+   * does. Re-stick explicitly on the one moment it can matter: the toggle itself, and only when the
+   * user was already at the bottom (a scrolled-up reader shouldn't be yanked down by an indicator).
+   * @param {import("lit").PropertyValues} changedProperties
+   */
+  updated(changedProperties) {
+    if (
+      (changedProperties.has("typing") || changedProperties.has("streaming")) &&
+      !this.#awayFromBottom
+    ) {
+      this.#infinityScrollElement?.scrollToBottom(this.scrollBehavior);
+    }
+  }
+
   render() {
     this.#updateStatusText();
 

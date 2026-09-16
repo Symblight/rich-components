@@ -1,5 +1,6 @@
 /** @typedef {import("./message.js").ChxMessage} ChxMessage */
 /** @typedef {import("./message.js").ChxMessagePart} ChxMessagePart */
+/** @typedef {import("./realtime.js").ChxRealtimeEvent} ChxRealtimeEvent */
 
 /**
  * @typedef {Object} ChxMessageDeltaChunk
@@ -57,9 +58,13 @@
  *   onChunk: (item: ChxMessageChunk | ChxMessageEnvelope) => void,
  *   onTyping?: (isTyping: boolean) => void,
  *   onConnectionChange: (state: "connecting" | "connected" | "error", error?: unknown) => void,
+ *   onEvent?: (event: ChxRealtimeEvent) => void,
  * }) => () => void} [subscribe] - one long-lived, conversation-spanning subscription — never re-invoked
  *   on an `activeConversationId` switch, see chx-chat's `activeConversationId`; a `ChxMessage`/`ChxMessageChunk`
- *   for any conversation (including a currently-backgrounded one) can arrive on it at any time
+ *   for any conversation (including a currently-backgrounded one) can arrive on it at any time. `onEvent`
+ *   covers typing/presence/read/conversation-collection sync — see `src/types/realtime.js` and
+ *   `.claude/plans/messages/realtime-sync.md`; deliberately separate from `onMessage`/`onTyping`
+ *   above, which keep covering the two event kinds they already handled before `onEvent` existed
  * @property {(message: ChxMessage, options: {signal: AbortSignal}) => Promise<ReadableStream<ChxMessageChunk | ChxMessageEnvelope> | void>} [sendMessage] - `message.conversationId` carries which
  *   conversation this send belongs to, same field as everywhere else — no separate parameter
  * @property {(replyMessageId: string, options: {signal: AbortSignal, conversationId?: string}) => Promise<ReadableStream<ChxMessageChunk | ChxMessageEnvelope> | void>} [regenerate]

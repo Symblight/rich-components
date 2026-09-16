@@ -17,6 +17,7 @@ import styles from "./chat.css?inline";
 
 /** @import { ChxMessage } from "../../types/message.js" */
 /** @import { ChxChatAdapter, ChxMessageRenderer, ChxPartRenderer } from "../../types/adapter.js" */
+/** @import { ChxConversation } from "../../types/conversation.js" */
 
 /**
  * @tag chx-chat
@@ -28,6 +29,11 @@ export class ChxChat extends LitElement {
   static properties = {
     loading: { type: Boolean, reflect: true, attribute: true },
     userId: { type: String, attribute: true },
+    activeConversationId: { type: String, attribute: "active-conversation-id" },
+    initialActiveConversationId: { type: String, attribute: "initial-active-conversation-id" },
+    conversations: { attribute: false },
+    initialConversations: { type: Array, attribute: "initial-conversations" },
+    restoreScrollPosition: { type: Boolean, attribute: "restore-scroll-position" },
     messages: { attribute: false },
     messageElement: { attribute: false },
     partElements: { attribute: false },
@@ -41,9 +47,15 @@ export class ChxChat extends LitElement {
   #internalMessages;
   #lastAnnounced;
   #stream; // StreamController, assigned in the constructor
-  #activeDeliveries = new Map(); // messageId/replyId -> AbortController
+  /** @type {Map<string, {controller: AbortController, conversationId: string | undefined}>} */
+  #activeDeliveries = new Map(); // messageId/replyId -> in-flight delivery, tagged with the conversation it belongs to
   /** @type {(() => void) | undefined} */
   #unsubscribe; // adapter.subscribe's returned unsubscribe fn, assigned in connectedCallback
+  /** @type {ChxChatAdapter | undefined} */
+  #subscribedAdapter; // whichever adapter #unsubscribe actually belongs to — see updated()'s re-subscribe guard
+  /** @type {Map<string, number | undefined>} */
+  #scrollOffsets = new Map(); // conversationId -> chx-message-list scroll offset, captured/restored on activeConversationId switch
+  #pendingScrollRestore = false;
   #pagination; // PaginationController, assigned in the constructor
   #typing; // TypingController, assigned in the constructor
   /** @type {DropTargetController} */
@@ -59,6 +71,36 @@ export class ChxChat extends LitElement {
 
     /** @type {String | undefined} */
     this.userId = undefined;
+
+    /** @type {String | undefined} */
+    this.activeConversationId = undefined;
+
+    /**
+     * The initial active conversation ID when uncontrolled. Ignored after initialization and when
+     * `activeConversationId` is provided — consulted exactly once, in `connectedCallback()`, only if
+     * `activeConversationId` is still `undefined` at that point.
+     * @type {String | undefined}
+     */
+    this.initialActiveConversationId = undefined;
+
+    /**
+     * Metadata for a picker UI (chx-conversations, or a consumer's own) — chx-chat itself only
+     * stores this, it doesn't fetch or interpret it. `undefined` (not `[]`) until either an app
+     * assignment or `initialConversations`'s own one-time seed resolves it — see that property.
+     * @type {ChxConversation[] | undefined}
+     */
+    this.conversations = undefined;
+
+    /**
+     * The initial conversations when uncontrolled. Ignored after initialization and when
+     * `conversations` is provided — same one-time, `connectedCallback()`-time seed contract as
+     * `initialActiveConversationId` above.
+     * @type {ChxConversation[] | undefined}
+     */
+    this.initialConversations = undefined;
+
+    /** Whether switching `activeConversationId` restores that conversation's remembered scroll position (opt out to always land at the bottom on switch). @type {Boolean} */
+    this.restoreScrollPosition = true;
 
     /** @type {ChxMessage[]} */
     this.messages = [];
@@ -83,15 +125,26 @@ export class ChxChat extends LitElement {
     this.#stream = new StreamController(this, {
       getMessages: () => this.#internalMessages,
       getUserId: () => this.userId,
-      onMessagesChange: (messages) => this.#applyMessages(messages),
+      onMessagesChange: (messages, conversationId) => this.#applyMessages(messages, conversationId),
       chunkBatchIntervalMs: this.chunkBatchIntervalMs,
     });
 
     this.#pagination = new PaginationController(this, {
       getAdapter: () => this.adapter,
       getMessages: () => this.#internalMessages,
-      applyMessages: (messages) => this.#applyMessages(messages),
+      applyMessages: (messages, conversationId) => this.#applyMessages(messages, conversationId),
+      getConversationId: () => this.activeConversationId,
     });
+
+    /**
+     * Cache management surface — `clear(conversationId?)` drops cached messages and pagination
+     * state for one conversation, or (no argument) every cached conversation at once. A lower-level
+     * primitive than `refresh()`: it doesn't re-fetch afterwards. Future home for a pluggable
+     * `get`/`set` storage seam (persisting to localStorage/a server instead of the in-memory default)
+     * — not built yet, `clear()` is the only method today.
+     * @type {{clear: (conversationId?: string) => void}}
+     */
+    this.cache = { clear: (conversationId) => this.#clearCache(conversationId) };
 
     this.#typing = new TypingController(this);
 
@@ -137,11 +190,34 @@ export class ChxChat extends LitElement {
       "chx-attachments-change",
       /** @type {EventListener} */ (this.handleAttachmentsChange),
     );
+    this.addEventListener(
+      "chx-active-conversation-change",
+      /** @type {EventListener} */ (this.handleActiveConversationChange),
+    );
 
-    // connectedCallback (not the constructor) — by the time an element is connected, Lit has
-    // already applied any `adapter` assigned before upgrade/insertion (its own pre-upgrade
-    // instance-property capture), so this is the first point `this.adapter` is reliably settled
-    this.#unsubscribe = this.adapter?.subscribe?.({
+    // Uncontrolled seeds — only apply if still undefined, so a reconnect or an app-provided value no-ops.
+    if (this.conversations === undefined) this.conversations = this.initialConversations ?? [];
+    if (this.activeConversationId === undefined) {
+      this.activeConversationId = this.initialActiveConversationId;
+    }
+
+    // Pre-upgrade property capture means `adapter` is already settled by now.
+    this.#subscribedAdapter = this.adapter;
+    this.#unsubscribe = this.#subscribeAdapter();
+
+    // Shares PaginationController's per-conversation `loading` flag with LoadMoreController's own
+    // accidental empty-list trigger, so this can't double-fetch — see PaginationController.loadInitial.
+    this.#pagination.loadInitial();
+  }
+
+  /**
+   * One long-lived, conversation-spanning subscription — never re-invoked on an `activeConversationId`
+   * switch (see `ChxChatAdapter.subscribe`'s own doc), only when `adapter` itself is reassigned to a
+   * different instance (see `updated()`'s re-subscribe guard).
+   * @returns {(() => void) | undefined}
+   */
+  #subscribeAdapter() {
+    return this.adapter?.subscribe?.({
       onMessage: (message) => this.addMessage(message),
       onChunk: (item) => this.#stream.applyChunk(item),
       onTyping: (isTyping) => this.#typing.setTyping(isTyping),
@@ -158,6 +234,19 @@ export class ChxChat extends LitElement {
     });
   }
 
+  /**
+   * Lets any descendant — a future `<chx-conversations>`, or a consumer's own bespoke picker UI —
+   * drive the active conversation purely by dispatching a standard event, the same "action bubbles
+   * up, chx-chat listens on itself" shape `chx-send-message`/`chx-attachments-change` already use.
+   * No corresponding outward announce: whoever dispatched this already knows the new id, and a
+   * programmatic `chatEl.activeConversationId = …` assignment is already observable to its own
+   * caller — matching `messages`' own "no echo on assignment" convention.
+   * @param {CustomEvent<{conversationId: string}>} event
+   */
+  handleActiveConversationChange(event) {
+    this.activeConversationId = event.detail.conversationId;
+  }
+
   disconnectedCallback() {
     super.disconnectedCallback();
     this.removeEventListener("chx-send-message", /** @type {EventListener} */ (this.handleSend));
@@ -165,7 +254,7 @@ export class ChxChat extends LitElement {
       "chx-attachments-change",
       /** @type {EventListener} */ (this.handleAttachmentsChange),
     );
-    for (const controller of this.#activeDeliveries.values()) controller.abort();
+    for (const { controller } of this.#activeDeliveries.values()) controller.abort();
     this.#unsubscribe?.();
   }
 
@@ -183,12 +272,58 @@ export class ChxChat extends LitElement {
 
   /**
    * Thin convenience — same as any other local action, applied to the internal store immediately
-   * and firing `chx-messages-change` as a side effect. Matches purely by `message.id`.
+   * and firing `chx-messages-change` as a side effect. Matches purely by `message.id`. Defaults
+   * `conversationId` to the active conversation, but a caller can target a different (e.g.
+   * currently-backgrounded) one explicitly — the same path `adapter.subscribe`'s `onMessage` itself
+   * goes through, since an incoming message can belong to any conversation, not just the visible one.
    * @param {Omit<ChxMessage, "own" | "createdAt"> & {own?: boolean, createdAt?: number}} message
    */
   addMessage(message) {
-    const resolved = /** @type {ChxMessage} */ ({ createdAt: Date.now(), ...message });
-    this.#applyMessages(reconcileMessages(this.#internalMessages, resolved, this.userId));
+    const resolved = /** @type {ChxMessage} */ ({
+      createdAt: Date.now(),
+      conversationId: this.activeConversationId,
+      ...message,
+    });
+    this.#applyMessages(
+      reconcileMessages(this.#internalMessages, resolved, this.userId),
+      resolved.conversationId,
+    );
+  }
+
+  /**
+   * Re-fetches a conversation from scratch: clears its cache (see `cache.clear()`) and calls
+   * `loadInitial()` again, which re-invokes `adapter.listMessages()`. Defaults to the active
+   * conversation — this is also the general "reset chat state" primitive for a single-conversation
+   * `chx-chat` (`activeConversationId` never set): it clears every message and refetches the one
+   * implicit conversation from scratch. Useful as a manual refresh/pull-to-refresh action, or to
+   * recover from a failed initial load, which `loadInitial()` never silently retries on its own.
+   * @param {string} [conversationId]
+   */
+  refresh(conversationId = this.activeConversationId) {
+    this.cache.clear(conversationId);
+    this.#pagination.loadInitial(conversationId);
+  }
+
+  /**
+   * The mechanism behind the public `cache` object's `clear()` — see its own doc on `cache` above.
+   * `conversationId === undefined` means "no argument was passed," never "a real conversation whose
+   * id happens to be undefined" (ids are always non-empty strings), so it's an unambiguous "clear
+   * everything" signal, not a collision with the single-conversation case.
+   * @param {string} [conversationId]
+   */
+  #clearCache(conversationId) {
+    if (conversationId === undefined) {
+      this.#pagination.forgetAll();
+      this.#scrollOffsets.clear();
+      this.#applyMessages([]);
+      return;
+    }
+    this.#pagination.forget(conversationId);
+    this.#scrollOffsets.delete(conversationId);
+    this.#applyMessages(
+      this.#internalMessages.filter((m) => m.conversationId !== conversationId),
+      conversationId,
+    );
   }
 
   /**
@@ -263,10 +398,12 @@ export class ChxChat extends LitElement {
   /** @param {CustomEvent<{value: string, html: string, attachments: File[]}>} event */
   handleSend(event) {
     const { value, html, attachments = [] } = event.detail;
+    const conversationId = this.activeConversationId;
     const id = crypto.randomUUID();
     /** @type {ChxMessage} */
     const message = {
       id,
+      conversationId,
       authorId: this.userId,
       own: true,
       createdAt: Date.now(),
@@ -281,19 +418,39 @@ export class ChxChat extends LitElement {
       ],
     };
 
-    this.#applyMessages(reconcileMessages(this.#internalMessages, message, this.userId));
-    this.#deliver(message); // not awaited — see #deliver's own doc for what this does
+    this.#applyMessages(reconcileMessages(this.#internalMessages, message, this.userId), conversationId);
+    this.#deliver(message, conversationId); // not awaited — see #deliver's own doc for what this does
   }
 
   /**
-   * The one choke point every local mutation of the internal store goes through.
-   * @param {ChxMessage[]} nextMessages
+   * `#internalMessages` holds every cached conversation's messages together, tagged by
+   * `conversationId` — this is what's actually rendered/announced: the active conversation's own
+   * slice (or everything, when `activeConversationId` is never used — the single-conversation case).
+   * @returns {ChxMessage[]}
    */
-  #applyMessages(nextMessages) {
+  get #visibleMessages() {
+    return this.activeConversationId === undefined
+      ? this.#internalMessages
+      : this.#internalMessages.filter((message) => message.conversationId === this.activeConversationId);
+  }
+
+  /**
+   * The one choke point every local mutation of the internal store goes through. `nextMessages` is
+   * always the *full*, multi-conversation array — `conversationId` says which conversation this
+   * particular write is *for* (a background delivery/pagination fetch can write here for a
+   * conversation that isn't currently active, see `#deliver`/`PaginationController`); only a write
+   * matching the active conversation actually renders or fires `chx-messages-change`, so a
+   * backgrounded conversation's cache stays silently up to date until the app switches to it.
+   * @param {ChxMessage[]} nextMessages
+   * @param {string} [conversationId]
+   */
+  #applyMessages(nextMessages, conversationId = this.activeConversationId) {
     validateMessages(nextMessages);
     this.#internalMessages = nextMessages;
-    this.#lastAnnounced = nextMessages;
-    this.#announce(nextMessages);
+    if (conversationId !== this.activeConversationId) return;
+    const visible = this.#visibleMessages;
+    this.#lastAnnounced = visible;
+    this.#announce(visible);
     this.requestUpdate();
   }
 
@@ -306,17 +463,21 @@ export class ChxChat extends LitElement {
 
   /**
    * AI-agent flavor's reply mechanism — a no-op if no `adapter.sendMessage` is set (a messenger
-   * flavor's local-echo-only `handleSend` is unaffected either way).
+   * flavor's local-echo-only `handleSend` is unaffected either way). `conversationId` is captured by
+   * the caller up front, not read from `this.activeConversationId` again in here — the app may have
+   * switched to a different conversation by the time this (unawaited) delivery settles, and every
+   * write below must still land on the conversation this send actually belongs to.
    * @param {ChxMessage} message
+   * @param {string} [conversationId]
    */
-  async #deliver(message) {
+  async #deliver(message, conversationId) {
     if (!this.adapter?.sendMessage) return;
     const controller = new AbortController();
-    this.#activeDeliveries.set(message.id, controller);
+    this.#activeDeliveries.set(message.id, { controller, conversationId });
     try {
       const stream = await this.adapter.sendMessage(message, { signal: controller.signal });
       if (!stream) return;
-      await this.#stream.deliverStream(stream, { replyToId: message.id });
+      await this.#stream.deliverStream(stream, { replyToId: message.id, conversationId });
     } catch (error) {
       // a cancellation surfaces either as an explicit {kind:"abort"} chunk (handled entirely
       // inside deliverStream, never reaches this catch) or the adapter's own fetch/EventSource
@@ -339,6 +500,7 @@ export class ChxChat extends LitElement {
                 : m,
             )
           : next,
+        conversationId,
       );
       if (!cancelled) {
         this.dispatchEvent(
@@ -362,10 +524,11 @@ export class ChxChat extends LitElement {
   retry(messageId) {
     const message = this.#internalMessages.find((m) => m.id === messageId);
     if (!message || message.status !== "failed") return;
+    const conversationId = message.conversationId;
     const resetMessage = { ...message, status: /** @type {"sending"} */ ("sending"), error: undefined };
     const withoutStaleReply = this.#internalMessages.filter((m) => m.replyToId !== messageId);
-    this.#applyMessages(reconcileMessages(withoutStaleReply, resetMessage, this.userId));
-    this.#deliver(resetMessage);
+    this.#applyMessages(reconcileMessages(withoutStaleReply, resetMessage, this.userId), conversationId);
+    this.#deliver(resetMessage, conversationId);
   }
 
   /**
@@ -375,7 +538,7 @@ export class ChxChat extends LitElement {
    * @param {string} messageId
    */
   cancel(messageId) {
-    this.#activeDeliveries.get(messageId)?.abort();
+    this.#activeDeliveries.get(messageId)?.controller.abort();
   }
 
   /**
@@ -391,21 +554,26 @@ export class ChxChat extends LitElement {
       this.#internalMessages.find((m) => m.replyToId === messageId);
     if (!reply || !this.adapter?.regenerate) return;
 
-    this.#applyMessages(this.#internalMessages.filter((m) => m.id !== reply.id));
-    this.#deliverRegenerate(reply.id, /** @type {string} */ (reply.replyToId));
+    const conversationId = reply.conversationId;
+    this.#applyMessages(
+      this.#internalMessages.filter((m) => m.id !== reply.id),
+      conversationId,
+    );
+    this.#deliverRegenerate(reply.id, /** @type {string} */ (reply.replyToId), conversationId);
   }
 
   /**
    * @param {string} replyId
    * @param {string} replyToId
+   * @param {string} [conversationId] - see #deliver's own note on why this is captured up front
    */
-  async #deliverRegenerate(replyId, replyToId) {
+  async #deliverRegenerate(replyId, replyToId, conversationId) {
     const controller = new AbortController();
-    this.#activeDeliveries.set(replyId, controller);
+    this.#activeDeliveries.set(replyId, { controller, conversationId });
     try {
-      const stream = await this.adapter?.regenerate?.(replyId, { signal: controller.signal });
+      const stream = await this.adapter?.regenerate?.(replyId, { signal: controller.signal, conversationId });
       if (!stream) return;
-      await this.#stream.deliverStream(stream, { replyToId });
+      await this.#stream.deliverStream(stream, { replyToId, conversationId });
     } catch (error) {
       // regenerate() already removed the old reply — if a fresh one started streaming before the
       // failure, close it out too; if nothing arrived yet, there's nothing to find or close
@@ -419,6 +587,7 @@ export class ChxChat extends LitElement {
           this.#internalMessages.map((m) =>
             m.id === orphanedReply.id ? finalizeStreamingParts({ ...m, status: replyStatus }) : m,
           ),
+          conversationId,
         );
       }
       if (!cancelled) {
@@ -474,7 +643,7 @@ export class ChxChat extends LitElement {
     const list = this.messageListElement;
     if (!list) return;
     list.dragging = this.dragging;
-    list.messages = this.#internalMessages;
+    list.messages = this.#visibleMessages;
     list.messageElement = this.messageElement;
     list.partElements = this.partElements;
     list.typing = this.#typing.isTyping();
@@ -487,14 +656,17 @@ export class ChxChat extends LitElement {
   }
 
   /**
-   * True while at least one in-flight delivery (`#deliver`/`#deliverRegenerate`) hasn't produced its
-   * reply shell yet — the "waiting for a reply, no message to attach a status to yet" window.
+   * True while at least one in-flight delivery *for the active conversation* (`#deliver`/
+   * `#deliverRegenerate`) hasn't produced its reply shell yet — the "waiting for a reply, no message
+   * to attach a status to yet" window. A backgrounded conversation's own in-flight delivery is
+   * deliberately excluded — its streaming indicator belongs to whichever chat is actually showing it.
    * Derived fresh each render, not tracked incrementally — `#activeDeliveries` is small in practice
-   * (0-1 concurrent deliveries in the normal case), so this scan is cheap.
+   * (0-1 concurrent deliveries per conversation in the normal case), so this scan is cheap.
    * @returns {boolean}
    */
   #isWaitingForReply() {
-    for (const deliveryId of this.#activeDeliveries.keys()) {
+    for (const [deliveryId, delivery] of this.#activeDeliveries) {
+      if (delivery.conversationId !== this.activeConversationId) continue;
       if (!this.#internalMessages.some((message) => message.replyToId === deliveryId)) return true;
     }
     return false;
@@ -502,16 +674,54 @@ export class ChxChat extends LitElement {
 
   /**
    * An app-assigned `messages` is authoritative, but only when it's not just an echo of what
-   * `#applyMessages` itself last produced.
+   * `#applyMessages` itself last produced — scoped to the active conversation's own slice, other
+   * cached conversations' entries in `#internalMessages` are left untouched.
    * @param {import("lit").PropertyValues} changedProperties
    */
   willUpdate(changedProperties) {
     super.willUpdate(changedProperties);
+
+    if (changedProperties.has("activeConversationId")) {
+      const previousId = /** @type {string | undefined} */ (
+        changedProperties.get("activeConversationId")
+      );
+      if (this.restoreScrollPosition && previousId !== undefined) {
+        this.#scrollOffsets.set(previousId, this.messageListElement?.list?.getScrollOffset());
+      }
+      if (this.activeConversationId !== undefined && !this.#pagination.hasVisited(this.activeConversationId)) {
+        this.#pagination.loadInitial();
+      }
+      this.#pendingScrollRestore = this.restoreScrollPosition;
+    }
+
     if (changedProperties.has("messages") && this.messages !== this.#lastAnnounced) {
       validateMessages(this.messages);
-      this.#internalMessages = this.messages;
+      const conversationId = this.activeConversationId;
+      const stamped =
+        conversationId === undefined
+          ? this.messages
+          : this.messages.map((m) => (m.conversationId === conversationId ? m : { ...m, conversationId }));
+      this.#internalMessages =
+        conversationId === undefined
+          ? stamped
+          : [...this.#internalMessages.filter((m) => m.conversationId !== conversationId), ...stamped];
       this.#lastAnnounced = this.messages;
     }
+  }
+
+  /**
+   * Restores `conversationId`'s remembered scroll offset (captured in `willUpdate` above) once its
+   * messages have actually rendered — awaiting `chx-message-list`'s own `updateComplete` first, since
+   * its render (and `chx-infinity-scroll`'s underneath it) happens on a separate microtask from
+   * `chx-chat`'s. A conversation with no remembered offset (first visit) is left alone — the
+   * virtualizer's own default (bottom-anchored) is already the right resting place for it.
+   * @param {string | undefined} conversationId
+   */
+  async #restoreScroll(conversationId) {
+    const offset = conversationId === undefined ? undefined : this.#scrollOffsets.get(conversationId);
+    if (offset === undefined) return;
+    await this.messageListElement?.updateComplete;
+    this.messageListElement?.list?.scrollToOffset(offset);
   }
 
   /**
@@ -524,8 +734,21 @@ export class ChxChat extends LitElement {
    */
   updated(changedProperties) {
     super.updated(changedProperties);
+    // `adapter` is compared by reference, guarded against the same instance being reassigned (a
+    // no-op reassignment wouldn't show up in changedProperties at all, but the initial mount value
+    // does — without the identity check, connectedCallback's own subscribe would immediately be torn
+    // down and redone here on every first render)
+    if (changedProperties.has("adapter") && this.adapter !== this.#subscribedAdapter) {
+      this.#unsubscribe?.();
+      this.#subscribedAdapter = this.adapter;
+      this.#unsubscribe = this.#subscribeAdapter();
+    }
     this.pushComposerProperties();
     this.pushMessageListProperties();
+    if (this.#pendingScrollRestore) {
+      this.#pendingScrollRestore = false;
+      this.#restoreScroll(this.activeConversationId); // not awaited — see #restoreScroll's own doc
+    }
   }
 
   render() {

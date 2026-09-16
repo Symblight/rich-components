@@ -5,6 +5,8 @@
  * @typedef {Object} ChxMessageDeltaChunk
  * @property {"delta"} [kind]
  * @property {string} messageId
+ * @property {string} [conversationId] - only consulted when this chunk creates a new message shell,
+ *   see chx-chat's `activeConversationId` — a chunk for an already-known message ignores it
  * @property {string} [authorId]
  * @property {string} partId
  * @property {string} [partType]
@@ -15,12 +17,14 @@
  * @typedef {Object} ChxMessageLifecycleChunk
  * @property {"finish" | "abort"} kind
  * @property {string} messageId
+ * @property {string} [conversationId] - see ChxMessageDeltaChunk's own note
  */
 
 /**
  * @typedef {Object} ChxMessagePartEndChunk
  * @property {"part-end"} kind
  * @property {string} messageId
+ * @property {string} [conversationId] - see ChxMessageDeltaChunk's own note
  * @property {string} partId
  */
 
@@ -47,15 +51,18 @@
 
 /**
  * @typedef {Object} ChxChatAdapter
- * @property {(input: {cursor?: string, direction?: "forward" | "backward", signal?: AbortSignal}) => Promise<{messages: ChxMessage[], cursor?: string, hasMore?: boolean}>} [listMessages]
+ * @property {(input: {conversationId?: string, cursor?: string, direction?: "forward" | "backward", signal?: AbortSignal}) => Promise<{messages: ChxMessage[], cursor?: string, hasMore?: boolean}>} [listMessages]
  * @property {(handlers: {
  *   onMessage: (message: ChxMessage) => void,
  *   onChunk: (item: ChxMessageChunk | ChxMessageEnvelope) => void,
  *   onTyping?: (isTyping: boolean) => void,
  *   onConnectionChange: (state: "connecting" | "connected" | "error", error?: unknown) => void,
- * }) => () => void} [subscribe]
- * @property {(message: ChxMessage, options: {signal: AbortSignal}) => Promise<ReadableStream<ChxMessageChunk | ChxMessageEnvelope> | void>} [sendMessage]
- * @property {(replyMessageId: string, options: {signal: AbortSignal}) => Promise<ReadableStream<ChxMessageChunk | ChxMessageEnvelope> | void>} [regenerate]
+ * }) => () => void} [subscribe] - one long-lived, conversation-spanning subscription — never re-invoked
+ *   on an `activeConversationId` switch, see chx-chat's `activeConversationId`; a `ChxMessage`/`ChxMessageChunk`
+ *   for any conversation (including a currently-backgrounded one) can arrive on it at any time
+ * @property {(message: ChxMessage, options: {signal: AbortSignal}) => Promise<ReadableStream<ChxMessageChunk | ChxMessageEnvelope> | void>} [sendMessage] - `message.conversationId` carries which
+ *   conversation this send belongs to, same field as everywhere else — no separate parameter
+ * @property {(replyMessageId: string, options: {signal: AbortSignal, conversationId?: string}) => Promise<ReadableStream<ChxMessageChunk | ChxMessageEnvelope> | void>} [regenerate]
  */
 
 export {};

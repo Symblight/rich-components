@@ -16,6 +16,7 @@
 /**
  * @typedef {Object} ChxMessage
  * @property {string} id
+ * @property {string} [conversationId] - multi-conversation caching key, see chx-chat's `activeConversationId`
  * @property {string} [authorId]
  * @property {boolean} own
  * @property {number} createdAt

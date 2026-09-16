@@ -157,6 +157,26 @@ export class ChxInfinityScroll extends LitElement {
     this.dispatchEvent(new CustomEvent("chx-scroll-to-bottom", { bubbles: true, composed: true }));
   }
 
+  /**
+   * Current scroll offset in px, or `undefined` before the scroller has ever measured one —
+   * pairs with `scrollToOffset()` to save/restore a scroll position across a bulk `data` swap (e.g.
+   * chx-chat caching/restoring a conversation's scroll position on switch).
+   * @returns {number | undefined}
+   */
+  getScrollOffset() {
+    return this.#controller.virtualizer.scrollOffset ?? undefined;
+  }
+
+  /**
+   * Scrolls to a specific pixel offset — the counterpart to `getScrollOffset()`, forwarded straight
+   * through to the virtualizer.
+   * @param {number} offset
+   * @param {{align?: "auto" | "start" | "center" | "end", behavior?: "auto" | "smooth" | "instant"}} [options]
+   */
+  scrollToOffset(offset, options) {
+    this.#controller.virtualizer.scrollToOffset(offset, options);
+  }
+
   /** Drop every cached row measurement. */
   remeasure() {
     this.#controller.remeasure();

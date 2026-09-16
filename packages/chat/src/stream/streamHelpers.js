@@ -10,14 +10,18 @@
  * @param {ChxMessageChunk} chunk
  * @param {string} [userId]
  * @param {string} [replyToId]
+ * @param {string} [conversationId] - explicit target (a `#deliver`/`#deliverRegenerate` call always
+ *   knows this up front); falls back to the chunk's own `conversationId` for `subscribe`'s `onChunk`,
+ *   which has no other way to know which conversation an unseen `messageId` belongs to
  * @returns {{ messages: ChxMessage[], index: number }}
  */
-export function getOrCreateMessage(messages, chunk, userId, replyToId) {
+export function getOrCreateMessage(messages, chunk, userId, replyToId, conversationId) {
   const index = messages.findIndex((m) => m.id === chunk.messageId);
   if (index !== -1) return { messages, index };
   /** @type {ChxMessage} */
   const shell = {
     id: chunk.messageId,
+    conversationId: conversationId ?? /** @type {any} */ (chunk).conversationId,
     authorId: /** @type {any} */ (chunk).authorId,
     own: /** @type {any} */ (chunk).authorId === userId,
     createdAt: Date.now(),
@@ -98,10 +102,17 @@ export function finalizePart(parts, partId) {
  * @param {ChxMessageChunk} chunk
  * @param {string} [userId]
  * @param {string} [replyToId]
+ * @param {string} [conversationId] - see getOrCreateMessage's own note
  * @returns {ChxMessage[]}
  */
-export function reconcileChunk(messages, chunk, userId, replyToId) {
-  const { messages: withMessage, index } = getOrCreateMessage(messages, chunk, userId, replyToId);
+export function reconcileChunk(messages, chunk, userId, replyToId, conversationId) {
+  const { messages: withMessage, index } = getOrCreateMessage(
+    messages,
+    chunk,
+    userId,
+    replyToId,
+    conversationId,
+  );
   const message = withMessage[index];
 
   if (chunk.kind === "finish") {

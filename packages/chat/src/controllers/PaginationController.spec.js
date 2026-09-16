@@ -9,6 +9,7 @@ function makeHost() {
   return {
     addController: (/** @type {{hostDisconnected?: () => void}} */ c) => controllers.push(c),
     disconnect: () => controllers.forEach((c) => c.hostDisconnected?.()),
+    requestUpdate: () => {},
   };
 }
 

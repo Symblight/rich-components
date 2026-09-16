@@ -24,7 +24,7 @@ export class StreamController {
    * @param {{
    *   getMessages: () => ChxMessage[],
    *   getUserId: () => string | undefined,
-   *   onMessagesChange: (messages: ChxMessage[]) => void,
+   *   onMessagesChange: (messages: ChxMessage[], conversationId?: string) => void,
    *   chunkBatchIntervalMs?: number,
    * }} options
    */
@@ -61,15 +61,16 @@ export class StreamController {
 
   /**
    * @param {ReadableStream<ChxMessageChunk | ChxMessageEnvelope>} stream
-   * @param {{replyToId?: string}} [options]
+   * @param {{replyToId?: string, conversationId?: string}} [options]
    */
-  async deliverStream(stream, { replyToId } = {}) {
+  async deliverStream(stream, { replyToId, conversationId } = {}) {
     await processStream(stream, {
       getMessages: this.#getMessages,
       getUserId: this.#getUserId,
       buffer: this.#buffer,
       ingest: (item) => this.#ingest(item),
       replyToId,
+      conversationId,
     });
   }
 

@@ -26,16 +26,20 @@ async function* readChunks(stream) {
  *   buffer: ReturnType<typeof import("./streamDeltaBuffer.js").createChunkBuffer>,
  *   ingest: (item: ChxMessageChunk | ChxMessageEnvelope) => ChxMessageChunk | null,
  *   replyToId?: string,
+ *   conversationId?: string,
  * }} options
  */
-export async function processStream(stream, { getMessages, getUserId, buffer, ingest, replyToId }) {
+export async function processStream(
+  stream,
+  { getMessages, getUserId, buffer, ingest, replyToId, conversationId },
+) {
   let sawTerminalChunk = false;
   try {
     for await (const item of readChunks(stream)) {
       const chunk = ingest(item);
       if (!chunk) continue; // duplicate eventId — silently skipped
       if (chunk.kind === "finish" || chunk.kind === "abort") sawTerminalChunk = true;
-      buffer.push(chunk, getMessages(), getUserId(), replyToId);
+      buffer.push(chunk, getMessages(), getUserId(), replyToId, conversationId);
     }
   } finally {
     // must run on every exit path, not just a clean loop completion, or a chunk pushed just before

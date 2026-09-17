@@ -3,6 +3,7 @@ import { RowMeasurer } from "./RowMeasurer.js";
 import { StickToBottom } from "./StickToBottom.js";
 import { LoadMoreController } from "./LoadMoreController.js";
 import { VisibilityController } from "./VisibilityController.js";
+import { PlainListController } from "./PlainListController.js";
 
 /**
  * @typedef {import("lit").ReactiveController} ReactiveController
@@ -10,12 +11,21 @@ import { VisibilityController } from "./VisibilityController.js";
  */
 
 /**
- * Composes the pieces of a bottom-anchored, lazily-prepending virtualized list into one
- * `ReactiveController`:
+ * Composes the pieces of a bottom-anchored, lazily-prepending list into one `ReactiveController`.
+ * Two mutually exclusive strategies share the rest of the composition (`LoadMoreController`/
+ * `VisibilityController` are DOM-only and don't care which is active):
  *
- *  - {@link VirtualListController} the virtualizer itself (`anchorTo: "end"` + `followOnAppend`)
- *  - {@link RowMeasurer}           measuring rows once their content actually exists
- *  - {@link StickToBottom}         the one edge case `anchorTo`/`followOnAppend` don't cover
+ *  - virtualized (default): {@link VirtualListController} (`anchorTo: "end"` + `followOnAppend`) +
+ *    {@link RowMeasurer} (measuring rows once their content actually exists) + {@link StickToBottom}
+ *    (the one edge case `anchorTo`/`followOnAppend` don't cover) + the initial-pin latch below.
+ *  - `noVirtualization`: {@link PlainListController} — every row is already real DOM at its real
+ *    height, so there's nothing to window or measure; it owns anchor-restoration-on-prepend and
+ *    stick-to-bottom itself, `MutationObserver`-driven. See `.claude/plans/messages/
+ *    no-virtualization.md`.
+ *
+ * The idle strategy is switched *off*, not just left unread: virtual-core's controller runs on this
+ * host either way, so `VirtualListController.sync()` disables it outright under `noVirtualization`
+ * (see its own doc for what it would do otherwise).
  *  - {@link LoadMoreController}    asking the consumer for older items, owns `loading`
  *  - {@link VisibilityController}  reporting rows that scrolled into view, owns `onItemVisible`
  *
@@ -29,8 +39,11 @@ export class InfinityScrollController {
   #stick;
   #loader;
   #visibility;
+  #plainList;
   /** @type {() => Element | undefined} */
   #getScrollElement;
+  /** @type {() => boolean} */
+  #getNoVirtualization;
   /** @type {number | null} */
   #scrollFrame = null;
 
@@ -62,6 +75,7 @@ export class InfinityScrollController {
    * @param {ReactiveControllerHost} host
    * @param {{
    *   getScrollElement: () => Element | undefined,
+   *   getCanvasElement?: () => Element | undefined,
    *   rows: () => Iterable<HTMLElement>,
    *   getData: () => unknown[],
    *   getItemKey: (item: unknown, index: number) => string | number,
@@ -79,6 +93,7 @@ export class InfinityScrollController {
    *   getShouldObserveItem: () => (item: unknown, index: number) => boolean,
    *   onItemVisible: (key: string) => void,
    *   emit: (type: string, detail?: unknown) => void,
+   *   getNoVirtualization?: () => boolean,
    * }} config
    */
   constructor(host, config) {
@@ -86,9 +101,12 @@ export class InfinityScrollController {
     this.#getScrollElement = config.getScrollElement;
     this.#getBuffer = config.getBuffer;
     this.#onAwayFromBottomChange = config.onAwayFromBottomChange;
+    this.#getNoVirtualization = config.getNoVirtualization ?? (() => false);
+    const getCanvasElement = config.getCanvasElement ?? (() => undefined);
 
     this.#list = new VirtualListController(host, {
       getScrollElement: config.getScrollElement,
+      getEnabled: () => !this.#getNoVirtualization(),
       getData: config.getData,
       getItemKey: config.getItemKey,
       getEstimateItemSize: config.getEstimateItemSize,
@@ -104,11 +122,39 @@ export class InfinityScrollController {
       getBuffer: config.getBuffer,
     });
 
-    this.#measurer = new RowMeasurer(this.#list, {
+    this.#measurer = new RowMeasurer({
       rows: config.rows,
-      // a measured height can move the end away from us, so re-check in the same frame (the
-      // virtualizer compensates on its own when it can)
-      afterMeasure: () => this.#stick.follow(),
+      onRowReady: (row) => this.#list.virtualizer.measureElement(row),
+      onRelease: () => this.#list.virtualizer.measureElement(null),
+      afterMeasure: () => {
+        // a measured height can move the end away from us, so re-check in the same frame (the
+        // virtualizer compensates on its own when it can)
+        this.#stick.follow();
+        // The only place maybeLoad() is checked in this branch — same reasoning as
+        // PlainListController's onReconciled (see its own doc): hostUpdated() below no longer
+        // checks directly, since it fires far more often than content actually changes (the
+        // initial-pin latch's own multi-frame settle loop, plus VirtualizerController's own
+        // internal re-renders on each measureElement() call above) — each of those was an extra,
+        // premature scrollTop check, and with the old post-load re-chain removed (see
+        // LoadMoreController's own doc), those extras were free to each fire a real, separate
+        // onLoadMore() call instead of just redundantly re-confirming one. This fires once per
+        // batch of newly-measured rows instead — still more often than PlainListController's own
+        // mutation-driven reconcile, since virtual-core's internal state changes on its own
+        // schedule too, but far less often than every render.
+        this.#loader.maybeLoad();
+      },
+    });
+
+    this.#plainList = new PlainListController({
+      getScrollElement: config.getScrollElement,
+      getCanvasElement,
+      rows: config.rows,
+      getBuffer: config.getBuffer,
+      onAwayFromBottomChange: config.onAwayFromBottomChange,
+      // hostUpdated() below deliberately does not call maybeLoad() itself in this mode — this is
+      // the only place it gets checked, and only once scrollTop is genuinely post-correction. See
+      // hostUpdated()'s own comment for why the direct call was the actual bug.
+      onReconciled: () => this.#loader.maybeLoad(),
     });
 
     this.#loader = new LoadMoreController({
@@ -137,31 +183,41 @@ export class InfinityScrollController {
   hostConnected() {
     this.#disposed = false;
     this.#loader.revive();
+    // the teardown disconnected the IntersectionObserver; rows must re-register
+    this.#visibility.reset();
+    if (this.#getNoVirtualization()) {
+      // the teardown disconnected the MutationObserver/ResizeObserver; re-arms and, if the view was
+      // pinned before disconnecting, re-pins (reattaching resets scrollTop)
+      this.#plainList.reset();
+      return;
+    }
     // the teardown disconnected the ResizeObserver; rows must re-register
     this.#measurer.reset();
     // a stale pre-disconnect size snapshot must not read as "grew" once reconnected
     this.#stick.reset();
-    // the teardown disconnected the IntersectionObserver; rows must re-register
-    this.#visibility.reset();
   }
 
   hostUpdate() {
+    // runs in both modes: under `noVirtualization` this is what puts virtual-core into `enabled:
+    // false` before it can subscribe to the scroll element — see VirtualListController.sync()
     this.#list.sync();
   }
 
   hostUpdated() {
+    this.#visibility.schedule();
+    if (this.#getNoVirtualization()) {
+      // idempotent — starts observing the first time the canvas exists, no-op afterwards; the
+      // MutationObserver/ResizeObserver it installs handle every reconcile on their own from here.
+      this.#plainList.observe();
+      return;
+    }
+    // Deliberately does NOT call maybeLoad() here — see RowMeasurer's own afterMeasure callback
+    // above, the only place it's checked in this branch now.
     this.#stick.follow();
     this.#measurer.schedule();
-    this.#visibility.schedule();
-    this.#loader.maybeLoad();
     // once the list first has content, keep it welded to the bottom through the measurement settle
     if (!this.#initialPinStarted && this.#list.virtualizer.options.count > 0)
       this.#startInitialPin();
-    // hostUpdated runs after Lit has committed the canvas height for this render but before the
-    // browser paints — and on *every* render, including the ones the virtualizer's own
-    // ResizeObserver triggers (which never pass through afterMeasure). Correcting the undershoot
-    // here lands the scroll in the same frame the canvas grew, so no short-of-bottom frame is ever
-    // painted.
     if (this.#initialPinStarted && !this.#initialPinDone) this.#pinCurrentFrame();
     // data/size changes move the bottom distance without a `scroll` event; recompute after any pin
     this.#updateAwayFromBottom();
@@ -170,11 +226,15 @@ export class InfinityScrollController {
   hostDisconnected() {
     if (this.#scrollFrame !== null) cancelAnimationFrame(this.#scrollFrame);
     this.#scrollFrame = null;
-    this.#endInitialPin();
     this.#disposed = true;
-    this.#measurer.dispose();
     this.#loader.dispose();
     this.#visibility.dispose();
+    if (this.#getNoVirtualization()) {
+      this.#plainList.dispose();
+      return;
+    }
+    this.#endInitialPin();
+    this.#measurer.dispose();
   }
 
   // ---------------------------------------------------------- initial pin
@@ -264,6 +324,11 @@ export class InfinityScrollController {
     return this.#list.virtualizer;
   }
 
+  /** The real-DOM strategy's own controller — the `noVirtualization` counterpart to `virtualizer`. */
+  get plainList() {
+    return this.#plainList;
+  }
+
   get loading() {
     return this.#loader.loading;
   }
@@ -273,8 +338,12 @@ export class InfinityScrollController {
   handleScroll = () => {
     // `atBottom` gates the follow, so it has to flip in the same task as the scroll event: deferring
     // it to a frame lets the next follow read a stale "true" and yank the user back down mid-scroll.
-    this.#stick.refresh();
-    this.#updateAwayFromBottom();
+    if (this.#getNoVirtualization()) {
+      this.#plainList.handleScroll();
+    } else {
+      this.#stick.refresh();
+      this.#updateAwayFromBottom();
+    }
 
     // the load check only reads scrollTop and can wait for the frame
     if (this.#scrollFrame !== null) return;
@@ -283,6 +352,19 @@ export class InfinityScrollController {
       this.#loader.maybeLoad();
     });
   };
+
+  /**
+   * Scrolls the row at `index` into view — forwards to whichever strategy is active.
+   * @param {number} index
+   * @param {{align?: "auto" | "start" | "center" | "end", behavior?: "auto" | "smooth" | "instant"}} [options]
+   */
+  scrollToIndex(index, options) {
+    if (this.#getNoVirtualization()) {
+      this.#plainList.scrollToIndex(index, options);
+      return;
+    }
+    this.#list.virtualizer.scrollToIndex(index, options);
+  }
 
   /**
    * Recomputes whether the view is scrolled away from the bottom (past `buffer` px, read straight
@@ -301,12 +383,22 @@ export class InfinityScrollController {
 
   /** release the ResizeObserver/IntersectionObserver registration of a row that left the DOM */
   releaseRows() {
-    this.#measurer.releaseRows();
+    // `noVirtualization` still tracks row-readiness (RowMeasurer, see PlainListController), just not
+    // a measurement cache — both branches need their own release call
+    if (this.#getNoVirtualization()) {
+      this.#plainList.releaseRows();
+    } else {
+      this.#measurer.releaseRows();
+    }
     this.#visibility.releaseRows();
   }
 
-  /** drop every cached measurement (after a global style or width change) */
+  /**
+   * Drop every cached row measurement (after a global style or width change). No-op under
+   * `noVirtualization` — nothing is measured or cached in that mode.
+   */
   remeasure() {
+    if (this.#getNoVirtualization()) return;
     this.#measurer.reset();
     this.virtualizer.measure();
     this.#host.requestUpdate();
@@ -315,7 +407,7 @@ export class InfinityScrollController {
   /**
    * Forget the measured heights of specific items. The size cache holds one entry per key for the
    * life of the instance, so a session that streams in an unbounded number of items should drop the
-   * keys it discards.
+   * keys it discards. No-op under `noVirtualization`, same reasoning as {@link remeasure}.
    *
    * Reaches into `itemSizeCache`/`itemSizeCacheVersion`/`pendingMin`, which virtual-core exposes on
    * the instance but does not document. If that ever changes this warns and falls back to the far
@@ -326,6 +418,7 @@ export class InfinityScrollController {
     if (keys == null || typeof keys[Symbol.iterator] !== "function") {
       throw new TypeError("dropMeasurements(keys) needs an iterable of item keys");
     }
+    if (this.#getNoVirtualization()) return;
 
     const virtualizer = /** @type {any} */ (this.virtualizer);
     if (typeof virtualizer.itemSizeCache?.delete !== "function") {

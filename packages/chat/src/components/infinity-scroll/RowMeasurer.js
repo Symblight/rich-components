@@ -1,15 +1,25 @@
 /**
- * Feeds rendered rows to the virtualizer for measurement.
+ * Detects when a rendered row's layout can actually be trusted, and calls back once it can —
+ * shared by both list strategies for two different purposes: `VirtualListController` feeds a ready
+ * row to the virtualizer's own `measureElement` (see `InfinityScrollController`); `PlainListController`
+ * uses the exact same readiness signal to know when it's safe to read a freshly-prepended row's
+ * `getBoundingClientRect()` for anchor restoration (see `.claude/plans/messages/no-virtualization.md`).
  *
- * A row is measured on insert and whenever a prepend shifted its index; the virtualizer's own
- * ResizeObserver keeps it current afterwards, so rows already measured at their current index are
+ * A row is checked on insert, and — for the virtualized path only — again whenever a prepend shifted
+ * its index, since the virtualizer caches measurements *by index*. Rows already accounted for are
  * skipped before any layout is read.
  *
- * The delicate part is *when* a row may be measured. `renderItem` usually returns a custom element
- * (`<chx-message>` or a consumer's own), which renders on a microtask — measuring it in the same
- * task records a height of **0**, and that cached 0 turns the eventual real measurement into a
- * *re-measurement*, which the virtualizer does not compensate for while scrolling up. The list then
- * jumps by one estimate on every prepend.
+ * `recheckOnIndexChange: false` drops that second trigger for callers with no index-keyed cache
+ * (`PlainListController`). It matters: a prepend rewrites `data-index` on every surviving row, so
+ * re-checking would read `offsetHeight` across the whole list on every page load — bounded by the
+ * overscan window when virtualized, but unbounded in the very mode that renders every row.
+ *
+ * The delicate part is *when* a row may be trusted. `renderItem` usually returns a custom element
+ * (`<chx-message>` or a consumer's own), which renders on a microtask — reading its layout in the
+ * same task sees a height of **0**. For the virtualized path that caches a 0 that later measurements
+ * don't compensate for while scrolling up; for the plain path it corrupts the anchor's captured
+ * offset, producing a wrong restore once the row actually grows. Either way, the fix is the same:
+ * don't trust the layout until it's real.
  *
  * So readiness is awaited from real signals rather than polled:
  *  - an un-upgraded custom element → `customElements.whenDefined()`
@@ -17,17 +27,20 @@
  *  - a hidden subtree, or a custom element still filling in → parked on a ResizeObserver, which
  *    fires the moment it gains a box
  *
- * Measurement itself always happens in the animation frame, so it stays batched regardless of which
+ * The callback itself always fires in the animation frame, so it stays batched regardless of which
  * signal woke it up.
  */
 export class RowMeasurer {
-  /** @type {{virtualizer: any}} */
-  #list;
   /** @type {() => Iterable<HTMLElement>} */
   #rows;
+  /** @type {(row: HTMLElement, index: number) => void} */
+  #onRowReady;
+  /** @type {() => void} */
+  #onRelease;
   /** @type {() => void} */
   #afterMeasure;
-  /** el -> index it was last measured at. @type {WeakMap<Element, number>} */
+  #recheckOnIndexChange = true;
+  /** el -> index it was last accounted for at. @type {WeakMap<Element, number>} */
   #measured = new WeakMap();
   /** rows with a readiness promise in flight. @type {WeakSet<Element>} */
   #awaiting = new WeakSet();
@@ -42,16 +55,23 @@ export class RowMeasurer {
   #disposed = false;
 
   /**
-   * @param {{virtualizer: any}} list
-   * @param {{rows: () => Iterable<HTMLElement>, afterMeasure: () => void}} config
+   * @param {{
+   *   rows: () => Iterable<HTMLElement>,
+   *   onRowReady: (row: HTMLElement, index: number) => void,
+   *   onRelease?: () => void,
+   *   afterMeasure: () => void,
+   *   recheckOnIndexChange?: boolean,
+   * }} config
    */
-  constructor(list, config) {
-    this.#list = list;
+  constructor(config) {
     this.#rows = config.rows;
+    this.#onRowReady = config.onRowReady;
+    this.#onRelease = config.onRelease ?? (() => {});
     this.#afterMeasure = config.afterMeasure;
+    this.#recheckOnIndexChange = config.recheckOnIndexChange ?? true;
   }
 
-  /** Queues a measurement pass for the next animation frame; a no-op while one's already pending. */
+  /** Queues a check pass for the next animation frame; a no-op while one's already pending. */
   schedule() {
     if (this.#disposed || this.#frame !== null) return;
     this.#frame = requestAnimationFrame(() => {
@@ -61,23 +81,26 @@ export class RowMeasurer {
     });
   }
 
-  /** Measures every ready, not-yet-measured-at-its-current-index row. */
+  /** Calls back for every ready, not-yet-accounted-for-at-its-current-index row. */
   #measure() {
-    const virtualizer = this.#list.virtualizer;
     /** @type {[HTMLElement, number][]} */
     const todo = [];
 
-    // Two passes on purpose: `measureElement` can write `scrollTop` (the virtualizer compensating
-    // for a size change), which invalidates the layout reads below. Collect first, measure after.
+    // Two passes on purpose: `onRowReady` (e.g. the virtualizer's `measureElement`) can write
+    // `scrollTop` to compensate for a size change, which invalidates the layout reads below.
+    // Collect first, call back after.
     for (const row of this.#rows()) {
       const index = Number(row.dataset.index);
-      if (this.#measured.get(row) === index) continue;
+      const accounted = this.#recheckOnIndexChange
+        ? this.#measured.get(row) === index
+        : this.#measured.has(row);
+      if (accounted) continue;
       if (this.#isReady(row)) todo.push([row, index]);
     }
 
     for (const [row, index] of todo) {
       this.#measured.set(row, index);
-      virtualizer.measureElement(row);
+      this.#onRowReady(row, index);
     }
   }
 
@@ -115,8 +138,9 @@ export class RowMeasurer {
 
   /**
    * `checkVisibility` distinguishes "has no box" from "laid out but zero tall", which
-   * `offsetHeight` alone cannot. The fallback probe works because rows are absolutely positioned,
-   * so `offsetParent` is only null when an ancestor is `display: none`.
+   * `offsetHeight` alone cannot. The fallback probe works for both list strategies' row positioning
+   * (absolute for the virtualized path, static for `noVirtualization`) — `offsetParent` is null when
+   * an ancestor is `display: none`, regardless of the row's own `position`.
    * @param {HTMLElement} row
    */
   #isVisible(row) {
@@ -194,12 +218,13 @@ export class RowMeasurer {
   }
 
   /**
-   * Drops the virtualizer's ResizeObserver registrations for rows that have left the DOM. Its
-   * element cache holds every row it ever measured, and this is the only call that prunes it.
-   * Driven by the host's row `ref`, which fires exactly when a row is removed.
+   * Calls `onRelease` (e.g. the virtualizer's own `measureElement(null)`, dropping its element cache
+   * — a no-op for a caller with nothing to release) and drops this instance's own ResizeObserver
+   * registrations for rows that have left the DOM. Driven by the host's row `ref`, which fires
+   * exactly when a row is removed.
    */
   releaseRows() {
-    this.#list.virtualizer.measureElement(null);
+    this.#onRelease();
     if (!this.#observer) return;
     // a parked row that left the DOM would otherwise be retained by the observer for the life of
     // this instance

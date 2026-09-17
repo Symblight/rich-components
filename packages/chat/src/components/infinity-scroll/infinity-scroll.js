@@ -25,6 +25,7 @@ export class ChxInfinityScroll extends LitElement {
     useScrollendEvent: { type: Boolean, attribute: "use-scrollend-event" },
     scrollBehavior: { type: String, attribute: "scroll-behavior" },
     contentAlign: { type: String, attribute: "content-align", reflect: true },
+    noVirtualization: { type: Boolean, attribute: "no-virtualization", reflect: true },
     buffer: { type: Number },
     hasMore: { type: Boolean },
     loading: { type: Boolean },
@@ -41,6 +42,8 @@ export class ChxInfinityScroll extends LitElement {
   #controller;
   /** @type {HTMLElement | undefined} */
   #scrollElement;
+  /** @type {HTMLElement | undefined} */
+  #canvasElement;
 
   /** `ref()` fires only on create/remove; `undefined` means the row left the DOM. @param {Element | undefined} row */
   #rowRef = (row) => {
@@ -87,6 +90,10 @@ export class ChxInfinityScroll extends LitElement {
     /** `"start"` rests a short list at the top, `"end"` at the bottom. @type {"start" | "end"} */
     this.contentAlign = "end";
 
+    /** Real-DOM mode — every row renders in full, in normal document flow, no windowing/measurement.
+     *  See `.claude/plans/messages/no-virtualization.md`. @type {boolean} */
+    this.noVirtualization = false;
+
     /** px from the bottom still counting as "at the bottom". @type {number} */
     this.buffer = 150;
 
@@ -120,6 +127,8 @@ export class ChxInfinityScroll extends LitElement {
 
     this.#controller = new InfinityScrollController(this, {
       getScrollElement: () => this.#scrollElement,
+      getCanvasElement: () => this.#canvasElement,
+      getNoVirtualization: () => this.noVirtualization,
       getData: () => this.data,
       getItemKey: (item, index) => this.itemKey(item, index),
       getEstimateItemSize: () => this.estimateItemSize,
@@ -157,29 +166,40 @@ export class ChxInfinityScroll extends LitElement {
     this.#scrollElement = /** @type {HTMLElement | undefined} */ (el);
   };
 
+  /** @param {Element | undefined} el */
+  #setCanvasElement = (el) => {
+    this.#canvasElement = /** @type {HTMLElement | undefined} */ (el);
+  };
+
   /**
-   * Scrolls to a specific item index — forwarded straight through to the virtualizer.
+   * Scrolls to a specific item index — forwarded to whichever strategy is active.
    * @param {number} index
    * @param {{align?: "auto" | "start" | "center" | "end", behavior?: "auto" | "smooth" | "instant"}} [options]
    */
   scrollToIndex(index, options) {
-    this.#controller.virtualizer.scrollToIndex(index, options);
+    this.#controller.scrollToIndex(index, options);
   }
 
   /**
    * Jump to the bottom (clears padding + `footer`) and fire `chx-scroll-to-bottom`.
-   * `virtualizer.scrollToEnd()` only knows about virtualized rows — it aligns the *last row* with
-   * the viewport edge, oblivious to any non-virtualized trailing content in the `footer` slot (e.g.
-   * a typing/streaming indicator). Following it with a plain `scrollTop = scrollHeight` snap corrects
-   * for that: `scrollHeight` is a real DOM measurement that already includes the footer, no
-   * virtualizer involvement needed. A no-op in the common no-footer case (both already agree on the
-   * same offset), so this stays cheap and doesn't need a conditional.
    * @param {"auto" | "smooth" | "instant"} [behavior]
    */
   scrollToBottom(behavior) {
     const resolvedBehavior = behavior ?? this.scrollBehavior;
-    this.#controller.virtualizer.scrollToEnd({ behavior: resolvedBehavior });
-    this.#scrollElement?.scrollTo({ top: this.#scrollElement.scrollHeight, behavior: resolvedBehavior });
+    if (this.noVirtualization) {
+      // PlainListController scrolls the real scroll element to its actual scrollHeight, which
+      // already includes the footer — no separate correction needed, unlike the virtualized branch.
+      this.#controller.plainList.scrollToBottom(resolvedBehavior);
+    } else {
+      // virtualizer.scrollToEnd() only knows about virtualized rows — it aligns the *last row* with
+      // the viewport edge, oblivious to any non-virtualized trailing content in the `footer` slot
+      // (e.g. a typing/streaming indicator). Following it with a plain `scrollTop = scrollHeight`
+      // snap corrects for that: `scrollHeight` is a real DOM measurement that already includes the
+      // footer. A no-op in the common no-footer case (both already agree on the same offset), so
+      // this stays cheap and doesn't need a conditional.
+      this.#controller.virtualizer.scrollToEnd({ behavior: resolvedBehavior });
+      this.#scrollElement?.scrollTo({ top: this.#scrollElement.scrollHeight, behavior: resolvedBehavior });
+    }
     this.dispatchEvent(new CustomEvent("chx-scroll-to-bottom", { bubbles: true, composed: true }));
   }
 
@@ -190,16 +210,21 @@ export class ChxInfinityScroll extends LitElement {
    * @returns {number | undefined}
    */
   getScrollOffset() {
+    if (this.noVirtualization) return this.#controller.plainList.getScrollOffset();
     return this.#controller.virtualizer.scrollOffset ?? undefined;
   }
 
   /**
-   * Scrolls to a specific pixel offset — the counterpart to `getScrollOffset()`, forwarded straight
-   * through to the virtualizer.
+   * Scrolls to a specific pixel offset — the counterpart to `getScrollOffset()`, forwarded to
+   * whichever strategy is active.
    * @param {number} offset
    * @param {{align?: "auto" | "start" | "center" | "end", behavior?: "auto" | "smooth" | "instant"}} [options]
    */
   scrollToOffset(offset, options) {
+    if (this.noVirtualization) {
+      this.#controller.plainList.scrollToOffset(offset, options);
+      return;
+    }
     this.#controller.virtualizer.scrollToOffset(offset, options);
   }
 
@@ -214,8 +239,12 @@ export class ChxInfinityScroll extends LitElement {
   }
 
   render() {
-    const virtualizer = this.#controller.virtualizer;
-    const rows = virtualizer.getVirtualItems();
+    const noVirtualization = this.noVirtualization;
+    // plain mode renders every item, in full, in document order — no windowed subset, no offset math
+    const rows = noVirtualization
+      ? this.data.map((item, index) => ({ key: this.itemKey(item, index), index, start: 0 }))
+      : this.#controller.virtualizer.getVirtualItems();
+    const canvasHeight = noVirtualization ? undefined : this.#controller.virtualizer.getTotalSize();
 
     return html`
       <div
@@ -231,7 +260,8 @@ export class ChxInfinityScroll extends LitElement {
             class="infinity-scroll__canvas"
             part="viewport"
             role="list"
-            style="height: ${virtualizer.getTotalSize()}px;"
+            style=${canvasHeight === undefined ? nothing : `height: ${canvasHeight}px;`}
+            ${ref(this.#setCanvasElement)}
           >
             ${repeat(
               rows,
@@ -248,7 +278,7 @@ export class ChxInfinityScroll extends LitElement {
                     data-index=${row.index}
                     aria-setsize=${this.data.length}
                     aria-posinset=${row.index + 1}
-                    style="transform: translateY(${row.start}px);"
+                    style=${noVirtualization ? nothing : `transform: translateY(${row.start}px);`}
                     ${ref(this.#rowRef)}
                   >
                     ${this.renderItem(value, row.index)}

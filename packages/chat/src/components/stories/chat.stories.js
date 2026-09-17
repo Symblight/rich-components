@@ -703,6 +703,53 @@ export const Pagination = {
 };
 
 /**
+ * Same as `Pagination` above, with `no-virtualization` set on `chx-chat` — see
+ * `.claude/plans/messages/no-virtualization.md` for the design doc this attribute is specced in.
+ */
+/** @type {Story} */
+export const PaginationNoVirtualization = {
+  render: () => html`
+    <div
+      class="pagination-story"
+      style="height: 500px; display: flex; flex-direction: column; gap: 0.5rem;"
+      @click=${(/** @type {MouseEvent} */ event) => {
+        if (!(/** @type {HTMLElement} */ (event.target).closest(".pagination-story__load-more")))
+          return;
+        const container = /** @type {HTMLElement} */ (event.currentTarget);
+        /** @type {(HTMLElement & {loadMoreHistory: () => Promise<void>}) | null} */ (
+          container.querySelector("chx-chat")
+        )?.loadMoreHistory();
+      }}
+    >
+      <md-button
+        class="pagination-story__load-more"
+        variant="outlined"
+        style="align-self: flex-start;"
+      >
+        Load older messages
+      </md-button>
+      <chx-chat
+        no-virtualization
+        .userId=${"me"}
+        .adapter=${createPaginatedAdapter()}
+        style="flex: 1; min-height: 0;"
+      >
+        <chx-message-list slot="message-list">
+          <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
+          <chx-scroll-to-bottom-affordance
+            slot="scroll-to-bottom"
+          ></chx-scroll-to-bottom-affordance>
+        </chx-message-list>
+        <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
+          <md-button slot="actions" variant="text">Opus 4.8</md-button>
+          <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+        </chx-message-composer>
+      </chx-chat>
+    </div>
+  `,
+};
+
+/**
  * `chx-loading-history` is only ever touched directly to customize it — `Pagination` above shows it
  * needs no wiring at all for the default look. Here the app slots its own instance with two
  * customizations at once: `delay="800"` (ms to wait, once connected, before actually rendering —

@@ -3,9 +3,18 @@ const LOAD_THRESHOLD = 450;
 
 /**
  * Decides *when* to ask for an older page. Fetching itself is the consumer's `onLoadMore` — awaited
- * directly (same contract as v2, unlike v1's fire-and-forget `chx-load-more` event), so a page
- * shorter than the viewport can keep auto-chaining until it either fills the view or the source
- * reports `hasMore: false`. Owns `loading`; the host mirrors it for rendering.
+ * directly (same contract as v2, unlike v1's fire-and-forget `chx-load-more` event). Owns `loading`;
+ * the host mirrors it for rendering.
+ *
+ * Does **not** auto-chain another `maybeLoad()` after a load completes, even for a page that leaves
+ * `scrollTop` still under `LOAD_THRESHOLD` (e.g. one shorter than the viewport) — an earlier version
+ * did, via its own `requestAnimationFrame(() => this.maybeLoad())`, but that re-check ran before the
+ * list's own scroll-position correction for the just-landed page could land (deferred a frame or more
+ * under `noVirtualization`, see `PlainListController`), so it routinely read a stale, still-near-top
+ * `scrollTop` and fired a second, spurious fetch — confirmed live by removing exactly that block.
+ * Whatever legitimate re-check a short page still needs happens through the host's own normal
+ * `hostUpdated()`/scroll-driven `maybeLoad()` calls instead, once a real render/scroll event happens
+ * to land after the correction — not guaranteed as eager, but never spuriously wrong.
  */
 export class LoadMoreController {
   /** @type {() => Element | undefined} */
@@ -21,9 +30,7 @@ export class LoadMoreController {
   /** @type {(type: string, detail?: unknown) => void} */
   #emit;
 
-  /** @type {number | null} */
-  #frame = null;
-  /** Item count at which a load produced nothing — blocks the auto-chain until the list actually
+  /** Item count at which a load produced nothing — blocks a re-check until the list actually
    *  changes, rather than until the offset happens to move. @type {number | null} */
   #blockedAtCount = null;
   #disposed = false;
@@ -61,6 +68,7 @@ export class LoadMoreController {
     if (this.#blockedAtCount === count) return;
 
     const el = this.#getScrollElement();
+
     if ((el ? el.scrollTop : Infinity) > LOAD_THRESHOLD) return;
 
     this.#blockedAtCount = null;
@@ -84,11 +92,6 @@ export class LoadMoreController {
         this.#emit("chx-load-more-end");
         const grown = this.#getData().length > count;
         this.#blockedAtCount = grown ? null : this.#getData().length;
-        // a page shorter than the viewport has to keep filling
-        this.#frame = requestAnimationFrame(() => {
-          this.#frame = null;
-          this.maybeLoad();
-        });
       }
     }
   }
@@ -99,10 +102,8 @@ export class LoadMoreController {
     this.#blockedAtCount = null;
   }
 
-  /** Cancels any pending re-chain frame and stops `maybeLoad()` acting past this point. */
+  /** Stops `maybeLoad()` acting past this point. */
   dispose() {
     this.#disposed = true;
-    if (this.#frame !== null) cancelAnimationFrame(this.#frame);
-    this.#frame = null;
   }
 }

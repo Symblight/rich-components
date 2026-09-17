@@ -54,3 +54,14 @@
   padding: 2px 0 0;
   overflow-anchor: none;
 }
+
+/* no-virtualization: every row is real, static-flow DOM — no windowed canvas height, no per-row
+   offset transform, so the absolute-positioning-by-transform scheme (a virtualization technique)
+   has nothing to do here; rows stack in plain document order instead. */
+:host([no-virtualization]) .infinity-scroll__canvas {
+  position: static;
+}
+
+:host([no-virtualization]) .infinity-scroll__row {
+  position: static;
+}

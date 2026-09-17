@@ -42,6 +42,7 @@ export class ChxChat extends LitElement {
     chunkBatchIntervalMs: { attribute: false },
     connectionState: { type: String, reflect: true, attribute: "connection-state" },
     readTracking: { type: Boolean, attribute: "read-tracking" },
+    noVirtualization: { type: Boolean, attribute: "no-virtualization" },
   };
 
   // real private fields must be declared here, in the class body — a bare `this.#foo = ...` inside
@@ -134,6 +135,15 @@ export class ChxChat extends LitElement {
      * @type {boolean}
      */
     this.readTracking = false;
+
+    /**
+     * Opt-in real-DOM mode for `chx-message-list`'s `chx-infinity-scroll` — every message renders in
+     * full, in normal document flow, no windowing/measurement. Pushed straight through to
+     * `chx-message-list.noVirtualization` (see `pushMessageListProperties`). See
+     * `.claude/plans/messages/no-virtualization.md`.
+     * @type {boolean}
+     */
+    this.noVirtualization = false;
 
     this.#stream = new StreamController(this, {
       getMessages: () => this.#internalMessages,
@@ -717,6 +727,7 @@ export class ChxChat extends LitElement {
     list.loading = this.#pagination.loading;
     list.hasMore = this.#pagination.hasMore;
     list.readTracking = this.readTracking;
+    list.noVirtualization = this.noVirtualization;
     // chx-message-list forwards this to chx-infinity-scroll, whose LoadMoreController awaits it near
     // the top of the scroll — the sole load-more path now.
     list.onLoadMore = () => this.#pagination.loadMore();

@@ -14,10 +14,20 @@ const SCROLL_END_THRESHOLD = 8;
  * `anchorTo: "end"` + `followOnAppend` — it holds the item under the fold still when the list grows
  * at either end, and follows new tail items while pinned to the end. `StickToBottom` covers the one
  * case this doesn't: a prepend landing into a not-yet-full viewport.
+ *
+ * Under `noVirtualization` this whole strategy is inert, but *not* by simply skipping `sync()`:
+ * `VirtualizerController` registers itself on the same host, so virtual-core's `_willUpdate()` keeps
+ * running and would subscribe its own `scroll` listener + `ResizeObserver` to the scroller and write
+ * `scrollTop` back to its own stale offset — a second scroll manager fighting `PlainListController`
+ * for the same element, plus a host `requestUpdate()` on every `isScrolling` flip (a full re-render
+ * of an un-windowed list). `enabled: false` is what actually stops it: `_willUpdate()` then resolves
+ * no scroll element at all, so it never subscribes and never writes. See `sync()`.
  */
 export class VirtualListController {
   /** @type {any} */
   #controller;
+  /** @type {() => boolean} */
+  #getEnabled;
   /** @type {() => unknown[]} */
   #getData;
   /** @type {() => number} */
@@ -35,6 +45,7 @@ export class VirtualListController {
    * @param {import("lit").ReactiveControllerHost} host
    * @param {{
    *   getScrollElement: () => Element | undefined,
+   *   getEnabled: () => boolean,
    *   getData: () => unknown[],
    *   getItemKey: (item: unknown, index: number) => string | number,
    *   getEstimateItemSize: () => (item: unknown, index: number) => number,
@@ -46,6 +57,7 @@ export class VirtualListController {
    * }} config
    */
   constructor(host, config) {
+    this.#getEnabled = config.getEnabled;
     this.#getData = config.getData;
     this.#getOverscan = config.getOverscan;
     this.#getPaddingStart = config.getPaddingStart;
@@ -62,6 +74,7 @@ export class VirtualListController {
       paddingEnd: this.#getPaddingEnd(),
       scrollMargin: this.#getScrollMargin(),
       useScrollendEvent: config.getUseScrollendEvent(),
+      enabled: this.#getEnabled(),
       anchorTo: "end",
       followOnAppend: true,
       scrollEndThreshold: SCROLL_END_THRESHOLD,
@@ -73,9 +86,24 @@ export class VirtualListController {
     return this.#controller.getVirtualizer();
   }
 
-  /** must run before render, so rows lay out against the anchored offset */
+  /**
+   * Must run before render, so rows lay out against the anchored offset — and, critically, before
+   * the first `hostUpdated()`, which is where virtual-core's own `_willUpdate()` would otherwise
+   * subscribe to (and write) the scroll element. Lit runs every controller's `hostUpdate()` ahead of
+   * every `hostUpdated()`, so disabling here always lands first. Safe to call in either mode.
+   */
   sync() {
     const virtualizer = this.virtualizer;
+
+    if (!this.#getEnabled()) {
+      if (virtualizer.options.enabled || virtualizer.options.count !== 0) {
+        virtualizer.setOptions({ ...virtualizer.options, enabled: false, count: 0 });
+      }
+      // a re-enable has to look like a fresh data set, since nothing was tracked while disabled
+      this.#lastData = undefined;
+      return;
+    }
+
     const data = this.#getData();
     const count = data.length;
     const overscan = this.#getOverscan();
@@ -96,6 +124,7 @@ export class VirtualListController {
     this.#lastData = data;
 
     if (
+      !virtualizer.options.enabled ||
       virtualizer.options.count !== count ||
       virtualizer.options.overscan !== overscan ||
       virtualizer.options.paddingStart !== paddingStart ||
@@ -104,6 +133,7 @@ export class VirtualListController {
     ) {
       virtualizer.setOptions({
         ...virtualizer.options,
+        enabled: true,
         count,
         overscan,
         paddingStart,

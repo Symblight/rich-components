@@ -31,6 +31,7 @@ export class ChxMessageList extends LitElement {
     messagesLabel: { type: String, attribute: "messages-label" },
     scrollBehavior: { type: String, attribute: "scroll-behavior" },
     contentAlign: { type: String, attribute: "content-align" },
+    noVirtualization: { type: Boolean, attribute: "no-virtualization" },
     buffer: { type: Number },
     estimateItemSize: { attribute: false },
     overscan: { type: Number },
@@ -99,6 +100,10 @@ export class ChxMessageList extends LitElement {
 
     /** Forwarded straight through to chx-infinity-scroll. @type {"start" | "end"} */
     this.contentAlign = "end";
+
+    /** Forwarded straight through to chx-infinity-scroll — real-DOM mode, no windowing/measurement.
+     *  See `.claude/plans/messages/no-virtualization.md`. @type {boolean} */
+    this.noVirtualization = false;
 
     /** Forwarded straight through to chx-infinity-scroll — "at the bottom" threshold, in px. @type {number} */
     this.buffer = 150;
@@ -459,6 +464,7 @@ export class ChxMessageList extends LitElement {
                 .onItemVisible=${this.#handleItemVisible}
                 .scrollBehavior=${this.scrollBehavior}
                 .contentAlign=${this.contentAlign}
+                .noVirtualization=${this.noVirtualization}
                 .buffer=${this.buffer}
                 .hasMore=${this.hasMore}
                 .loading=${this.loading}

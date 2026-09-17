@@ -32,6 +32,9 @@ export class ChxInfinityScroll extends LitElement {
     onScrollerKeydown: { attribute: false },
     onScrollerFocusin: { attribute: false },
     onAwayFromBottomChange: { attribute: false },
+    onItemVisible: { attribute: false },
+    visibilityThreshold: { type: Number, attribute: "visibility-threshold" },
+    shouldObserveItem: { attribute: false },
   };
 
   /** @type {InfinityScrollController} */
@@ -106,6 +109,15 @@ export class ChxInfinityScroll extends LitElement {
     /** Fires on an actual flip only. @type {(awayFromBottom: boolean) => void} */
     this.onAwayFromBottomChange = () => {};
 
+    /** Fires on every `false → true` intersection transition for a row that passed `shouldObserveItem` — not fire-once. `key` is always a string (recovered from `data-item-key`), regardless of what `itemKey` itself returns. @type {(key: string) => void} */
+    this.onItemVisible = () => {};
+
+    /** Forwarded straight to the `IntersectionObserver`'s own `threshold` option. Read once, at first observation — not live. @type {number} */
+    this.visibilityThreshold = 0;
+
+    /** Consulted once, when a row would otherwise first be observed — a row that fails this is never registered with the `IntersectionObserver` at all. @type {(item: unknown, index: number) => boolean} */
+    this.shouldObserveItem = () => true;
+
     this.#controller = new InfinityScrollController(this, {
       getScrollElement: () => this.#scrollElement,
       getData: () => this.data,
@@ -120,6 +132,9 @@ export class ChxInfinityScroll extends LitElement {
       getHasMore: () => this.hasMore,
       getOnLoadMore: () => this.onLoadMore,
       onAwayFromBottomChange: (away) => this.onAwayFromBottomChange(away),
+      getVisibilityThreshold: () => this.visibilityThreshold,
+      getShouldObserveItem: () => this.shouldObserveItem,
+      onItemVisible: (key) => this.onItemVisible(key),
       rows: () =>
         this.renderRoot?.querySelectorAll(".infinity-scroll__canvas > .infinity-scroll__row") ?? [],
       emit: (type, detail) =>

@@ -2,6 +2,7 @@ import { VirtualListController } from "./VirtualListController.js";
 import { RowMeasurer } from "./RowMeasurer.js";
 import { StickToBottom } from "./StickToBottom.js";
 import { LoadMoreController } from "./LoadMoreController.js";
+import { VisibilityController } from "./VisibilityController.js";
 
 /**
  * @typedef {import("lit").ReactiveController} ReactiveController
@@ -16,6 +17,7 @@ import { LoadMoreController } from "./LoadMoreController.js";
  *  - {@link RowMeasurer}           measuring rows once their content actually exists
  *  - {@link StickToBottom}         the one edge case `anchorTo`/`followOnAppend` don't cover
  *  - {@link LoadMoreController}    asking the consumer for older items, owns `loading`
+ *  - {@link VisibilityController}  reporting rows that scrolled into view, owns `onItemVisible`
  *
  * The host supplies data/DOM getters and mirrors `loading` for rendering. No styling lives here.
  * @implements {ReactiveController}
@@ -26,6 +28,7 @@ export class InfinityScrollController {
   #measurer;
   #stick;
   #loader;
+  #visibility;
   /** @type {() => Element | undefined} */
   #getScrollElement;
   /** @type {number | null} */
@@ -72,6 +75,9 @@ export class InfinityScrollController {
    *   getHasMore: () => boolean,
    *   getOnLoadMore: () => () => Promise<unknown>,
    *   onAwayFromBottomChange: (awayFromBottom: boolean) => void,
+   *   getVisibilityThreshold: () => number,
+   *   getShouldObserveItem: () => (item: unknown, index: number) => boolean,
+   *   onItemVisible: (key: string) => void,
    *   emit: (type: string, detail?: unknown) => void,
    * }} config
    */
@@ -114,6 +120,15 @@ export class InfinityScrollController {
       emit: config.emit,
     });
 
+    this.#visibility = new VisibilityController({
+      rows: config.rows,
+      getScrollElement: config.getScrollElement,
+      getThreshold: config.getVisibilityThreshold,
+      getData: config.getData,
+      getShouldObserveItem: config.getShouldObserveItem,
+      onItemVisible: config.onItemVisible,
+    });
+
     host.addController(this);
   }
 
@@ -126,6 +141,8 @@ export class InfinityScrollController {
     this.#measurer.reset();
     // a stale pre-disconnect size snapshot must not read as "grew" once reconnected
     this.#stick.reset();
+    // the teardown disconnected the IntersectionObserver; rows must re-register
+    this.#visibility.reset();
   }
 
   hostUpdate() {
@@ -135,6 +152,7 @@ export class InfinityScrollController {
   hostUpdated() {
     this.#stick.follow();
     this.#measurer.schedule();
+    this.#visibility.schedule();
     this.#loader.maybeLoad();
     // once the list first has content, keep it welded to the bottom through the measurement settle
     if (!this.#initialPinStarted && this.#list.virtualizer.options.count > 0)
@@ -156,6 +174,7 @@ export class InfinityScrollController {
     this.#disposed = true;
     this.#measurer.dispose();
     this.#loader.dispose();
+    this.#visibility.dispose();
   }
 
   // ---------------------------------------------------------- initial pin
@@ -280,9 +299,10 @@ export class InfinityScrollController {
     this.#onAwayFromBottomChange(away);
   }
 
-  /** release the ResizeObserver registration of a row that left the DOM */
+  /** release the ResizeObserver/IntersectionObserver registration of a row that left the DOM */
   releaseRows() {
     this.#measurer.releaseRows();
+    this.#visibility.releaseRows();
   }
 
   /** drop every cached measurement (after a global style or width change) */

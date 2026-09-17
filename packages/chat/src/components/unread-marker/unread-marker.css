@@ -1,0 +1,13 @@
+:host {
+  display: flex;
+  align-items: center;
+  --chx-unread-marker-size: 0.5rem;
+  --chx-unread-marker-color: var(--md-sys-color-primary);
+}
+
+.unread-marker__dot {
+  inline-size: var(--chx-unread-marker-size);
+  block-size: var(--chx-unread-marker-size);
+  border-radius: 50%;
+  background-color: var(--chx-unread-marker-color);
+}

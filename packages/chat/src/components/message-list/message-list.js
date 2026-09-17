@@ -8,6 +8,7 @@ import "../message/message.js";
 import "../infinity-scroll/infinity-scroll.js";
 import "../loading-history/loading-history.js";
 import { FocusBehaviorController } from "../../controllers/FocusBehaviorController.js";
+import { ReadTrackingController } from "./ReadTrackingController.js";
 import styles from "./message-list.css?inline";
 
 /** @import { ChxMessage, ChxMessagePart } from "../../types/message.js" */
@@ -37,6 +38,8 @@ export class ChxMessageList extends LitElement {
     paddingEnd: { type: Number, attribute: "padding-end" },
     scrollMargin: { type: Number, attribute: "scroll-margin" },
     useScrollendEvent: { type: Boolean, attribute: "use-scrollend-event" },
+    readThreshold: { type: Number, attribute: "read-threshold" },
+    readTracking: { type: Boolean, attribute: "read-tracking" },
     typing: { type: Boolean, reflect: true, attribute: true },
     streaming: { type: Boolean, reflect: true, attribute: true },
     loading: { type: Boolean },
@@ -56,9 +59,19 @@ export class ChxMessageList extends LitElement {
   #infinityScrollElement; // set via a ref() directive in render()
   /** @type {FocusBehaviorController} */
   #focusBehavior; // roving tabindex — assigned in the constructor, below
+  /** @type {ReadTrackingController} */
+  #readTracking; // fire-once chx-message-read dedup + readState gate — assigned in the constructor, below
+  /** @type {Map<string, ChxMessage["readState"]>} */
+  #previousReadStates = new Map();
   #awayFromBottom = false;
   #itemKey = (/** @type {ChxMessage} */ message, /** @type {number} */ index) =>
     message?.id ?? index;
+  #shouldObserveItem = (/** @type {ChxMessage} */ message) =>
+    this.readTracking && message?.readState === "unread";
+  #handleItemVisible = (/** @type {string} */ key) => {
+    if (!this.readTracking) return; // toggled off mid-session — see `readTracking`'s own doc
+    this.#readTracking.handleItemVisible(key);
+  };
 
   constructor() {
     super();
@@ -108,6 +121,20 @@ export class ChxMessageList extends LitElement {
     /** Forwarded straight through to chx-infinity-scroll — read once at mount, not reactive. @type {boolean} */
     this.useScrollendEvent = false;
 
+    /** Forwarded straight through to chx-infinity-scroll's visibilityThreshold — gates `chx-message-read`. @type {number} */
+    this.readThreshold = 0;
+
+    /**
+     * Opt-in master switch for the whole read-tracking mechanism (`.claude/plans/messages/
+     * read-tracking.md`) — `false` by default. When `false`, no message is ever `observe()`d by
+     * `chx-infinity-scroll`'s `IntersectionObserver` (`#shouldObserveItem` always returns `false`), so
+     * `chx-message-read` never fires and `adapter.markRead` is never called. Does **not** affect
+     * `chx-message.unread`/the `unread-marker` slot — that half is purely `readState`-driven and stays
+     * usable independently, per this doc's own "either half usable without the other" scope note.
+     * @type {boolean}
+     */
+    this.readTracking = false;
+
     /** Gates the `typing` slot in render() — no default content. @type {boolean} */
     this.typing = false;
 
@@ -132,6 +159,12 @@ export class ChxMessageList extends LitElement {
         this.#infinityScrollElement?.requestUpdate();
       },
     });
+
+    this.#readTracking = new ReadTrackingController({
+      getMessages: () => this.messages,
+      emit: (type, detail) =>
+        this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true })),
+    });
   }
 
   /** @returns {import("lit").CSSResultGroup} */
@@ -141,6 +174,9 @@ export class ChxMessageList extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
+    // reconnect-must-reset, same posture VisibilityController/RowMeasurer already have
+    this.#readTracking.reset();
+    this.#previousReadStates = new Map();
     // slotted light-DOM child, so caught via addEventListener, not a template event binding
     this.addEventListener(
       "chx-scroll-to-bottom-click",
@@ -201,13 +237,14 @@ export class ChxMessageList extends LitElement {
     const cached = this.#messageElementCache.get(message.id);
 
     if (!this.messageElement) {
-      /** @type {HTMLElement & {own: boolean, busy: boolean, actionable: boolean, ariaLabel: string | null}} */
+      /** @type {HTMLElement & {own: boolean, busy: boolean, unread: boolean, actionable: boolean, ariaLabel: string | null}} */
       const el =
         cached && cached.key === undefined
           ? /** @type {any} */ (cached.element)
           : /** @type {any} */ (document.createElement("chx-message"));
       el.own = message.own;
       el.busy = message.parts.some((part) => part.state === "streaming");
+      el.unread = message.readState === "unread";
       el.ariaLabel = message.own ? "Your message" : "Message"; // no author display-name metadata yet
       el.style.alignSelf = message.own ? "flex-end" : "flex-start"; // infinity-scroll has no own/not-own concept
       this.#focusBehavior.ensureSeeded(message.id); // seed a tab stop before applyToElement reads it
@@ -347,6 +384,28 @@ export class ChxMessageList extends LitElement {
   }
 
   /**
+   * Diffs `readState` against the previous render so a message that just became `"read"` un-defers
+   * in `ReadTrackingController` — see its own `clearFired`.
+   * @param {import("lit").PropertyValues} changedProperties
+   */
+  willUpdate(changedProperties) {
+    if (changedProperties.has("messages")) this.#syncReadTracking();
+  }
+
+  #syncReadTracking() {
+    /** @type {Map<string, ChxMessage["readState"]>} */
+    const currentReadStates = new Map();
+    for (const message of this.messages) {
+      currentReadStates.set(message.id, message.readState);
+      const previous = this.#previousReadStates.get(message.id);
+      if (previous === "unread" && message.readState === "read") {
+        this.#readTracking.clearFired(message.id);
+      }
+    }
+    this.#previousReadStates = currentReadStates;
+  }
+
+  /**
    * `typing`/`streaming` land in chx-infinity-scroll's `footer` slot, which the virtualizer has no
    * concept of (see `scrollToBottom()`'s own doc) — appearing/growing there doesn't move
    * `chx-infinity-scroll`'s own reactive properties, so nothing auto-follows it the way a new message
@@ -395,6 +454,9 @@ export class ChxMessageList extends LitElement {
                 .paddingEnd=${this.paddingEnd}
                 .scrollMargin=${this.scrollMargin}
                 .useScrollendEvent=${this.useScrollendEvent}
+                .shouldObserveItem=${this.#shouldObserveItem}
+                .visibilityThreshold=${this.readThreshold}
+                .onItemVisible=${this.#handleItemVisible}
                 .scrollBehavior=${this.scrollBehavior}
                 .contentAlign=${this.contentAlign}
                 .buffer=${this.buffer}

@@ -13,18 +13,22 @@ export class RealtimeSyncController {
   #setTyping;
   /** @type {() => void} */
   #clearActiveConversation;
+  /** @type {(messageId: string) => void} */
+  #markMessageRead;
 
   /**
    * @param {{
    *   getActiveConversationId: () => string | undefined,
    *   setTyping: (isTyping: boolean) => void,
    *   clearActiveConversation: () => void,
+   *   markMessageRead: (messageId: string) => void,
    * }} callbacks
    */
-  constructor({ getActiveConversationId, setTyping, clearActiveConversation }) {
+  constructor({ getActiveConversationId, setTyping, clearActiveConversation, markMessageRead }) {
     this.#getActiveConversationId = getActiveConversationId;
     this.#setTyping = setTyping;
     this.#clearActiveConversation = clearActiveConversation;
+    this.#markMessageRead = markMessageRead;
   }
 
   /** @param {ChxRealtimeEvent} event */
@@ -43,8 +47,14 @@ export class RealtimeSyncController {
         // TODO(chx-conversations): remove the conversation from `conversations` itself once that
         //   component owns conversation-list mutation.
         break;
-      case "presence":
       case "read":
+        // Idempotently sets ChxMessage.readState to "read" for event.messageId — a per-message
+        // effect, not ChxConversation.readState/unreadCount, which stay parked on <chx-conversations>
+        // per realtime-sync.md; see .claude/plans/messages/read-tracking.md. Not a toggle: a
+        // ChxReadEvent is a one-way signal and can be redelivered by the transport.
+        this.#markMessageRead(event.messageId);
+        break;
+      case "presence":
       case "conversation-added":
       case "conversation-updated":
         // TODO(chx-conversations): no home on chx-chat today.

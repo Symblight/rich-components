@@ -68,6 +68,8 @@
  * @property {(message: ChxMessage, options: {signal: AbortSignal}) => Promise<ReadableStream<ChxMessageChunk | ChxMessageEnvelope> | void>} [sendMessage] - `message.conversationId` carries which
  *   conversation this send belongs to, same field as everywhere else — no separate parameter
  * @property {(replyMessageId: string, options: {signal: AbortSignal, conversationId?: string}) => Promise<ReadableStream<ChxMessageChunk | ChxMessageEnvelope> | void>} [regenerate]
+ * @property {(input: {conversationId: string | undefined, messageId: string}) => Promise<void>} [markRead] - called
+ *   fire-and-forget when a message crosses `chx-message-list`'s `readThreshold`, see `chx-message-read`
  */
 
 export {};

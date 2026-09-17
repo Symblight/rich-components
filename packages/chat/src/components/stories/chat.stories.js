@@ -17,6 +17,7 @@ import "../typing-indicator/typing-indicator.js";
 import "../streaming-indicator/streaming-indicator.js";
 import "../scroll-to-bottom-affordance/scroll-to-bottom-affordance.js";
 import "../loading-history/loading-history.js";
+import "../unread-marker/unread-marker.js";
 import "../chip/chip.js";
 import "../paste-long-text/paste-long-text.js";
 import { createSplitOnSendHandler } from "../../utils/split-message-parts.js";
@@ -321,6 +322,158 @@ export const Streaming = {
       </chx-message-composer>
     </chx-chat>
   `,
+};
+
+/**
+ * `readState`-driven read tracking, per `.claude/plans/messages/read-tracking.md`. `read-tracking` is
+ * an opt-in master switch (default `false`) — set here on `<chx-chat>`, pushed straight through to
+ * `chx-message-list.readTracking`; without it, no message is ever `observe()`d and `chx-message-read`
+ * never fires at all. Every non-own message starts `readState: "unread"` (`makeUnreadMessages` below)
+ * — a custom `messageElement` (`renderReadTrackingMessage`) slots a `<chx-unread-marker>` into
+ * `chx-message`'s own `unread-marker` slot for each one, since the built-in `<chx-message>` renderer
+ * has no hook to slot one in. Scroll up through the older messages below `chx-chat`'s default
+ * bottom-anchored view: each unread one fires `chx-message-read` the instant it crosses
+ * `read-threshold` (`0` here, the default — any pixel visible counts) *and covers every other
+ * still-unread message positioned before it* (Decision 10's coverage sweep — reading the newest message
+ * after a reset below marks the whole backlog read in one event, not one event per message), which
+ * (a) `chx-chat` turns into an `adapter.markRead` call, logged to the console below, and (b) this
+ * story's own listener uses to close the loop itself — the recommended, durable path per that doc's
+ * "Closing the loop" — by re-assigning `chx-chat.messages` with every covered id's `readState` flipped
+ * to `"read"`, which drops their dots on the very next render. The "Reset unread messages" button
+ * regenerates the whole set with fresh ids so the demo can be replayed — reusing the same ids wouldn't
+ * re-fire anything, since `ReadTrackingController`'s fire-once `Set` never resets on a `messages`
+ * reassignment (by design, see Decision 3/10 — it relies on global id uniqueness).
+ *
+ * "Simulate incoming read event" demonstrates the *other* direction — an inbound `ChxReadEvent`
+ * (`{type: "read", conversationId, messageId}`, `src/types/realtime.js`) toggling one message's
+ * `readState` via `RealtimeSyncController`, independent of the scroll-driven mechanism above. The mock
+ * `adapter.subscribe()` here just captures the `onEvent` callback `chx-chat` already passes to any real
+ * adapter's own `subscribe()` — the button calls it directly, standing in for a server push. Unlike the
+ * coverage sweep, this toggles exactly one message (the first still-unread one), not a range.
+ */
+/** @type {Story} */
+export const ReadTracking = {
+  render: () => {
+    // bumped on every "Reset unread messages" click so regenerated messages get fresh ids —
+    // ReadTrackingController's fire-once Set never resets on a `messages` reassignment (Decision
+    // 3/10, relies on global id uniqueness), so reusing the same ids would never re-fire anything.
+    let generation = 0;
+
+    /** @param {number} count */
+    function makeUnreadMessages(count) {
+      return Array.from({ length: count }, (_, i) => {
+        const own = i % 3 === 0;
+        return {
+          id: `read-msg-${generation}-${i}`,
+          authorId: own ? "me" : "assistant",
+          own,
+          createdAt: Date.now() + i,
+          status: /** @type {"sent"} */ ("sent"),
+          readState: own ? undefined : /** @type {"unread"} */ ("unread"),
+          parts: [
+            {
+              id: `read-msg-${generation}-${i}-t1`,
+              type: "text",
+              text: own
+                ? `My message #${i}`
+                : `Unread reply #${i} — scroll past me to mark me read.`,
+            },
+          ],
+        };
+      });
+    }
+
+    /** @type {import("../../types/adapter.js").ChxMessageRenderer} */
+    function renderReadTrackingMessage(message, previousElement) {
+      const el = /** @type {any} */ (previousElement ?? document.createElement("chx-message"));
+      el.own = message.own;
+      el.unread = message.readState === "unread";
+      el.ariaLabel = message.own ? "Your message" : "Message";
+      el.replaceChildren();
+      if (el.unread) {
+        const marker = document.createElement("chx-unread-marker");
+        marker.slot = "unread-marker";
+        el.append(marker);
+      }
+      for (const part of message.parts) el.append(document.createTextNode(part.text ?? ""));
+      return el;
+    }
+
+    /** @type {import("../base/chat.js").ChxChat | undefined} */
+    let chatEl;
+    // Captured from adapter.subscribe() below — this is the same onEvent chx-chat already passes to
+    // any real adapter's own subscribe(), routed to RealtimeSyncController. Simulating a call to it
+    // here stands in for a server pushing a ChxReadEvent, without a real backend.
+    /** @type {((event: {type: "read", conversationId?: string, messageId: string}) => void) | undefined} */
+    let onReadEvent;
+
+    return html`
+      <div
+        class="read-tracking-story"
+        style="height: 500px; display: flex; flex-direction: column; gap: 0.5rem;"
+        @click=${(/** @type {MouseEvent} */ event) => {
+          const target = /** @type {HTMLElement} */ (event.target);
+          if (target.closest(".read-tracking-story__reset")) {
+            if (!chatEl) return;
+            generation++;
+            chatEl.messages = makeUnreadMessages(24);
+            return;
+          }
+          if (target.closest(".read-tracking-story__simulate-read-event")) {
+            if (!chatEl || !onReadEvent) return;
+            // Toggles the first still-unread message — same messageId shape a real ChxReadEvent
+            // carries, per src/types/realtime.js.
+            const message = chatEl.messages.find((m) => m.readState === "unread");
+            if (!message) return;
+            onReadEvent({ type: "read", conversationId: message.conversationId, messageId: message.id });
+          }
+        }}
+      >
+        <div style="display: flex; gap: 0.5rem;">
+          <md-button class="read-tracking-story__reset" variant="outlined">
+            Reset unread messages
+          </md-button>
+          <md-button class="read-tracking-story__simulate-read-event" variant="outlined">
+            Simulate incoming read event
+          </md-button>
+        </div>
+        <chx-chat
+          .userId=${"me"}
+          .messages=${makeUnreadMessages(24)}
+          .adapter=${{
+            markRead: async (/** @type {{conversationId?: string, messageId: string}} */ input) => {
+              console.log("adapter.markRead", input);
+            },
+            subscribe: (/** @type {{onEvent: (event: any) => void}} */ handlers) => {
+              onReadEvent = handlers.onEvent;
+              return () => {
+                onReadEvent = undefined;
+              };
+            },
+          }}
+          read-tracking
+          style="flex: 1; min-height: 0;"
+          ${ref((el) => (chatEl = /** @type {import("../base/chat.js").ChxChat} */ (el)))}
+          @chx-message-read=${(/** @type {CustomEvent<{messageId: string, messageIds: string[]}>} */ event) => {
+            const chat = /** @type {any} */ (event.currentTarget);
+            const covered = new Set(event.detail.messageIds);
+            chat.messages = chat.messages.map((/** @type {any} */ message) =>
+              covered.has(message.id) ? { ...message, readState: "read" } : message,
+            );
+          }}
+        >
+          <chx-message-list
+            slot="message-list"
+            .messageElement=${renderReadTrackingMessage}
+            read-threshold="0"
+          ></chx-message-list>
+          <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
+            <md-button slot="actions" variant="text">Opus 4.8</md-button>
+          </chx-message-composer>
+        </chx-chat>
+      </div>
+    `;
+  },
 };
 
 /**

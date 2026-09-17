@@ -41,6 +41,7 @@ export class ChxChat extends LitElement {
     adapter: { attribute: false },
     chunkBatchIntervalMs: { attribute: false },
     connectionState: { type: String, reflect: true, attribute: "connection-state" },
+    readTracking: { type: Boolean, attribute: "read-tracking" },
   };
 
   // real private fields must be declared here, in the class body — a bare `this.#foo = ...` inside
@@ -124,6 +125,16 @@ export class ChxChat extends LitElement {
     /** @type {"connecting" | "connected" | "error" | undefined} */
     this.connectionState = undefined;
 
+    /**
+     * Opt-in master switch for read tracking (`.claude/plans/messages/read-tracking.md`) — `false` by
+     * default. Pushed straight through to `chx-message-list.readTracking` (see
+     * `pushMessageListProperties`); `chx-message-list` itself is what actually gates the
+     * `IntersectionObserver` observation and, through that, whether `chx-message-read`/
+     * `adapter.markRead` ever fire.
+     * @type {boolean}
+     */
+    this.readTracking = false;
+
     this.#stream = new StreamController(this, {
       getMessages: () => this.#internalMessages,
       getUserId: () => this.userId,
@@ -163,6 +174,7 @@ export class ChxChat extends LitElement {
           }),
         );
       },
+      markMessageRead: (messageId) => this.#markMessageRead(messageId),
     });
 
     /**
@@ -211,6 +223,7 @@ export class ChxChat extends LitElement {
       "chx-active-conversation-change",
       /** @type {EventListener} */ (this.handleActiveConversationChange),
     );
+    this.addEventListener("chx-message-read", /** @type {EventListener} */ (this.#handleMessageRead));
 
     // Uncontrolled seeds — only apply if still undefined, so a reconnect or an app-provided value no-ops.
     if (this.conversations === undefined) this.conversations = this.initialConversations ?? [];
@@ -272,6 +285,7 @@ export class ChxChat extends LitElement {
       "chx-attachments-change",
       /** @type {EventListener} */ (this.handleAttachmentsChange),
     );
+    this.removeEventListener("chx-message-read", /** @type {EventListener} */ (this.#handleMessageRead));
     for (const { controller } of this.#activeDeliveries.values()) controller.abort();
     this.#unsubscribe?.();
   }
@@ -353,6 +367,27 @@ export class ChxChat extends LitElement {
    */
   setTyping(isTyping) {
     this.#typing.setTyping(isTyping);
+  }
+
+  /**
+   * Sets `ChxMessage.readState` to `"read"` for one message — the mechanism behind an inbound
+   * `ChxReadEvent` (`adapter.subscribe`'s `onEvent`, `{type: "read", messageId}`), routed through
+   * `RealtimeSyncController`. A no-op if the message isn't found. Idempotent, not a toggle — a
+   * `ChxReadEvent` is a one-way "this was read" signal with no direction field, and a realtime
+   * transport can redeliver it; toggling would flip an already-read message back to `"unread"` on
+   * redelivery, and would turn an own/never-opted-in message's `undefined` `readState` into
+   * `"unread"` on first delivery. Per-message only — does not touch `ChxConversation.readState`/
+   * `unreadCount`, which stay parked on `<chx-conversations>` per `realtime-sync.md`; see
+   * `.claude/plans/messages/read-tracking.md`.
+   * @param {string} messageId
+   */
+  #markMessageRead(messageId) {
+    const message = this.#internalMessages.find((m) => m.id === messageId);
+    if (!message || message.readState === "read") return;
+    this.#applyMessages(
+      this.#internalMessages.map((m) => (m.id === messageId ? { ...m, readState: "read" } : m)),
+      message.conversationId,
+    );
   }
 
   /**
@@ -628,6 +663,19 @@ export class ChxChat extends LitElement {
   };
 
   /**
+   * Fire-and-forget, per Decision 5 of `.claude/plans/messages/read-tracking.md` — no
+   * `chx-messages-change`/status update depends on this call's outcome, and a rejected promise is
+   * left uncaught, same as every other fire-and-forget adapter call in this file.
+   * @param {CustomEvent<{messageId: string}>} event
+   */
+  #handleMessageRead = (event) => {
+    this.adapter?.markRead?.({
+      conversationId: this.activeConversationId,
+      messageId: event.detail.messageId,
+    });
+  };
+
+  /**
    * chx-message-list/chx-message-composer are consumer-authored light DOM,
    * each required to carry its own `slot="message-list"`/
    * `slot="message-composer"` attribute — chx-chat only orchestrates layout
@@ -668,6 +716,7 @@ export class ChxChat extends LitElement {
     list.streaming = this.#isWaitingForReply();
     list.loading = this.#pagination.loading;
     list.hasMore = this.#pagination.hasMore;
+    list.readTracking = this.readTracking;
     // chx-message-list forwards this to chx-infinity-scroll, whose LoadMoreController awaits it near
     // the top of the scroll — the sole load-more path now.
     list.onLoadMore = () => this.#pagination.loadMore();

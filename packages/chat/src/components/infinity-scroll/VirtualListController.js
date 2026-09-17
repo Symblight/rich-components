@@ -28,6 +28,8 @@ export class VirtualListController {
   #getPaddingEnd;
   /** @type {() => number} */
   #getScrollMargin;
+  /** @type {unknown[] | undefined} */
+  #lastData;
 
   /**
    * @param {import("lit").ReactiveControllerHost} host
@@ -74,11 +76,24 @@ export class VirtualListController {
   /** must run before render, so rows lay out against the anchored offset */
   sync() {
     const virtualizer = this.virtualizer;
-    const count = this.#getData().length;
+    const data = this.#getData();
+    const count = data.length;
     const overscan = this.#getOverscan();
     const paddingStart = this.#getPaddingStart();
     const paddingEnd = this.#getPaddingEnd();
     const scrollMargin = this.#getScrollMargin();
+
+    // A same-length `data` swap (e.g. a whole-array reassignment where item *identities* changed
+    // but the count didn't) doesn't change count/overscan/padding/scrollMargin, so the branch below
+    // alone would never run — but virtual-core's own measurements are memoized keyed off this
+    // `getItemKey` closure's *reference* (stable, constructed once), not what it currently returns,
+    // so already-computed rows would keep reporting stale `.key`s (pointing at items that no longer
+    // exist) until something else happens to invalidate them. Bumping `itemSizeCacheVersion` is the
+    // same mechanism `InfinityScrollController.dropMeasurements()` already uses to force virtual-core
+    // to recompute measurements — here that recompute is what re-derives each row's key fresh from
+    // `getItemKey(index)`, which reads `this.#getData()` live.
+    const dataChanged = data !== this.#lastData;
+    this.#lastData = data;
 
     if (
       virtualizer.options.count !== count ||
@@ -96,5 +111,7 @@ export class VirtualListController {
         scrollMargin,
       });
     }
+
+    if (dataChanged) virtualizer.itemSizeCacheVersion++;
   }
 }

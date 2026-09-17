@@ -1,5 +1,6 @@
 import { html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
+import { when } from "lit/directives/when.js";
 
 import styles from "./message.css?inline";
 
@@ -28,6 +29,9 @@ export class ChxMessage extends LitElement {
     // set by chx-message-list's roving-focus handling, a plain presence-based flag (not a real
     // ARIA state), matching MUI X's own data-actionable attribute
     actionable: { type: Boolean, reflect: true, attribute: "data-actionable" },
+    // gates the unread-marker slot — no default content, matches typing/streaming's "no slot, no
+    // render" contract, see chx-message-list's #renderMessage
+    unread: { type: Boolean, reflect: true },
   };
 
   constructor() {
@@ -41,6 +45,9 @@ export class ChxMessage extends LitElement {
 
     /** @type {boolean} */
     this.actionable = false;
+
+    /** @type {boolean} */
+    this.unread = false;
   }
 
   /** @returns {import("lit").CSSResultGroup} */
@@ -57,6 +64,14 @@ export class ChxMessage extends LitElement {
 
   render() {
     return html`
+      ${when(
+        this.unread,
+        () => html`
+          <div class="message__unread-marker" part="unread-marker">
+            <slot name="unread-marker"></slot>
+          </div>
+        `,
+      )}
       <div class="message__avatar" part="avatar">
         <slot name="avatar"></slot>
       </div>

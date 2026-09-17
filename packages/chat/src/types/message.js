@@ -23,6 +23,7 @@
  * @property {"sending" | "sent" | "failed" | "cancelled"} [status]
  * @property {{message: string}} [error]
  * @property {string} [replyToId]
+ * @property {"read" | "unread"} [readState]
  * @property {ChxMessagePart[]} parts
  */
 

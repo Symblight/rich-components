@@ -13,6 +13,7 @@ import { PaginationController } from "../../controllers/PaginationController.js"
 import { TypingController } from "../../controllers/TypingController.js";
 import { RealtimeSyncController } from "../../controllers/RealtimeSyncController.js";
 import { finalizeStreamingParts } from "../../stream/streamHelpers.js";
+import { DEFAULT_CONVERSATION_ID } from "../../constants.js";
 
 import styles from "./chat.css?inline";
 
@@ -43,6 +44,9 @@ export class ChxChat extends LitElement {
     connectionState: { type: String, reflect: true, attribute: "connection-state" },
     readTracking: { type: Boolean, attribute: "read-tracking" },
     noVirtualization: { type: Boolean, attribute: "no-virtualization" },
+    // Set by a bound <chx-conversations> to mark this chat as conversation-driven (multi-conversation
+    // mode), so an empty/removed selection shows the empty state instead of the default conversation.
+    conversationsPresent: { attribute: false },
   };
 
   // real private fields must be declared here, in the class body — a bare `this.#foo = ...` inside
@@ -59,6 +63,18 @@ export class ChxChat extends LitElement {
   /** @type {Map<string, number | undefined>} */
   #scrollOffsets = new Map(); // conversationId -> chx-message-list scroll offset, captured/restored on activeConversationId switch
   #pendingScrollRestore = false;
+  // Latched: true once any conversation signal appears (a bound <chx-conversations>, conversations
+  // data, or an activeConversationId). Never flips back, so removing every conversation lands in the
+  // empty state rather than silently reverting to the single-conversation default. See empty-state.md.
+  #usesConversations = false;
+  // Latched separately from #usesConversations: true once the `conversations` collection is actually
+  // being maintained (a bound <chx-conversations> owns it, or the app populated it at least once).
+  // Only then does a missing entry mean "removed" — see #isEmptyState.
+  #tracksConversations = false;
+  /** @type {{source: ChxMessage[], id: string | symbol | null, visible: ChxMessage[]} | undefined} */
+  #visibleCache; // memo for #visibleMessages, invalidated by reference on every #internalMessages write
+  /** @type {string | undefined} */
+  #unkeyedTypingId; // conversation the last conversation-less setTyping/onTyping was attributed to
   #pagination; // PaginationController, assigned in the constructor
   #typing; // TypingController, assigned in the constructor
   #realtimeSync; // RealtimeSyncController, assigned in the constructor
@@ -145,6 +161,9 @@ export class ChxChat extends LitElement {
      */
     this.noVirtualization = false;
 
+    /** Set true by a bound `<chx-conversations>` — engages multi-conversation mode. @type {boolean} */
+    this.conversationsPresent = false;
+
     this.#stream = new StreamController(this, {
       getMessages: () => this.#internalMessages,
       getUserId: () => this.userId,
@@ -173,7 +192,7 @@ export class ChxChat extends LitElement {
 
     this.#realtimeSync = new RealtimeSyncController({
       getActiveConversationId: () => this.activeConversationId,
-      setTyping: (isTyping) => this.setTyping(isTyping),
+      setTyping: (isTyping, conversationId) => this.setTyping(isTyping, conversationId),
       clearActiveConversation: () => {
         this.activeConversationId = undefined;
         this.dispatchEvent(
@@ -185,6 +204,8 @@ export class ChxChat extends LitElement {
         );
       },
       markMessageRead: (messageId) => this.#markMessageRead(messageId),
+      getConversations: () => this.conversations ?? [],
+      applyConversations: (next) => this.#applyConversations(next),
     });
 
     /**
@@ -240,6 +261,7 @@ export class ChxChat extends LitElement {
     if (this.activeConversationId === undefined) {
       this.activeConversationId = this.initialActiveConversationId;
     }
+    this.#refreshConversationMode();
 
     // Pre-upgrade property capture means `adapter` is already settled by now.
     this.#subscribedAdapter = this.adapter;
@@ -260,7 +282,7 @@ export class ChxChat extends LitElement {
     return this.adapter?.subscribe?.({
       onMessage: (message) => this.addMessage(message),
       onChunk: (item) => this.#stream.applyChunk(item),
-      onTyping: (isTyping) => this.#typing.setTyping(isTyping),
+      onTyping: (isTyping) => this.setTyping(isTyping), // unkeyed hook (no conversationId) → active conversation, see setTyping
       onEvent: (event) => this.#realtimeSync.handleEvent(event),
       onConnectionChange: (state, error) => {
         this.connectionState = state;
@@ -309,6 +331,7 @@ export class ChxChat extends LitElement {
    * the `loading`/`hasMore` it's pushed, so no promise hand-back is needed.
    */
   loadMoreHistory() {
+    if (this.#isEmptyState) return undefined;
     return this.#pagination.loadMore();
   }
 
@@ -369,14 +392,40 @@ export class ChxChat extends LitElement {
   }
 
   /**
-   * Sets whether the *other* side is currently typing/composing — shown via whatever the app has
-   * slotted into `chx-message-list`'s `typing` slot (nothing renders if it slotted nothing). No-op
-   * if unchanged from the current value. Driven either by calling this directly, or by
-   * `adapter.subscribe`'s `onTyping` handler (above), both funnel into the same `TypingController`.
+   * Sets whether the *other* side is currently typing/composing in `conversationId` (defaults to the
+   * active conversation). The active conversation's value is shown via whatever the app has slotted
+   * into `chx-message-list`'s `typing` slot; any conversation's value is announced via
+   * `chx-typing-change` (which `<chx-conversations>` uses to drive a per-row indicator). No-op if
+   * unchanged. Driven by calling this directly, by `adapter.subscribe`'s `onTyping` (active
+   * conversation only), or by an `onEvent` `typing` realtime event (any conversation) — all funnel
+   * into the same per-conversation `TypingController`.
    * @param {boolean} isTyping
+   * @param {string} [conversationId]
    */
-  setTyping(isTyping) {
-    this.#typing.setTyping(isTyping);
+  setTyping(isTyping, conversationId) {
+    if (conversationId !== undefined) {
+      this.#typing.setTyping(conversationId, isTyping);
+      return;
+    }
+    // Conversation-less signal (this method's own 1-arg form, or adapter.subscribe's onTyping, which
+    // carries no conversationId): it only ever means "in whatever is active right now", so drop the
+    // attribution the previous one latched — nothing else would ever reset it.
+    this.#clearUnkeyedTyping(this.activeConversationId);
+    this.#unkeyedTypingId = isTyping ? this.activeConversationId : undefined;
+    this.#typing.setTyping(this.activeConversationId, isTyping);
+  }
+
+  /**
+   * Clears the conversation a conversation-less `setTyping(true)` was attributed to — on the next
+   * unkeyed signal and on an `activeConversationId` switch. Keyed (realtime `typing` event) state is
+   * untouched, which is the whole point of `TypingController` being per-conversation.
+   * @param {string} [except] skip when it's still the same conversation — it's about to be re-set
+   */
+  #clearUnkeyedTyping(except) {
+    const previous = this.#unkeyedTypingId;
+    if (previous === undefined || previous === except) return;
+    this.#unkeyedTypingId = undefined;
+    this.#typing.setTyping(previous, false);
   }
 
   /**
@@ -460,6 +509,7 @@ export class ChxChat extends LitElement {
 
   /** @param {CustomEvent<{value: string, html: string, attachments: File[]}>} event */
   handleSend(event) {
+    if (this.#isEmptyState) return; // nowhere to route a message when no conversation is active
     const { value, html, attachments = [] } = event.detail;
     const conversationId = this.activeConversationId;
     const id = crypto.randomUUID();
@@ -489,12 +539,75 @@ export class ChxChat extends LitElement {
    * `#internalMessages` holds every cached conversation's messages together, tagged by
    * `conversationId` — this is what's actually rendered/announced: the active conversation's own
    * slice (or everything, when `activeConversationId` is never used — the single-conversation case).
+   * Memoized on `(#internalMessages reference, effective id)` and identity-preserving when the whole
+   * store belongs to the active conversation, because `pushMessageListProperties` re-pushes this on
+   * *every* host update — a fresh array each time would re-render chx-message-list (and re-sync the
+   * virtualizer underneath it) on unrelated changes like `loading` or `connectionState`.
    * @returns {ChxMessage[]}
    */
   get #visibleMessages() {
-    return this.activeConversationId === undefined
-      ? this.#internalMessages
-      : this.#internalMessages.filter((message) => message.conversationId === this.activeConversationId);
+    const id = this.#effectiveConversationId;
+    const source = this.#internalMessages;
+    const cached = this.#visibleCache;
+    if (cached && cached.source === source && cached.id === id) return cached.visible;
+    const filtered =
+      id == null // empty state — no active conversation
+        ? []
+        : source.filter((message) => (message.conversationId ?? DEFAULT_CONVERSATION_ID) === id);
+    const visible = filtered.length === source.length ? source : filtered;
+    this.#visibleCache = { source, id, visible };
+    return visible;
+  }
+
+  /**
+   * Latches `#usesConversations` to true the moment any conversation signal appears — a bound
+   * `<chx-conversations>`, conversations data, or an `activeConversationId`. Never flips back, so once
+   * a chat is conversation-driven, clearing/removing every conversation lands in the empty state
+   * rather than reverting to the single-conversation default. See empty-state.md.
+   */
+  #refreshConversationMode() {
+    // A sidebar owns the collection outright; an app-provided one only counts once it's non-empty,
+    // since `[]` is also what a chat driven by activeConversationId alone carries.
+    if (this.conversationsPresent || (this.conversations?.length ?? 0) > 0) {
+      this.#tracksConversations = true;
+    }
+    if (this.#usesConversations) return;
+    if (
+      this.#tracksConversations ||
+      this.initialConversations !== undefined ||
+      this.initialActiveConversationId !== undefined ||
+      this.activeConversationId != null
+    ) {
+      this.#usesConversations = true;
+    }
+  }
+
+  /**
+   * The conversation id message routing/rendering keys off: the (string) active conversation in
+   * multi-conversation mode, the `DEFAULT_CONVERSATION_ID` sentinel in single-conversation mode, or
+   * `null` in the empty state. Internal only — never stored on a message or sent to an adapter.
+   * @returns {string | symbol | null}
+   */
+  get #effectiveConversationId() {
+    if (!this.#usesConversations) return DEFAULT_CONVERSATION_ID;
+    return this.#isEmptyState ? null : this.activeConversationId ?? null;
+  }
+
+  /**
+   * True when a conversation-driven chat has no usable active conversation — the active one was
+   * cleared/removed, or points at a conversation no longer in `conversations` (bulk-removed). The
+   * single-conversation flavor never hits this (it isn't `#usesConversations`). See empty-state.md.
+   * The membership check is gated on `#tracksConversations`: `conversations` is optional picker
+   * metadata (see its own doc), so an app switching `activeConversationId` without ever populating it
+   * must not read as "that conversation doesn't exist" — only a maintained collection can say that.
+   * @returns {boolean}
+   */
+  get #isEmptyState() {
+    if (!this.#usesConversations) return false;
+    const id = this.activeConversationId;
+    if (id == null) return true;
+    if (!this.#tracksConversations) return false;
+    return !this.conversations?.some((conversation) => conversation.id === id);
   }
 
   /**
@@ -522,6 +635,18 @@ export class ChxChat extends LitElement {
     this.dispatchEvent(
       new CustomEvent("chx-messages-change", { detail: { messages }, bubbles: true, composed: true }),
     );
+  }
+
+  /**
+   * The one choke point for conversation-collection mutation — realtime add/update/remove/presence
+   * funnel through here (see RealtimeSyncController), the direct mirror of `#applyMessages`. Assigns
+   * a new array reference so Lit's identity check fires; `updated()` then dispatches
+   * `chx-conversations-change`, which `<chx-conversations>` re-reads off. See
+   * `.claude/plans/messages/conversations.md`.
+   * @param {ChxConversation[]} nextConversations
+   */
+  #applyConversations(nextConversations) {
+    this.conversations = nextConversations;
   }
 
   /**
@@ -708,6 +833,7 @@ export class ChxChat extends LitElement {
     composer.loading = this.loading;
     composer.dragging = this.dragging;
     composer.messagesEmpty = this.#internalMessages.length === 0;
+    composer.disabled = this.#isEmptyState; // no active conversation → can't compose/send
   }
 
   /**
@@ -722,15 +848,17 @@ export class ChxChat extends LitElement {
     list.messages = this.#visibleMessages;
     list.messageElement = this.messageElement;
     list.partElements = this.partElements;
-    list.typing = this.#typing.isTyping();
+    list.typing = this.#typing.isTyping(this.activeConversationId);
     list.streaming = this.#isWaitingForReply();
     list.loading = this.#pagination.loading;
-    list.hasMore = this.#pagination.hasMore;
+    list.emptyState = this.#isEmptyState;
+    // No conversation to page through in the empty state — report exhausted and swallow any load-more.
+    list.hasMore = this.#isEmptyState ? false : this.#pagination.hasMore;
     list.readTracking = this.readTracking;
     list.noVirtualization = this.noVirtualization;
     // chx-message-list forwards this to chx-infinity-scroll, whose LoadMoreController awaits it near
     // the top of the scroll — the sole load-more path now.
-    list.onLoadMore = () => this.#pagination.loadMore();
+    list.onLoadMore = () => (this.#isEmptyState ? Promise.resolve() : this.#pagination.loadMore());
   }
 
   /**
@@ -759,6 +887,10 @@ export class ChxChat extends LitElement {
   willUpdate(changedProperties) {
     super.willUpdate(changedProperties);
 
+    // Latch multi-conversation mode off any late-arriving signal (app-set conversations/active id, or
+    // a <chx-conversations> setting conversationsPresent after connect).
+    this.#refreshConversationMode();
+
     if (changedProperties.has("activeConversationId")) {
       const previousId = /** @type {string | undefined} */ (
         changedProperties.get("activeConversationId")
@@ -766,11 +898,16 @@ export class ChxChat extends LitElement {
       if (this.restoreScrollPosition && previousId !== undefined) {
         this.#scrollOffsets.set(previousId, this.messageListElement?.list?.getScrollOffset());
       }
-      // A `typing` realtime event is filtered to the active conversation on the way in (see
-      // RealtimeSyncController), but the resulting boolean has no memory of which conversation it
-      // was last true for — reset it here so a stale `true` doesn't bleed into the newly-active one.
-      this.setTyping(false);
-      if (this.activeConversationId !== undefined && !this.#pagination.hasVisited(this.activeConversationId)) {
+      // Keyed typing state survives a switch untouched (TypingController is per-conversation, so
+      // switching just reads the now-active conversation's own value) — only an unkeyed signal's
+      // attribution to the conversation being left is dropped, since it was never about that
+      // conversation in the first place. See setTyping.
+      this.#clearUnkeyedTyping();
+      if (
+        this.activeConversationId !== undefined &&
+        !this.#isEmptyState &&
+        !this.#pagination.hasVisited(this.activeConversationId)
+      ) {
         this.#pagination.loadInitial();
       }
       this.#pendingScrollRestore = this.restoreScrollPosition;
@@ -824,6 +961,15 @@ export class ChxChat extends LitElement {
       this.#unsubscribe?.();
       this.#subscribedAdapter = this.adapter;
       this.#unsubscribe = this.#subscribeAdapter();
+    }
+    if (changedProperties.has("conversations")) {
+      this.dispatchEvent(
+        new CustomEvent("chx-conversations-change", {
+          detail: { conversations: this.conversations ?? [] },
+          bubbles: true,
+          composed: true,
+        }),
+      );
     }
     this.pushComposerProperties();
     this.pushMessageListProperties();

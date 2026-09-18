@@ -1,0 +1,9 @@
+:host {
+  display: block;
+  overflow-y: auto;
+  --chx-conversations-container-color: var(--md-sys-color-surface);
+}
+
+md-list {
+  --md-list-container-color: var(--chx-conversations-container-color);
+}

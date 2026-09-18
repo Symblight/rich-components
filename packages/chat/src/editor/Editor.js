@@ -142,6 +142,11 @@ export class Editor {
     this.view.updateState(state.apply(state.tr.insertText(text)));
   }
 
+  /** @param {boolean} editable Toggles the ProseMirror view's editable state (contenteditable + input handling). */
+  setEditable(editable) {
+    this.view.setProps({ editable: () => editable });
+  }
+
   focus() {
     this.view.focus();
   }

@@ -1,0 +1,39 @@
+:host {
+  display: block;
+  --chx-conversation-item-active-background-color: var(--md-sys-color-secondary-container);
+  --chx-conversation-item-unread-title-weight: 600;
+  --chx-conversation-item-badge-color: var(--md-sys-color-primary);
+}
+
+:host([active]) md-list-item {
+  --md-list-item-container-color: var(--chx-conversation-item-active-background-color);
+  background-color: var(--chx-conversation-item-active-background-color);
+}
+
+.conversation-item__title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+:host([unread]) .conversation-item__title {
+  font-weight: var(--chx-conversation-item-unread-title-weight);
+}
+
+.conversation-item__preview {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  min-width: 0;
+}
+
+.conversation-item__last-message {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.conversation-item__badge {
+  --md-badge-color: var(--chx-conversation-item-badge-color);
+}

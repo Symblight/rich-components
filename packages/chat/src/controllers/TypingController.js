@@ -3,33 +3,44 @@
  */
 
 /**
- * Whether the *other* side is currently typing/composing — a plain boolean, not per-conversation or
- * per-user (this package has no conversation/thread/multi-participant concept). Latched so a value
- * already in effect is never re-applied or re-announced. Not a real `ReactiveController` — no
- * lifecycle hook to hang off, just a small stateful helper that calls back into `host` on change.
+ * Which conversations the *other* side is currently typing in — a set keyed by `conversationId`
+ * (`undefined`, the single-conversation flavor, is normalized to `""`). Per-conversation, so switching
+ * the active conversation just reads that conversation's own state instead of needing a reset, and a
+ * background conversation's typing can drive its own sidebar row. Still not per-*user* — multiple
+ * simultaneous typers in one conversation collapse to a single boolean per conversation (the remaining
+ * TODO, see realtime-sync.md). Latched per conversation so a value already in effect is never
+ * re-applied or re-announced. Not a real `ReactiveController` — just a small stateful helper that
+ * calls back into `host` on change.
  */
 export class TypingController {
   /** @type {ReactiveControllerHost & EventTarget} */
   #host;
-  #typing = false;
+  /** @type {Set<string>} */
+  #typing = new Set();
 
   /** @param {ReactiveControllerHost & EventTarget} host */
   constructor(host) {
     this.#host = host;
   }
 
-  /** Whether the other side is currently typing. */
-  isTyping() {
-    return this.#typing;
+  /** @param {string} [conversationId] @returns {boolean} */
+  isTyping(conversationId) {
+    return this.#typing.has(conversationId ?? "");
   }
 
-  /** @param {boolean} isTyping */
-  setTyping(isTyping) {
-    if (isTyping === this.#typing) return;
-    this.#typing = isTyping;
+  /** @param {string | undefined} conversationId @param {boolean} isTyping */
+  setTyping(conversationId, isTyping) {
+    const key = conversationId ?? "";
+    if (isTyping === this.#typing.has(key)) return;
+    if (isTyping) this.#typing.add(key);
+    else this.#typing.delete(key);
     this.#host.requestUpdate();
     this.#host.dispatchEvent(
-      new CustomEvent("chx-typing-change", { detail: { typing: isTyping }, bubbles: true, composed: true }),
+      new CustomEvent("chx-typing-change", {
+        detail: { typing: isTyping, conversationId },
+        bubbles: true,
+        composed: true,
+      }),
     );
   }
 }

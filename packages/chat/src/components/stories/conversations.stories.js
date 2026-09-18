@@ -32,11 +32,17 @@ const CONVERSATIONS = [
     id: "c2",
     title: "Support bot",
     participants: [makeUser("me", "user"), makeUser("Assistant", "assistant")],
+    unreadCount: 3,
+    readState: "unread",
+    lastMessagePreview: "Assistant: Happy to help with that.",
   },
   {
     id: "c3",
     title: "Design review",
     participants: [makeUser("me", "user"), makeUser("Jordan", "user"), makeUser("Sam", "user")],
+    unreadCount: 1,
+    readState: "unread",
+    lastMessagePreview: "Jordan: Ship it 🚀",
   },
 ];
 
@@ -51,7 +57,7 @@ function formatParticipants(participants) {
 // controlled ones are provided, these two are ignored outright (see chx-chat's own doc on
 // `initialConversations`/`initialActiveConversationId`) — if either of these decoy values ever won
 // instead, it'd show up immediately (a conversation titled "Ignored" in the sidebar, or the wrong
-// `<li>` highlighted on mount).
+// row highlighted on mount).
 const DECOY_INITIAL_CONVERSATIONS = [{ id: "decoy", title: "Ignored (initialConversations)" }];
 const DECOY_INITIAL_ACTIVE_CONVERSATION_ID = "decoy";
 
@@ -72,6 +78,9 @@ function makeConversationMessage(conversationId, index) {
     own,
     createdAt: Date.now() + index,
     status: /** @type {"sent"} */ ("sent"),
+    // incoming (not-own) messages start unread, so the real read-tracking feature (chx-message-read,
+    // gated on readState === "unread") actually fires as they scroll into view — see the story doc.
+    readState: /** @type {"unread" | undefined} */ (own ? undefined : "unread"),
     parts: [
       {
         id: `${conversationId}-msg-${index}-t1`,
@@ -131,113 +140,159 @@ function createConversationsAdapter() {
 }
 
 /**
- * A consumer-authored `<ul>`/`<li>` conversation picker — deliberately *not* a built-in
- * `chx-conversations` component (not built yet) — driving `chx-chat` purely through its public API:
- * `.conversations` (this story's own `CONVERSATIONS` array, `{id, title, participants}`, just stored
- * by `chx-chat`, never fetched or interpreted by it) and the `chx-active-conversation-change` event,
- * the same "action bubbles up, chx-chat listens on itself" shape `chx-send-message` already uses. No
- * direct property/method call onto `chx-chat` is needed to switch conversations — clicking an `<li>`
- * dispatches the event with `detail: {conversationId}`, `chx-chat` picks it up and reassigns its own
- * `activeConversationId`. The active `<li>` is highlighted with plain imperative DOM (no framework
- * re-render involved), same style this file's other click-delegated stories already use.
+ * The built-in `<chx-conversations>`/`<chx-conversation-item>` sidebar, bound to `<chx-chat>` by
+ * `for="conversations-demo-chat"` (matching the chat's own `id`) — the native `<label for>` idiom.
+ * This replaces the hand-rolled `<ul>`/`<li>` picker earlier revisions of this story carried.
  *
- * `.initialConversations`/`initial-active-conversation-id` are also wired onto `chx-chat` below,
- * deliberately fed `DECOY_INITIAL_CONVERSATIONS`/`DECOY_INITIAL_ACTIVE_CONVERSATION_ID` instead of
- * the real data — since `.conversations`/`active-conversation-id` are provided on the very same
- * element, `chx-chat`'s own documented contract says the `initial*` pair must be ignored outright.
- * Kept in the template specifically to demonstrate that: if the decoy ever won, a conversation titled
- * "Ignored (initialConversations)" would appear in the sidebar, or the wrong `<li>` would highlight on
- * mount. Neither happens.
+ * **`chx-chat.conversations` is the single source of truth**; `<chx-conversations>` is a view synced
+ * to it. Nothing here sets the sidebar's own `.conversations` — it reads the chat's. Selection is
+ * pure `chx-active-conversation-change`: clicking a row makes `<chx-conversations>` dispatch it on the
+ * chat (which reassigns its own `activeConversationId`) and move its own highlight optimistically —
+ * no direct property poke. The header above the message list is still story-owned (`chx-chat` has no
+ * header slot), kept in sync via a `@chx-active-conversation-change` listener on `<chx-chat>` that now
+ * fires for **both** directions: a user click (dispatched on the chat by the sidebar) and a realtime
+ * `conversation-removed` clearing the active conversation (dispatched by `chx-chat` itself).
+ *
+ * `.initialConversations`/`initial-active-conversation-id` are wired onto `chx-chat` with the decoy
+ * values on purpose — since `.conversations`/`active-conversation-id` are provided on the same
+ * element, the `initial*` pair must be ignored; if a decoy ever won, "Ignored (initialConversations)"
+ * would appear in the sidebar or the wrong row would highlight on mount. Neither happens.
+ *
+ * `buildItem` is overridden below to add an initials avatar to each row (demonstrating the
+ * `chx-conversation-item` `avatar` slot + the reuse-`previousElement` contract); the default row
+ * already renders title + `lastMessagePreview` + an unread `md-badge` with no override at all.
  *
  * Each conversation keeps its own cached message history and pagination cursor (see
  * `createConversationsAdapter` above) — switching away and back doesn't refetch or lose scroll
- * position (`chx-chat`'s `restoreScrollPosition`, default `true`): scroll up in one conversation to
- * load older history, switch to another, then switch back — the scroll position and already-loaded
- * pages are exactly as you left them.
+ * position (`chx-chat`'s `restoreScrollPosition`, default `true`).
  *
- * The header above the message list is likewise entirely story-owned — `chx-chat` has no header
- * concept or slot for one, so it's just a plain sibling `<div>` above it, kept in sync with the
- * active conversation the same imperative way the `<li>` highlight is: updated directly inside the
- * click handler, off the same `CONVERSATIONS` lookup, no reactive re-render involved.
+ * Row previews are kept fresh by writing `lastMessagePreview` back onto `chx-chat.conversations`
+ * (the source of truth): `chx-messages-change` (the active conversation's own slice) patches the
+ * matching conversation and reassigns the array, which fires `chx-conversations-change` and re-renders
+ * the sidebar. A conversation only updates once visited — `chx-messages-change` only fires for the
+ * displayed conversation (a real app wanting previews for unvisited ones sets `lastMessagePreview`
+ * from the backend, e.g. via a `conversation-updated` realtime event). Switching into an
+ * already-cached conversation also resyncs its preview from the now-visible messages, since a plain
+ * switch isn't itself a message mutation.
  *
- * Each `<li>`'s preview line (last message + author) is synced off the real public
- * `chx-messages-change` event instead — `detail.messages` is always the *active* conversation's own
- * slice (see `chat.js`'s `#visibleMessages`), so the handler below reads `chatEl.activeConversationId`
- * to know which `<li>` to update, not the event itself. This also means a conversation's preview only
- * ever updates once you've actually visited it at least once — `chx-messages-change` only fires for
- * the conversation currently being displayed, there's no cross-conversation broadcast of it (a real
- * app wanting previews for *unvisited* conversations would need a separate summary fetch, e.g. via
- * `listConversations`, not this event) — a known, deliberate simplification for this demo. The click
- * handler additionally resyncs the just-selected `<li>`'s own preview straight from
- * `chatEl.messageListElement.messages` right after the switch — needed because *switching into* an
- * already-cached conversation isn't itself a mutation, so `chx-messages-change` correctly doesn't
- * fire for it; without this, a conversation flooded with messages while backgrounded (see "Start
- * flood chats" below) would show stale/empty previews even after you click into it and see the
- * messages are actually there.
+ * **Unread badges are driven by the real read-tracking feature, not a standalone counter.** `chx-chat`
+ * has `read-tracking` enabled and inbound (not-own) messages start `readState: "unread"`, so
+ * `chx-message-list`'s `ReadTrackingController` fires `chx-message-read` (fire-once, watermark-covered)
+ * as they scroll into view. This story listens for that and subtracts `detail.messageIds.length` from
+ * the active conversation's `unreadCount` (writing it back onto `chx-chat.conversations`) — so opening a
+ * conversation and reading it clears its badge. The reverse direction: a not-own flood message landing
+ * in a *backgrounded* conversation bumps that conversation's badge by one. `chx-chat` itself never
+ * touches `ChxConversation.unreadCount` (per read-tracking.md / realtime-sync.md, that stays app/
+ * `<chx-conversations>` territory) — this wiring is the app closing that loop.
  *
- * "Reset all chats" demonstrates the new `cache.clear()` primitive with no argument — every
- * conversation's cached messages and pagination state are dropped at once, then `refresh()` (defaults
- * to the active conversation) re-fetches just the one currently visible; the other two lazily refetch
- * the next time you switch to them, since `cache.clear()` also cleared their own `hasVisited` mark.
+ * "Reset all chats" clears every conversation's message cache (`cache.clear()`, no argument) and
+ * their previews, then `refresh()` re-fetches the visible one. "Start flood chats" pushes a bounded
+ * burst of fake inbound messages via `adapter.emit` (the story's stand-in for a backend calling
+ * `subscribe`'s `onMessage`) at random conversations — a backgrounded conversation accumulates them
+ * silently in its cache, its unread badge climbing as they arrive.
  *
- * "Start flood chats" fires a bounded burst of fake incoming messages at random conversations via
- * `adapter.emit({conversationId, ...})` — the story's own stand-in for a real backend pushing
- * through `adapter.subscribe`'s `onMessage`, the same handler `chx-chat` itself forwards straight
- * into `addMessage()` (see `chat.js`'s `#subscribeAdapter()`). A message for a conversation you're
- * not currently looking at lands silently in that conversation's cache (see `chat.js`'s
- * `#applyMessages`/background-delivery doc) without disturbing whatever's on screen. Switch to a
- * different conversation mid-flood to see this live: its messages keep accumulating in the
- * background exactly as if you'd never left.
- *
- * The three "Simulate…" buttons drive `adapter.subscribe`'s new `onEvent` handler (see
- * `.claude/plans/messages/realtime-sync.md`), via `createConversationsAdapter`'s own
- * `emitRealtimeEvent` test hook — not a real transport, just a stand-in for "the app's own socket
- * handler called `onEvent(...)`":
- * - "Simulate typing (this chat)" fires a `typing` event scoped to whichever conversation is
- *   currently active — `RealtimeSyncController` forwards it straight to the existing
- *   `chx-typing-indicator`, slotted into `chx-message-list` below, exactly as `setTyping()` would.
- * - "Simulate typing (background chat)" fires the same event for a *different* conversation and is
- *   the negative case: nothing visibly changes, since `chx-message-list` only ever renders the
- *   active conversation and `RealtimeSyncController` filters on `conversationId` before touching
- *   any state.
- * - "Simulate conversation removed" fires `conversation-removed` for the active conversation.
- *   `chx-chat` clears its own `activeConversationId` and dispatches `chx-active-conversation-change`
- *   outward (now bidirectional, see the same spec doc) — this story listens for that and clears the
- *   header/highlight the same way a real app would. The conversation deliberately **stays** in the
- *   sidebar `<ul>` afterwards: actually removing it from `conversations` is explicitly out of scope
- *   for what's implemented today (`<chx-conversations>` territory, not built yet) — only the
- *   `activeConversationId` reset is live.
+ * The "Simulate…" buttons drive `adapter.subscribe`'s `onEvent` via `emitRealtimeEvent`:
+ * - "Simulate typing" — fires a `typing` event for the active conversation. Typing is now
+ *   per-conversation in `chx-chat` (`TypingController` keyed by `conversationId`), so this single event
+ *   lights up both indicators with no story glue: the chat one (`RealtimeSyncController` →
+ *   `setTyping(isTyping, conversationId)` → `<chx-typing-indicator slot="typing">` in
+ *   `chx-message-list` for the active conversation) and the sidebar row's own `typing` slot
+ *   (`chx-chat` fires `chx-typing-change`, `chx-conversations` toggles the matching row's `typing`
+ *   property). Because it's per-conversation, switching away and back mid-typing keeps both in sync —
+ *   and a `typing` event for a *background* conversation would light only its row, not the chat.
+ * - "Simulate unread bump" — the *realtime* path to the same badge (vs. read-tracking above): a
+ *   `conversation-updated` event raising a background conversation's `unreadCount` directly; `chx-chat`
+ *   patches its own `conversations` and the sidebar badge updates live. Mimics a backend that tracks
+ *   unread counts server-side rather than deriving them from local read events.
+ * - "Simulate conversation removed" — a `conversation-removed` event for the active conversation;
+ *   `chx-chat` both clears `activeConversationId` (→ header/highlight reset) **and** removes the row
+ *   from `conversations` (now that `#applyConversations` exists), so the sidebar shrinks by one.
  */
 /** @type {Story} */
 export const ConversationsList = {
   render: () => {
-    /** @type {(import("../base/chat.js").ChxChat & {activeConversationId?: string}) | undefined} */
+    /** @type {(import("../base/chat.js").ChxChat & {activeConversationId?: string, conversations?: import("../../types/conversation.js").ChxConversation[]}) | undefined} */
     let chatEl;
     /** @type {HTMLElement | undefined} */
     let headerTitleEl;
     /** @type {HTMLElement | undefined} */
     let headerSubtitleEl;
-    /** @type {HTMLElement | undefined} */
-    let listEl;
-    /** @type {Map<string, HTMLElement>} */
-    const previewEls = new Map();
     const adapter = createConversationsAdapter();
 
-    // Only reacts to chx-chat clearing the active conversation itself (a realtime
-    // conversation-removed event, see "Simulate conversation removed" below) — a click-originated
-    // switch is already handled synchronously inside the <ul>'s own click handler further down.
+    /** @param {string} conversationId @param {string} text */
+    const setPreview = (conversationId, text) => {
+      const list = chatEl?.conversations ?? [];
+      if (!chatEl) return;
+      chatEl.conversations = list.map((c) =>
+        c.id === conversationId ? { ...c, lastMessagePreview: text } : c,
+      );
+    };
+
+    // Sidebar unreadCount is derived from the real read-tracking feature, not tracked independently:
+    // the `chx-message-read` event (fired by chx-message-list's ReadTrackingController as unread
+    // messages scroll into view) drives it down, and inbound unread messages to a backgrounded
+    // conversation drive it up. Written back onto chx-chat.conversations (the source of truth), which
+    // re-renders the badge.
+    /** @param {string} conversationId @param {number} delta */
+    const adjustUnread = (conversationId, delta) => {
+      if (!chatEl) return;
+      chatEl.conversations = (chatEl.conversations ?? []).map((c) => {
+        if (c.id !== conversationId) return c;
+        const unreadCount = Math.max(0, (c.unreadCount ?? 0) + delta);
+        return { ...c, unreadCount, readState: unreadCount > 0 ? "unread" : "read" };
+      });
+    };
+
+    // The real feature's output: `detail.messageIds` is every message this event covered (the
+    // watermark sweep), so subtract exactly that many from the active conversation's badge.
+    const handleMessageRead = (/** @type {CustomEvent<{messageId: string, messageIds: string[]}>} */ event) => {
+      const conversationId = chatEl?.activeConversationId;
+      if (!conversationId) return;
+      adjustUnread(conversationId, -(event.detail.messageIds?.length ?? 1));
+    };
+
+    /** @param {any} message */
+    const formatPreview = (message) => {
+      if (!message) return "No messages yet";
+      const author = message.own ? "You" : (message.authorId ?? "Them");
+      const text = message.parts?.find((/** @type {any} */ p) => p.text)?.text ?? "";
+      return `${author}: ${text}`;
+    };
+
+    // Fires for both directions now: a user click (the sidebar dispatches it on the chat) and a
+    // realtime conversation-removed clearing the active conversation (chx-chat dispatches it itself).
     const handleActiveConversationChange = (
       /** @type {CustomEvent<{conversationId?: string}>} */ event,
     ) => {
-      if (event.detail.conversationId !== undefined) return;
-      for (const li of Array.from(listEl?.children ?? [])) {
-        /** @type {HTMLElement} */ (li).style.background = "";
-      }
-      if (headerTitleEl) headerTitleEl.textContent = "No conversation selected";
-      if (headerSubtitleEl) headerSubtitleEl.textContent = "";
+      const id = event.detail.conversationId;
+      const conversation = chatEl?.conversations?.find((c) => c.id === id);
+      if (headerTitleEl) headerTitleEl.textContent = conversation?.title ?? "No conversation selected";
+      if (headerSubtitleEl) headerSubtitleEl.textContent = formatParticipants(conversation?.participants);
+      if (!id) return;
+      chatEl?.updateComplete.then(() => {
+        // Resync this conversation's preview from whatever's now visible — switching into an
+        // already-cached conversation isn't a message mutation, so chx-messages-change won't fire for it.
+        const messages = chatEl?.messageListElement?.messages ?? [];
+        if (messages.length) setPreview(id, formatPreview(messages[messages.length - 1]));
+        // Typing needs no story reconciliation anymore — chx-chat's TypingController is per-conversation,
+        // so switching back to a still-typing conversation restores its chat indicator on its own.
+      });
     };
 
-    const handleSimulateTyping = (/** @type {string | undefined} */ conversationId) => {
+    const handleMessagesChange = (/** @type {CustomEvent<{messages: any[]}>} */ event) => {
+      const conversationId = chatEl?.activeConversationId;
+      if (!conversationId) return;
+      const { messages } = event.detail;
+      setPreview(conversationId, formatPreview(messages[messages.length - 1]));
+    };
+
+    // Per-conversation "typing" is not a built-in feature — RealtimeSyncController only forwards a
+    // `typing` event to the global setTyping() (chx-message-list's typing slot, active conversation
+    // Typing is now per-conversation in chx-chat, so the story just emits the realtime event: chx-chat
+    // keys it by conversationId, shows the active conversation's in chx-message-list, and fires
+    // chx-typing-change (which chx-conversations turns into the matching sidebar row's `typing` slot).
+    const handleSimulateTyping = () => {
+      const conversationId = chatEl?.activeConversationId;
       if (!conversationId) return;
       adapter.emitRealtimeEvent({ type: "typing", conversationId, userId: "them", isTyping: true });
       setTimeout(
@@ -246,26 +301,21 @@ export const ConversationsList = {
       );
     };
 
+    const handleSimulateUnreadBump = () => {
+      const background = chatEl?.conversations?.find((c) => c.id !== chatEl?.activeConversationId);
+      if (!background) return;
+      adapter.emitRealtimeEvent({
+        type: "conversation-updated",
+        conversation: { id: background.id, unreadCount: (background.unreadCount ?? 0) + 1 },
+      });
+    };
+
     const handleSimulateConversationRemoved = () => {
       if (!chatEl?.activeConversationId) return;
       adapter.emitRealtimeEvent({
         type: "conversation-removed",
         conversationId: chatEl.activeConversationId,
       });
-    };
-    /** @param {any} message */
-    const formatPreview = (message) => {
-      if (!message) return "No messages yet";
-      const author = message.own ? "You" : (message.authorId ?? "Them");
-      const text = message.parts?.find((/** @type {any} */ p) => p.text)?.text ?? "";
-      return `${author}: ${text}`;
-    };
-    const handleMessagesChange = (/** @type {CustomEvent<{messages: any[]}>} */ event) => {
-      const conversationId = chatEl?.activeConversationId;
-      const previewEl = conversationId ? previewEls.get(conversationId) : undefined;
-      if (!previewEl) return;
-      const { messages } = event.detail;
-      previewEl.textContent = formatPreview(messages[messages.length - 1]);
     };
 
     /** @type {ReturnType<typeof setInterval> | undefined} */
@@ -281,7 +331,10 @@ export const ConversationsList = {
       }
       chatEl.cache.clear(); // no argument — every conversation's cache, not just the active one
       chatEl.refresh(); // re-fetches just the currently-visible conversation
-      for (const previewEl of previewEls.values()) previewEl.textContent = "No messages yet";
+      chatEl.conversations = (chatEl.conversations ?? []).map((c) => ({
+        ...c,
+        lastMessagePreview: "No messages yet",
+      }));
     };
 
     const handleStartFlood = () => {
@@ -304,6 +357,7 @@ export const ConversationsList = {
           own,
           createdAt: Date.now(),
           status: "sent",
+          readState: own ? undefined : "unread",
           parts: [
             {
               id: `${id}-t1`,
@@ -312,6 +366,11 @@ export const ConversationsList = {
             },
           ],
         });
+        // A not-own message landing in a backgrounded conversation bumps its unread badge — the
+        // active conversation's incoming messages are instead cleared by read-tracking as they show.
+        if (!own && conversation.id !== chatEl?.activeConversationId) {
+          adjustUnread(conversation.id, +1);
+        }
         if (count >= FLOOD_MESSAGE_COUNT && floodTimer) {
           clearInterval(floodTimer);
           floodTimer = undefined;
@@ -319,88 +378,60 @@ export const ConversationsList = {
       }, FLOOD_INTERVAL_MS);
     };
 
+    // buildItem override — adds an initials avatar (the chx-conversation-item `avatar` slot) on top
+    // of the default title + lastMessagePreview + unread badge, reusing the previous element.
+    const buildItem = (
+      /** @type {import("../../types/conversation.js").ChxConversation} */ conversation,
+      /** @type {HTMLElement | undefined} */ previousElement,
+    ) => {
+      const item = /** @type {any} */ (
+        previousElement instanceof HTMLElement
+          ? previousElement
+          : document.createElement("chx-conversation-item")
+      );
+      item.title = conversation.title ?? "";
+      item.lastMessage = conversation.lastMessagePreview ?? "";
+      item.unreadCount = conversation.unreadCount ?? 0;
+      item.unread = conversation.readState === "unread";
+      let avatar = item.querySelector('[slot="avatar"]');
+      if (!avatar) {
+        avatar = document.createElement("span");
+        avatar.slot = "avatar";
+        avatar.style.cssText =
+          "display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:var(--md-sys-color-primary-container);color:var(--md-sys-color-on-primary-container);font-size:0.8rem;font-weight:600;";
+        item.append(avatar);
+      }
+      avatar.textContent = (conversation.title ?? "?").slice(0, 1).toUpperCase();
+      // Fill the row's own `typing` slot once — chx-conversations toggles the row's `typing` property
+      // (off chx-chat's chx-typing-change), which gates whether this slot actually renders.
+      if (!item.querySelector('[slot="typing"]')) {
+        const typing = document.createElement("chx-typing-indicator");
+        typing.slot = "typing";
+        typing.setAttribute("value", "typing…");
+        item.append(typing);
+      }
+      return item;
+    };
+
     return html`
       <div style="display: flex; gap: 0.5rem; padding-bottom: 0.75rem; flex-wrap: wrap;">
         <md-button variant="outlined" @click=${handleResetAll}>Reset all chats</md-button>
         <md-button variant="outlined" @click=${handleStartFlood}>Start flood chats</md-button>
-        <md-button
-          variant="outlined"
-          @click=${() => handleSimulateTyping(chatEl?.activeConversationId)}
-        >
-          Simulate typing (this chat)
-        </md-button>
-        <md-button
-          variant="outlined"
-          @click=${() =>
-            handleSimulateTyping(CONVERSATIONS.find((c) => c.id !== chatEl?.activeConversationId)?.id)}
-        >
-          Simulate typing (background chat)
+        <md-button variant="outlined" @click=${handleSimulateTyping}>Simulate typing</md-button>
+        <md-button variant="outlined" @click=${handleSimulateUnreadBump}>
+          Simulate unread bump
         </md-button>
         <md-button variant="outlined" @click=${handleSimulateConversationRemoved}>
           Simulate conversation removed
         </md-button>
       </div>
-      <div style="display: flex; gap: 0; height: 500px; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; overflow: hidden;">
-        <ul
-          style="list-style: none; margin: 0; padding: 0; width: 220px; border-right: 1px solid var(--md-sys-color-outline-variant); overflow-y: auto;"
-          ${ref((el) => (listEl = /** @type {HTMLElement} */ (el)))}
-          @click=${(/** @type {MouseEvent} */ event) => {
-            const target = /** @type {HTMLElement} */ (event.target);
-            const li = /** @type {HTMLElement | null} */ (target.closest("li[data-conversation-id]"));
-            if (!li || !chatEl) return;
-            for (const sibling of Array.from(li.parentElement?.children ?? [])) {
-              /** @type {HTMLElement} */ (sibling).style.background = "";
-            }
-            li.style.background = "var(--md-sys-color-secondary-container)";
-            const conversation = CONVERSATIONS.find((c) => c.id === li.dataset.conversationId);
-            if (headerTitleEl) headerTitleEl.textContent = conversation?.title ?? "";
-            if (headerSubtitleEl) {
-              headerSubtitleEl.textContent = formatParticipants(conversation?.participants);
-            }
-            chatEl.dispatchEvent(
-              new CustomEvent("chx-active-conversation-change", {
-                detail: { conversationId: li.dataset.conversationId },
-                bubbles: true,
-                composed: true,
-              }),
-            );
-            // resyncs this <li>'s own preview from whatever's now visible — chx-messages-change
-            // doesn't fire just from switching into an already-cached conversation (see doc above),
-            // so a conversation flooded while backgrounded wouldn't otherwise update its preview
-            // until its *next* new message arrives while active
-            const conversationId = li.dataset.conversationId;
-            const previewEl = conversationId ? previewEls.get(conversationId) : undefined;
-            chatEl.updateComplete.then(() => {
-              if (!previewEl) return;
-              const messages = chatEl?.messageListElement?.messages ?? [];
-              previewEl.textContent = formatPreview(messages[messages.length - 1]);
-            });
-          }}
-        >
-          ${CONVERSATIONS.map(
-            (conversation, index) => html`
-              <li
-                data-conversation-id=${conversation.id}
-                style="padding: 0.75rem 1rem; cursor: pointer; border-bottom: 1px solid var(--md-sys-color-outline-variant); background: ${index === 0
-                  ? "var(--md-sys-color-secondary-container)"
-                  : "transparent"};"
-              >
-                <div style="font-weight: 600;">${conversation.title}</div>
-                <div style="font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant);">
-                  ${formatParticipants(conversation.participants)}
-                </div>
-                <div
-                  style="font-size: 0.75rem; color: var(--md-sys-color-on-surface-variant); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 0.125rem;"
-                  ${ref((el) => {
-                    if (el) previewEls.set(conversation.id, /** @type {HTMLElement} */ (el));
-                  })}
-                >
-                  No messages yet
-                </div>
-              </li>
-            `,
-          )}
-        </ul>
+      <div style="display: flex; gap: 0; height: 100%; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; overflow: hidden;">
+        <chx-conversations
+          for="conversations-demo-chat"
+          aria-label="Conversations"
+          style="width: 260px; border-right: 1px solid var(--md-sys-color-outline-variant);"
+          .buildItem=${buildItem}
+        ></chx-conversations>
         <div style="display: flex; flex-direction: column; flex: 1; min-width: 0;">
           <div
             style="display: flex; flex-direction: column; gap: 0.125rem; padding: 0.75rem 1rem; border-bottom: 1px solid var(--md-sys-color-outline-variant);"
@@ -417,6 +448,8 @@ export const ConversationsList = {
             >
           </div>
           <chx-chat
+            id="conversations-demo-chat"
+            read-tracking
             .userId=${"me"}
             .conversations=${CONVERSATIONS}
             active-conversation-id=${CONVERSATIONS[0].id}
@@ -425,6 +458,7 @@ export const ConversationsList = {
             .adapter=${adapter}
             style="flex: 1; min-height: 0;"
             @chx-messages-change=${handleMessagesChange}
+            @chx-message-read=${handleMessageRead}
             @chx-active-conversation-change=${handleActiveConversationChange}
             ${ref((el) => (chatEl = /** @type {import("../base/chat.js").ChxChat} */ (el)))}
           >

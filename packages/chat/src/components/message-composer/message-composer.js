@@ -14,6 +14,7 @@ export class ChxMessageComposer extends LitElement {
   /** @type {import("lit").PropertyDeclarations} */
   static properties = {
     loading: { type: Boolean, reflect: true },
+    disabled: { type: Boolean, reflect: true },
     placeholder: { type: String },
     dropHint: { type: String, attribute: "drop-hint" },
     dragging: { type: Boolean, reflect: true },
@@ -34,6 +35,9 @@ export class ChxMessageComposer extends LitElement {
 
     /** @type {boolean} */
     this.loading = false;
+
+    /** @type {boolean} Pushed down by chx-chat — true in the empty state (no active conversation). Blocks send + editing. */
+    this.disabled = false;
 
     /** @type {boolean} Pushed down by chx-chat — true while #internalMessages is empty. See pushSuggestionListProperties. */
     this.messagesEmpty = true;
@@ -283,6 +287,7 @@ export class ChxMessageComposer extends LitElement {
           .dropHint=${this.dropHint}
           .getTriggerFields=${this.#getTriggerFields}
           ?loading=${this.loading}
+          ?disabled=${this.disabled}
           ?dragging=${this.dragging}
           @chx-textbox-change=${this.#handleTextboxChange}
         >

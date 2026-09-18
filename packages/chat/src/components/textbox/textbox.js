@@ -31,6 +31,7 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     dragging: { type: Boolean, reflect: true, attribute: true },
     getTriggerFields: { attribute: false },
     loading: { type: Boolean, reflect: true, attribute: true },
+    disabled: { type: Boolean, reflect: true, attribute: true },
     simplified: { state: true },
     value: { state: true },
   };
@@ -72,6 +73,9 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
 
     /** @type {Boolean} */
     this.loading = false;
+
+    /** @type {Boolean} Pushed down from chx-message-composer — empty state: blocks send + makes the editor read-only. */
+    this.disabled = false;
 
     /** @type {String} Mirrors the editor's live value — drives the submit button's visibility. */
     this.value = "";
@@ -117,7 +121,10 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
   #mountEditor() {
     this.editor = new Editor(this.inputElement, {
       onChange: this.handleEditorChange,
-      onSubmit: () => this.closest("form")?.requestSubmit(),
+      onSubmit: () => {
+        if (this.disabled) return; // empty state — no active conversation to send into
+        this.closest("form")?.requestSubmit();
+      },
       getCommandFields: () => this.getTriggerFields(),
       onCommandSelected: this.handleCommandSelected,
       placeholder: this.placeholder,
@@ -133,6 +140,7 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
       },
     });
     this.editor.view.dom.setAttribute("aria-label", this.placeholder);
+    if (this.disabled) this.editor.setEditable(false); // disabled set before the editor mounted
     // Restore the draft across a disconnect/reconnect (e.g. the element being moved).
     if (this.value) this.editor.setText(this.value);
 
@@ -145,6 +153,9 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     super.updated(changedProperties);
     if (changedProperties.has("placeholder") && this.editor) {
       this.editor.view.dom.setAttribute("aria-label", this.placeholder);
+    }
+    if (changedProperties.has("disabled") && this.editor) {
+      this.editor.setEditable(!this.disabled);
     }
   }
 
@@ -318,10 +329,10 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
                         <div class="textbox__trailing" part="trailing">
                             <slot name="trailing"></slot>
                             ${when(
-                              this.value !== "" && !this.loading,
+                              this.value !== "" && !this.loading && !this.disabled,
                               () => html`
                                 <md-icon-button
-                                  ?disabled=${this.value === "" || this.loading}
+                                  ?disabled=${this.value === "" || this.loading || this.disabled}
                                   type="submit"
                                   .form=${this.closest("form")}
                                   variant="filled"

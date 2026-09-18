@@ -48,6 +48,18 @@
   height: 100%;
 }
 
+.message-list__empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex: 1 auto;
+  height: 100%;
+}
+
+.message-list__empty-default {
+  color: var(--md-sys-color-on-surface-variant);
+}
+
 .message-list__status {
   position: absolute;
   width: 1px;

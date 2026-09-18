@@ -26,6 +26,7 @@
  * @property {number} [unreadCount]
  * @property {"read" | "unread"} [readState]
  * @property {string} [lastMessageAt] - ISO 8601 date-time string
+ * @property {string} [lastMessagePreview] - short last-message text for the conversation-list row's supporting line
  * @property {Record<string, unknown>} [metadata] - opaque bag, chx-chat never reads or interprets it
  */
 

@@ -43,6 +43,7 @@ export class ChxMessageList extends LitElement {
     readTracking: { type: Boolean, attribute: "read-tracking" },
     typing: { type: Boolean, reflect: true, attribute: true },
     streaming: { type: Boolean, reflect: true, attribute: true },
+    emptyState: { type: Boolean, reflect: true, attribute: "empty-state" },
     loading: { type: Boolean },
     hasMore: { type: Boolean },
     onLoadMore: { attribute: false },
@@ -145,6 +146,9 @@ export class ChxMessageList extends LitElement {
 
     /** Waiting for a reply with no message yet — gates the `streaming` slot, same no-default posture as `typing` above. @type {boolean} */
     this.streaming = false;
+
+    /** No active conversation (removed / none selected) — gates the `empty` slot, which has a default. @type {boolean} */
+    this.emptyState = false;
 
     /** Forwarded straight to `chx-infinity-scroll` — pushed down from chx-chat's `PaginationController`. @type {boolean} */
     this.loading = false;
@@ -342,7 +346,9 @@ export class ChxMessageList extends LitElement {
   /** Diffs part states against the previous render's snapshot to detect a streaming start/complete edge. */
   #updateStatusText() {
     // no edge-tracking needed — role="status" only re-announces on an actual text change
-    if (this.#isInitialLoading()) {
+    if (this.emptyState) {
+      this.#statusText = "No conversation selected";
+    } else if (this.#isInitialLoading()) {
       this.#statusText = "Loading messages";
     } else if (this.#isLoadingHistory()) {
       this.#statusText = "Loading older messages";
@@ -438,13 +444,21 @@ export class ChxMessageList extends LitElement {
       )}
       <div class="message-list__status" role="status">${this.#statusText}</div>
       ${when(
-          this.#isInitialLoading(),
-          () => html`
-            <slot name="initial-loading" class="message-list__initial-loading">
-              <md-progress-circular></md-progress-circular>
-            </slot>
-          `,
-          () => html`
+        this.emptyState,
+        () => html`
+          <slot name="empty" class="message-list__empty">
+            <div class="message-list__empty-default">No conversation selected</div>
+          </slot>
+        `,
+        () =>
+          when(
+            this.#isInitialLoading(),
+            () => html`
+              <slot name="initial-loading" class="message-list__initial-loading">
+                <md-progress-circular></md-progress-circular>
+              </slot>
+            `,
+            () => html`
             <chx-infinity-scroll
                 class="message-list__infinity-scroll"
                 role="log"
@@ -478,6 +492,7 @@ export class ChxMessageList extends LitElement {
               ${when(this.typing, () => html`<slot name="typing" slot="footer"></slot>`)}
             </chx-infinity-scroll>
           `
+          )
       )}
       ${when(
         this.#isLoadingHistory(),

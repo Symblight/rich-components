@@ -47,6 +47,42 @@ export const Basic = {
   `,
 };
 
+/**
+ * The empty state — a conversation-driven chat with no active conversation (the active one was
+ * removed, or none is selected yet). Forced here by marking the chat conversation-driven
+ * (`.conversationsPresent=${true}`) while leaving `activeConversationId` unset — the same condition
+ * `chx-chat` derives after a realtime `conversation-removed` clears the active conversation, or after
+ * every conversation is removed. See `.claude/plans/messages/empty-state.md`.
+ *
+ * Two things happen automatically: `chx-message-list` renders its `empty` slot (default text
+ * "No conversation selected"), and the composer's send is disabled with the editor made read-only
+ * (no active conversation to send into). Override the placeholder by slotting your own content into
+ * `slot="empty"` on `<chx-message-list>` — shown commented-out below.
+ */
+/** @type {Story} */
+export const EmptyState = {
+  render: () => html`
+    <div
+      style="height: 480px; display: flex; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; overflow: hidden;"
+    >
+      <chx-chat .conversationsPresent=${true} style="flex: 1; min-height: 0;">
+        <chx-message-list slot="message-list">
+          <!-- Uncomment to override the default "No conversation selected":
+          <div slot="empty">Выберите беседу, чтобы начать</div>
+          -->
+        </chx-message-list>
+        <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
+          <div slot="leading">
+            <md-icon-button variant="tonal" selected> ${unsafeSVG(plus)} </md-icon-button>
+          </div>
+          <md-button slot="actions" variant="text">Opus 4.8</md-button>
+          <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+        </chx-message-composer>
+      </chx-chat>
+    </div>
+  `,
+};
+
 /** @param {number} count */
 function makeMessages(count) {
   return Array.from({ length: count }, (_, i) => {

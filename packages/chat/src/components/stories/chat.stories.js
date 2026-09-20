@@ -18,6 +18,7 @@ import "../streaming-indicator/streaming-indicator.js";
 import "../scroll-to-bottom-affordance/scroll-to-bottom-affordance.js";
 import "../loading-history/loading-history.js";
 import "../unread-marker/unread-marker.js";
+import "../divider/divider.js";
 import "../chip/chip.js";
 import "../paste-long-text/paste-long-text.js";
 import { createSplitOnSendHandler } from "../../utils/split-message-parts.js";
@@ -63,7 +64,7 @@ export const Basic = {
 export const EmptyState = {
   render: () => html`
     <div
-      style="height: 480px; display: flex; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; overflow: hidden;"
+      style="height: 100%; display: flex; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; overflow: hidden;"
     >
       <chx-chat .conversationsPresent=${true} style="flex: 1; min-height: 0;">
         <chx-message-list slot="message-list">
@@ -98,8 +99,8 @@ function makeMessages(count) {
           id: `msg-${i}-t1`,
           type: "text",
           text: own
-            ? `My message #${i}`
-            : `Assistant reply #${i}, a bit longer to see wrapping happen.`,
+              ? `My message #${i}`
+              : `Assistant reply #${i}, a bit longer to see wrapping happen.`,
         },
       ],
     };
@@ -126,8 +127,8 @@ function createSlowReplyAdapter() {
   let replyCount = 0;
   return {
     sendMessage: async (
-      /** @type {any} */ message,
-      /** @type {{signal: AbortSignal}} */ { signal },
+        /** @type {any} */ message,
+        /** @type {{signal: AbortSignal}} */ { signal },
     ) => {
       await new Promise((resolve) => setTimeout(resolve, 1800)); // nothing sent yet — chx-chat's own
       //   state (a delivery in flight, no reply message) is what drives `streaming`, not this story
@@ -298,13 +299,13 @@ export const Typing = {
     return html`
       <div
         class="typing-story"
-        style="height: 500px; display: flex; flex-direction: column; gap: 0.5rem;"
+        style="height: 100%; display: flex; flex-direction: column; gap: 0.5rem;"
         @click=${(/** @type {MouseEvent} */ event) => {
-          if (!(/** @type {HTMLElement} */ (event.target).closest(".typing-story__toggle-typing")))
-            return;
-          if (!chatEl) return;
-          chatEl.setTyping(!chatEl.messageListElement?.typing);
-        }}
+      if (!(/** @type {HTMLElement} */ (event.target).closest(".typing-story__toggle-typing")))
+        return;
+      if (!chatEl) return;
+      chatEl.setTyping(!chatEl.messageListElement?.typing);
+    }}
       >
         <md-button
           class="typing-story__toggle-typing"
@@ -411,8 +412,8 @@ export const ReadTracking = {
               id: `read-msg-${generation}-${i}-t1`,
               type: "text",
               text: own
-                ? `My message #${i}`
-                : `Unread reply #${i} — scroll past me to mark me read.`,
+                  ? `My message #${i}`
+                  : `Unread reply #${i} — scroll past me to mark me read.`,
             },
           ],
         };
@@ -446,24 +447,24 @@ export const ReadTracking = {
     return html`
       <div
         class="read-tracking-story"
-        style="height: 500px; display: flex; flex-direction: column; gap: 0.5rem;"
+        style="height: 100%; display: flex; flex-direction: column; gap: 0.5rem;"
         @click=${(/** @type {MouseEvent} */ event) => {
-          const target = /** @type {HTMLElement} */ (event.target);
-          if (target.closest(".read-tracking-story__reset")) {
-            if (!chatEl) return;
-            generation++;
-            chatEl.messages = makeUnreadMessages(24);
-            return;
-          }
-          if (target.closest(".read-tracking-story__simulate-read-event")) {
-            if (!chatEl || !onReadEvent) return;
-            // Toggles the first still-unread message — same messageId shape a real ChxReadEvent
-            // carries, per src/types/realtime.js.
-            const message = chatEl.messages.find((m) => m.readState === "unread");
-            if (!message) return;
-            onReadEvent({ type: "read", conversationId: message.conversationId, messageId: message.id });
-          }
-        }}
+      const target = /** @type {HTMLElement} */ (event.target);
+      if (target.closest(".read-tracking-story__reset")) {
+        if (!chatEl) return;
+        generation++;
+        chatEl.messages = makeUnreadMessages(24);
+        return;
+      }
+      if (target.closest(".read-tracking-story__simulate-read-event")) {
+        if (!chatEl || !onReadEvent) return;
+        // Toggles the first still-unread message — same messageId shape a real ChxReadEvent
+        // carries, per src/types/realtime.js.
+        const message = chatEl.messages.find((m) => m.readState === "unread");
+        if (!message) return;
+        onReadEvent({ type: "read", conversationId: message.conversationId, messageId: message.id });
+      }
+    }}
       >
         <div style="display: flex; gap: 0.5rem;">
           <md-button class="read-tracking-story__reset" variant="outlined">
@@ -477,26 +478,26 @@ export const ReadTracking = {
           .userId=${"me"}
           .messages=${makeUnreadMessages(24)}
           .adapter=${{
-            markRead: async (/** @type {{conversationId?: string, messageId: string}} */ input) => {
-              console.log("adapter.markRead", input);
-            },
-            subscribe: (/** @type {{onEvent: (event: any) => void}} */ handlers) => {
-              onReadEvent = handlers.onEvent;
-              return () => {
-                onReadEvent = undefined;
-              };
-            },
-          }}
+      markRead: async (/** @type {{conversationId?: string, messageId: string}} */ input) => {
+        console.log("adapter.markRead", input);
+      },
+      subscribe: (/** @type {{onEvent: (event: any) => void}} */ handlers) => {
+        onReadEvent = handlers.onEvent;
+        return () => {
+          onReadEvent = undefined;
+        };
+      },
+    }}
           read-tracking
           style="flex: 1; min-height: 0;"
           ${ref((el) => (chatEl = /** @type {import("../base/chat.js").ChxChat} */ (el)))}
           @chx-message-read=${(/** @type {CustomEvent<{messageId: string, messageIds: string[]}>} */ event) => {
-            const chat = /** @type {any} */ (event.currentTarget);
-            const covered = new Set(event.detail.messageIds);
-            chat.messages = chat.messages.map((/** @type {any} */ message) =>
-              covered.has(message.id) ? { ...message, readState: "read" } : message,
-            );
-          }}
+      const chat = /** @type {any} */ (event.currentTarget);
+      const covered = new Set(event.detail.messageIds);
+      chat.messages = chat.messages.map((/** @type {any} */ message) =>
+          covered.has(message.id) ? { ...message, readState: "read" } : message,
+      );
+    }}
         >
           <chx-message-list
             slot="message-list"
@@ -533,18 +534,18 @@ export const ScrollToBottomAffordance = {
     return html`
       <div
         class="scroll-to-bottom-story"
-        style="height: 500px; display: flex; flex-direction: column; gap: 0.5rem;"
+        style="height: 100%; display: flex; flex-direction: column; gap: 0.5rem;"
         @click=${(/** @type {MouseEvent} */ event) => {
-          if (
-            !(
+      if (
+          !(
               /** @type {HTMLElement} */ (event.target).closest(
-                ".scroll-to-bottom-story__scroll-up",
+                  ".scroll-to-bottom-story__scroll-up",
               )
-            )
           )
-            return;
-          chatEl?.messageListElement?.list?.scrollToIndex(0, { align: "start" });
-        }}
+      )
+        return;
+      chatEl?.messageListElement?.list?.scrollToIndex(0, { align: "start" });
+    }}
       >
         <md-button
           class="scroll-to-bottom-story__scroll-up"
@@ -620,8 +621,8 @@ function seededRandom(seed) {
 function makeSentence(seed) {
   const wordCount = 4 + Math.floor(seededRandom(seed) * 12); // 4-15 words
   const words = Array.from(
-    { length: wordCount },
-    (_, i) => WORDS[Math.floor(seededRandom(seed * 31 + i) * WORDS.length)],
+      { length: wordCount },
+      (_, i) => WORDS[Math.floor(seededRandom(seed * 31 + i) * WORDS.length)],
   );
   return `${words[0][0].toUpperCase()}${words[0].slice(1)} ${words.slice(1).join(" ")}.`;
 }
@@ -701,15 +702,15 @@ export const Pagination = {
   render: () => html`
     <div
       class="pagination-story"
-      style="height: 500px; display: flex; flex-direction: column; gap: 0.5rem;"
+      style="height: 100%; display: flex; flex-direction: column; gap: 0.5rem;"
       @click=${(/** @type {MouseEvent} */ event) => {
-        if (!(/** @type {HTMLElement} */ (event.target).closest(".pagination-story__load-more")))
-          return;
-        const container = /** @type {HTMLElement} */ (event.currentTarget);
-        /** @type {(HTMLElement & {loadMoreHistory: () => Promise<void>}) | null} */ (
-          container.querySelector("chx-chat")
-        )?.loadMoreHistory();
-      }}
+    if (!(/** @type {HTMLElement} */ (event.target).closest(".pagination-story__load-more")))
+      return;
+    const container = /** @type {HTMLElement} */ (event.currentTarget);
+    /** @type {(HTMLElement & {loadMoreHistory: () => Promise<void>}) | null} */ (
+        container.querySelector("chx-chat")
+    )?.loadMoreHistory();
+  }}
     >
       <md-button
         class="pagination-story__load-more"
@@ -747,15 +748,15 @@ export const PaginationNoVirtualization = {
   render: () => html`
     <div
       class="pagination-story"
-      style="height: 500px; display: flex; flex-direction: column; gap: 0.5rem;"
+      style="height: 100%; display: flex; flex-direction: column; gap: 0.5rem;"
       @click=${(/** @type {MouseEvent} */ event) => {
-        if (!(/** @type {HTMLElement} */ (event.target).closest(".pagination-story__load-more")))
-          return;
-        const container = /** @type {HTMLElement} */ (event.currentTarget);
-        /** @type {(HTMLElement & {loadMoreHistory: () => Promise<void>}) | null} */ (
-          container.querySelector("chx-chat")
-        )?.loadMoreHistory();
-      }}
+    if (!(/** @type {HTMLElement} */ (event.target).closest(".pagination-story__load-more")))
+      return;
+    const container = /** @type {HTMLElement} */ (event.currentTarget);
+    /** @type {(HTMLElement & {loadMoreHistory: () => Promise<void>}) | null} */ (
+        container.querySelector("chx-chat")
+    )?.loadMoreHistory();
+  }}
     >
       <md-button
         class="pagination-story__load-more"
@@ -800,15 +801,15 @@ export const LoadingHistoryCustomDelay = {
   render: () => html`
     <div
       class="pagination-story"
-      style="height: 500px; display: flex; flex-direction: column; gap: 0.5rem;"
+      style="height: 100%; display: flex; flex-direction: column; gap: 0.5rem;"
       @click=${(/** @type {MouseEvent} */ event) => {
-        if (!(/** @type {HTMLElement} */ (event.target).closest(".pagination-story__load-more")))
-          return;
-        const container = /** @type {HTMLElement} */ (event.currentTarget);
-        /** @type {(HTMLElement & {loadMoreHistory: () => Promise<void>}) | null} */ (
-          container.querySelector("chx-chat")
-        )?.loadMoreHistory();
-      }}
+    if (!(/** @type {HTMLElement} */ (event.target).closest(".pagination-story__load-more")))
+      return;
+    const container = /** @type {HTMLElement} */ (event.currentTarget);
+    /** @type {(HTMLElement & {loadMoreHistory: () => Promise<void>}) | null} */ (
+        container.querySelector("chx-chat")
+    )?.loadMoreHistory();
+  }}
     >
       <md-button
         class="pagination-story__load-more"
@@ -917,7 +918,7 @@ export const ContentAlignStart = {
       .userId=${"me"}
       .messages=${makeMessages(2)}
       .adapter=${createSlowReplyAdapter()}
-      style="height: 500px;"
+      style="height: 100%;"
     >
       <chx-message-list slot="message-list" content-align="start">
         <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
@@ -1063,6 +1064,142 @@ function renderTicketSummaryPart(part, previous) {
   return card;
 }
 
+const DAY_MS = 86_400_000;
+
+/**
+ * Messages spread across seven calendar days (six days ago … today), twelve per day, with a couple of
+ * `type: "system"` action entries ("Alex added Max…", "Sasha renamed the chat") interleaved between
+ * days. Enough content to scroll for several screens so the sticky label crosses many day boundaries.
+ * `createdAt` is strictly ascending across the whole array so ordering and the day-change comparison
+ * both hold.
+ */
+function makeDatedMessages() {
+  const now = Date.now();
+  const dayCount = 7;
+  const perDay = 12;
+  const dayBases = Array.from({ length: dayCount }, (_, d) => now - (dayCount - 1 - d) * DAY_MS);
+  const actions = {
+    1: "Alex added Max to the conversation",
+    3: "Sasha renamed the chat “Release planning”",
+  };
+  /** @type {any[]} */
+  const messages = [];
+  let n = 0;
+  dayBases.forEach((base, day) => {
+    for (let i = 0; i < perDay; i++) {
+      const own = n % 2 === 0;
+      messages.push({
+        id: `dm-${n}`,
+        authorId: own ? "me" : "assistant",
+        own,
+        createdAt: base + n * 1000, // ascending overall — day base dominates, n breaks ties
+        status: /** @type {"sent"} */ ("sent"),
+        parts: [
+          {
+            id: `dm-${n}-t1`,
+            type: "text",
+            text: own ? `My message #${n}` : `Assistant reply #${n} (day ${day + 1}).`,
+          },
+        ],
+      });
+      n++;
+    }
+    // an action divider (a system part) after the day's messages, on a couple of days
+    const action = /** @type {Record<number, string>} */ (actions)[day];
+    if (action) {
+      messages.push({
+        id: `dm-sys-${n}`,
+        authorId: "system",
+        own: false,
+        createdAt: base + n * 1000,
+        status: /** @type {"sent"} */ ("sent"),
+        parts: [{ id: `dm-sys-${n}-t1`, type: "system", text: action }],
+      });
+      n++;
+    }
+  });
+  return messages;
+}
+
+/**
+ * Row-level renderer (`messageElement`) that draws an action divider chrome-free. A `type: "system"`
+ * message renders as a bare, full-bleed `<chx-divider>` — no `<chx-message>` bubble, centered across the
+ * row (`width: 100%` sidesteps the `align-self: flex-start` `chx-message-list` forces on every row, and
+ * `chx-divider`'s own line-label-line centers the text). Every other message is built as an ordinary
+ * `<chx-message>` here, since `messageElement` replaces the built-in renderer for *all* rows. `partElements`
+ * can't do this — a part renders *inside* `chx-message`, so it inherits the bubble; escaping it needs the
+ * row-level hook. Date dividers are separate: derived and library-driven via `<chx-divider slot="divider">`.
+ * @type {import("../../types/adapter.js").ChxMessageRenderer}
+ */
+function renderDividerRow(message, previousElement) {
+  if (message.parts[0]?.type === "system") {
+    const divider = /** @type {any} */ (
+        previousElement?.tagName.toLowerCase() === "chx-divider"
+            ? previousElement
+            : document.createElement("chx-divider")
+    );
+    divider.textContent = message.parts[0].text ?? "";
+    divider.style.width = "100%";
+    return divider;
+  }
+
+  const el = /** @type {any} */ (
+      previousElement?.tagName.toLowerCase() === "chx-message"
+          ? previousElement
+          : document.createElement("chx-message")
+  );
+  el.own = message.own;
+  el.busy = message.parts.some((/** @type {any} */ part) => part.state === "streaming");
+  el.ariaLabel = message.own ? "Your message" : "Message";
+  el.replaceChildren();
+  for (const part of message.parts) {
+    if (part.html) {
+      const span = document.createElement("span");
+      span.innerHTML = part.html;
+      el.append(span);
+    } else {
+      el.append(document.createTextNode(part.text ?? ""));
+    }
+  }
+  return el;
+}
+
+/**
+ * Date dividers + action dividers across a week of history. `<chx-divider slot="divider">` on
+ * `<chx-message-list>` is the config carrier: `chx-message-list` reads its `formatDate`/
+ * `shouldShowDivider` and prepends a divider inside the first message of each calendar day (the default
+ * `formatDate` gives "Today"/"Yesterday"/a weekday). It renders nothing itself — it's discovered via a
+ * hidden slot and drives per-row insertion through `DividerController`. Adding `sticky` pins the current
+ * day's label at the top like a native sticky section header: it stays stuck while that day is in view,
+ * the next day's divider pushes it up and swaps it as you scroll (one label, no overlap — the inline
+ * divider under it is occluded), and it's **clickable** — click it to jump to that day's boundary. The
+ * "Alex added Max…"/"Sasha renamed…" rows are *not* date dividers — they're
+ * ordinary `type: "system"` messages rendered chrome-free as full-bleed `<chx-divider>`s via the
+ * row-level `messageElement` hook (`renderDividerRow` above), since a part rendered through
+ * `partElements` would inherit `chx-message`'s bubble. Remove the `<chx-divider slot="divider">` and the
+ * date dividers vanish while the action dividers stay — the date feature is inert unless the carrier is
+ * slotted. See `.claude/plans/messages/dividers.md`.
+ */
+/** @type {Story} */
+export const Dividers = {
+  render: () => html`
+    <chx-chat
+      .userId=${"me"}
+      .messages=${makeDatedMessages()}
+      .messageElement=${renderDividerRow}
+      style="height: 100%;"
+    >
+      <chx-message-list slot="message-list">
+        <chx-divider slot="divider" sticky></chx-divider>
+      </chx-message-list>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
+        <md-button slot="actions" variant="text">Opus 4.8</md-button>
+        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
+      </chx-message-composer>
+    </chx-chat>
+  `,
+};
+
 /** @type {Story} */
 export const CustomParts = {
   render: () => html`
@@ -1070,32 +1207,32 @@ export const CustomParts = {
       .userId=${"me"}
       .partElements=${{ "ticket-summary": renderTicketSummaryPart }}
       .messages=${[
+    {
+      id: "msg-1",
+      authorId: "me",
+      own: true,
+      createdAt: Date.now(),
+      status: "sent",
+      parts: [{ id: "msg-1-t1", type: "text", text: "What's the status on my last ticket?" }],
+    },
+    {
+      id: "msg-2",
+      authorId: "assistant",
+      own: false,
+      createdAt: Date.now(),
+      status: "sent",
+      parts: [
+        { id: "msg-2-t1", type: "text", text: "Here's the latest:" },
         {
-          id: "msg-1",
-          authorId: "me",
-          own: true,
-          createdAt: Date.now(),
-          status: "sent",
-          parts: [{ id: "msg-1-t1", type: "text", text: "What's the status on my last ticket?" }],
+          id: "msg-2-c1",
+          type: "ticket-summary",
+          ticketId: "SUP-4821",
+          status: "blocked",
+          summary: "Waiting on a screen recording from the customer to reproduce the issue.",
         },
-        {
-          id: "msg-2",
-          authorId: "assistant",
-          own: false,
-          createdAt: Date.now(),
-          status: "sent",
-          parts: [
-            { id: "msg-2-t1", type: "text", text: "Here's the latest:" },
-            {
-              id: "msg-2-c1",
-              type: "ticket-summary",
-              ticketId: "SUP-4821",
-              status: "blocked",
-              summary: "Waiting on a screen recording from the customer to reproduce the issue.",
-            },
-          ],
-        },
-      ]}
+      ],
+    },
+  ]}
     >
       <chx-message-list slot="message-list"></chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">

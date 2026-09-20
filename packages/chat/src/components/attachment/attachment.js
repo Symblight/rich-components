@@ -9,6 +9,7 @@ import "@symblight/wc-material/card";
 import "@symblight/wc-material/icon-button";
 import "@symblight/wc-material/icon";
 import "@symblight/wc-material/progress-circular";
+import "@symblight/wc-material/tooltip";
 
 import description from "@material-design-icons/svg/outlined/description.svg?raw";
 import close from "@material-design-icons/svg/outlined/close.svg?raw";
@@ -21,6 +22,8 @@ import errorOutline from "@material-design-icons/svg/outlined/error_outline.svg?
  */
 @customElement("chx-attachment")
 export class ChxAttachment extends LitElement {
+  #contentId = `chx-attachment-content-${crypto.randomUUID()}`;
+
   /** @type {import("lit").PropertyDeclarations} */
   static properties = {
     file: { attribute: false },
@@ -92,15 +95,14 @@ export class ChxAttachment extends LitElement {
                             </slot>`
                     }
         </div>
-        <div
-          class="attachment__content"
-          part="content"
-          title=${this.error ? this.errorLabel : this.loading ? this.loadingLabel : this.displayName}
-        >
+        <div class="attachment__content" part="content" id=${this.#contentId}>
           <slot
             >${this.error ? this.errorLabel : this.loading ? this.loadingLabel : this.displayName}</slot
           >
         </div>
+        <md-tooltip placement="bottom" for=${this.#contentId}
+          >${this.error ? this.errorLabel : this.loading ? this.loadingLabel : this.displayName}</md-tooltip
+        >
         <div class="attachment__actions" part="actions">
           <slot name="actions">
             <md-icon-button class="attachment__remove" @click=${this.handleRemoveClick}>

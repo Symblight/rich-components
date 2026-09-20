@@ -2,13 +2,17 @@ import { html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
 import { when } from "lit/directives/when.js";
 import { ref } from "lit/directives/ref.js";
+import { classMap } from "lit/directives/class-map.js";
 
 import "@symblight/wc-material/progress-circular";
 import "../message/message.js";
 import "../infinity-scroll/infinity-scroll.js";
 import "../loading-history/loading-history.js";
+import "../divider/divider.js";
 import { FocusBehaviorController } from "../../controllers/FocusBehaviorController.js";
 import { ReadTrackingController } from "./ReadTrackingController.js";
+import { DividerController } from "./DividerController.js";
+import { StickyController } from "./StickyController.js";
 import styles from "./message-list.css?inline";
 
 /** @import { ChxMessage, ChxMessagePart } from "../../types/message.js" */
@@ -55,6 +59,10 @@ export class ChxMessageList extends LitElement {
   #pendingRenderedMessageIds;
   /** @type {Set<string> | undefined} */
   #pendingRenderedPartIds;
+  /** @type {DividerController} */
+  #dividerController; // date dividers — assigned in the constructor, below
+  /** @type {StickyController} */
+  #stickyController; // floating stuck-section date label — assigned in the constructor, below
   #previousPartStates = new Map();
   #statusText = "";
   /** @type {ChxInfinityScroll | undefined} */
@@ -110,7 +118,7 @@ export class ChxMessageList extends LitElement {
     this.buffer = 150;
 
     /** Forwarded straight through to chx-infinity-scroll — content-aware pre-measurement estimate. @type {(item: ChxMessage, index: number) => number} */
-    this.estimateItemSize = (message) => this.#estimateMessageSize(message);
+    this.estimateItemSize = (message, index) => this.#estimateMessageSize(message, index);
 
     /** Forwarded straight through to chx-infinity-scroll. @type {number} */
     this.overscan = 6;
@@ -174,6 +182,15 @@ export class ChxMessageList extends LitElement {
       emit: (type, detail) =>
         this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true })),
     });
+
+    this.#dividerController = new DividerController({ getMessages: () => this.messages });
+
+    this.#stickyController = new StickyController(this, {
+      dividerController: this.#dividerController,
+      getMessages: () => this.messages,
+      getInfinityScrollElement: () => this.#infinityScrollElement,
+      getAwayFromBottom: () => this.#awayFromBottom,
+    });
   }
 
   /** @returns {import("lit").CSSResultGroup} */
@@ -209,22 +226,40 @@ export class ChxMessageList extends LitElement {
   /** @param {boolean} away */
   #handleAwayFromBottomChange = (away) => {
     this.#awayFromBottom = away;
+    this.#stickyController.handleAwayFromBottomChange(away); // back at bottom — drop the label, cancel the idle timer
     this.requestUpdate();
   };
 
+  /** Discovers the slotted `<chx-divider slot="divider">` config carrier; renders nothing itself.
+   * @param {Event} event */
+  #handleDividerSlotchange = (event) => {
+    const slot = /** @type {HTMLSlotElement} */ (event.target);
+    const element = slot
+      .assignedElements()
+      .find((node) => node.tagName.toLowerCase() === "chx-divider");
+    this.#dividerController.setElement(
+      /** @type {import("../divider/divider.js").ChxDivider | undefined} */ (element),
+    );
+    this.requestUpdate();
+    // infinity-scroll's own reactive props don't change by reference here, so force its rows to re-run
+    // #renderItem — same cross-component update-cascade gotcha FocusBehaviorController documents.
+    this.#infinityScrollElement?.requestUpdate();
+  };
+
   /** Rough pre-measurement height — text length → line count → px, cheap and approximate on purpose.
-   * @param {ChxMessage} message */
-  #estimateMessageSize(message) {
+   * @param {ChxMessage} message @param {number} index */
+  #estimateMessageSize(message, index) {
     const chars = (message.parts ?? []).reduce((sum, part) => {
       if (part.type === "attachment") return sum + 220; // attachment cards are tall and text-less
       return sum + (part.text?.length ?? part.html?.length ?? 0);
     }, 0);
     const lines = Math.max(1, Math.ceil(chars / 42)); // ~42 chars per rendered line
-    return 32 + lines * 20; // meta + padding, then line-height per line
+    const base = 32 + lines * 20; // meta + padding, then line-height per line
+    return base + this.#dividerController.estimateExtra(message, index); // divider folds into the row
   }
 
-  /** Passed to chx-infinity-scroll as `.renderItem`. @param {ChxMessage} message */
-  #renderItem = (message) => {
+  /** Passed to chx-infinity-scroll as `.renderItem`. @param {ChxMessage} message @param {number} index */
+  #renderItem = (message, index) => {
     if (!this.#pendingRenderedMessageIds) {
       this.#pendingRenderedMessageIds = new Set();
       this.#pendingRenderedPartIds = new Set();
@@ -237,11 +272,11 @@ export class ChxMessageList extends LitElement {
         this.#pendingRenderedPartIds = undefined;
       });
     }
-    return this.#renderMessage(message);
+    return this.#renderMessage(message, index);
   };
 
-  /** @param {ChxMessage} message */
-  #renderMessage(message) {
+  /** @param {ChxMessage} message @param {number} index */
+  #renderMessage(message, index) {
     /** @type {Set<string>} */ (this.#pendingRenderedMessageIds).add(message.id);
     const cached = this.#messageElementCache.get(message.id);
 
@@ -265,14 +300,14 @@ export class ChxMessageList extends LitElement {
           .map((part, index) => this.#renderPart(part, message, index)),
       );
       this.#messageElementCache.set(message.id, { key: undefined, element: el });
-      return el;
+      return this.#dividerController.wrap(el, message, index);
     }
 
     const previous = cached?.key === this.messageElement ? cached.element : undefined;
     const element = this.messageElement(message, previous);
     element.style.alignSelf = message.own ? "flex-end" : "flex-start";
     this.#messageElementCache.set(message.id, { key: this.messageElement, element });
-    return element;
+    return this.#dividerController.wrap(element, message, index);
   }
 
   /**
@@ -341,6 +376,7 @@ export class ChxMessageList extends LitElement {
     for (const id of this.#partElementCache.keys()) {
       if (!renderedPartIds.has(id)) this.#partElementCache.delete(id);
     }
+    this.#dividerController.sweep(renderedMessageIds);
   }
 
   /** Diffs part states against the previous render's snapshot to detect a streaming start/complete edge. */
@@ -431,6 +467,8 @@ export class ChxMessageList extends LitElement {
     ) {
       this.#infinityScrollElement?.scrollToBottom(this.scrollBehavior);
     }
+    this.#stickyController.sync();
+    if (changedProperties.has("messages")) this.#stickyController.notifyMessagesChanged();
   }
 
   render() {
@@ -490,6 +528,30 @@ export class ChxMessageList extends LitElement {
             >
               ${when(this.streaming, () => html`<slot name="streaming" slot="footer"></slot>`)}
               ${when(this.typing, () => html`<slot name="typing" slot="footer"></slot>`)}
+              ${when(
+                this.#stickyController.labelText,
+                () =>
+                  html`<button
+                    slot="sticky"
+                    class=${classMap({
+                      "message-list__sticky-date": true,
+                      "message-list__sticky-date_visible": this.#stickyController.visible,
+                    })}
+                    type="button"
+                    aria-label=${`Jump to ${this.#stickyController.labelText}`}
+                    ?inert=${!this.#stickyController.visible}
+                    @click=${this.#stickyController.handleClick}
+                    ${ref((el) =>
+                      this.#stickyController.setButton(/** @type {HTMLElement | undefined} */ (el)),
+                    )}
+                  >
+                    <chx-divider
+                      part="sticky-date"
+                      label=${this.#stickyController.labelText}
+                      aria-hidden="true"
+                    ></chx-divider>
+                  </button>`,
+              )}
             </chx-infinity-scroll>
           `
           )
@@ -499,6 +561,7 @@ export class ChxMessageList extends LitElement {
         () => html`<slot name="loading-history"></slot>`,
       )}
       ${when(this.#awayFromBottom, () => html`<slot name="scroll-to-bottom"></slot>`)}
+      <slot name="divider" hidden @slotchange=${this.#handleDividerSlotchange}></slot>
     `;
   }
 }

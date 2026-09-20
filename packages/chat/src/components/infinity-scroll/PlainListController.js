@@ -196,6 +196,22 @@ export class PlainListController {
     return this.#getScrollElement()?.scrollTop;
   }
 
+  /** Plain-DOM counterpart to the virtualizer's `getOffsetForIndex` — the scrollTop that puts the row's
+   * edge at the viewport edge, read straight off the real DOM. `undefined` when the row isn't found.
+   * @param {number} index @param {"start" | "center" | "end"} [align] @returns {number | undefined} */
+  getOffsetForIndex(index, align = "start") {
+    const el = this.#getScrollElement();
+    const row = this.#findRow(index);
+    if (!el || !row) return undefined;
+    const viewportRect = el.getBoundingClientRect();
+    const rowRect = row.getBoundingClientRect();
+    let delta;
+    if (align === "center") delta = rowRect.top - viewportRect.top - (el.clientHeight - rowRect.height) / 2;
+    else if (align === "end") delta = rowRect.bottom - viewportRect.bottom;
+    else delta = rowRect.top - viewportRect.top;
+    return el.scrollTop + delta;
+  }
+
   /**
    * Scrolls the row at `index` into view — the plain-DOM counterpart to the virtualizer's own
    * `scrollToIndex`, resolved via `[data-index]` instead of an offset lookup table.

@@ -1,6 +1,7 @@
 :host {
   display: inline-flex;
   position: relative;
+  user-select: none;
   --chx-attachment-background-color: var(--md-sys-color-surface-container-high);
   --chx-attachment-foreground-color: var(--md-sys-color-on-surface-variant);
   --chx-attachment-icon-color: var(--md-sys-color-primary);

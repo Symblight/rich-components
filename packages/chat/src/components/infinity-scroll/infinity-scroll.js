@@ -228,6 +228,19 @@ export class ChxInfinityScroll extends LitElement {
     this.#controller.virtualizer.scrollToOffset(offset, options);
   }
 
+  /**
+   * The scroll offset (px) that would align item `index` to the given edge — the estimate the
+   * virtualizer would use for `scrollToIndex`, exposed so a caller can pre-compute a target and
+   * `scrollToOffset()` to it in one pass (no measurement-driven re-scroll). `undefined` when the item
+   * isn't resolvable yet. @param {number} index @param {"start" | "center" | "end"} [align]
+   * @returns {number | undefined}
+   */
+  getOffsetForIndex(index, align = "start") {
+    if (this.noVirtualization) return this.#controller.plainList.getOffsetForIndex(index, align);
+    const result = this.#controller.virtualizer.getOffsetForIndex(index, align);
+    return result ? result[0] : undefined;
+  }
+
   /** Drop every cached row measurement. */
   remeasure() {
     this.#controller.remeasure();
@@ -255,6 +268,7 @@ export class ChxInfinityScroll extends LitElement {
         @focusin=${this.onScrollerFocusin}
         ${ref(this.#setScrollElement)}
       >
+        <div class="infinity-scroll__sticky" part="sticky"><slot name="sticky"></slot></div>
         <div class="infinity-scroll__content">
           <div
             class="infinity-scroll__canvas"

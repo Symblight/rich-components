@@ -8,7 +8,9 @@
 .infinity-scroll__scroller {
   flex: 1 1 auto;
   min-height: 0;
-  overflow-y: auto;
+  /* vertical-only by design — `overflow-x: hidden` also stops `overflow-y: auto` alone from making
+     overflow-x compute to `auto`, so stray-wide row content can't produce a spurious horizontal bar */
+  overflow: hidden auto;
   overflow-anchor: none;
   overscroll-behavior: contain;
   padding-block: 0.4rem;
@@ -38,6 +40,26 @@
   padding-top: var(--chx-infinity-scroll-footer-gap, 0.5rem);
 }
 
+/* a height-0 sticky "sentinel" pinned at the scroller's top: a generic overlay slot (sibling to
+   `footer`) that a consumer fills with a sticky header. Height 0 so it never reserves space or shifts
+   content; its slotted child overflows downward into view and is clipped by the scroller when pushed
+   up. Width == the scrollport (this box lives inside the scroller, scrollbar excluded), so a centered
+   child lines up exactly with the virtualized rows — no JS measuring needed. */
+.infinity-scroll__sticky {
+  position: sticky;
+  inset-block-start: 0;
+  block-size: 0;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  pointer-events: none; /* the strip passes clicks through; only the slotted control is interactive */
+}
+
+.infinity-scroll__sticky ::slotted(*) {
+  pointer-events: auto;
+}
+
 .infinity-scroll__canvas {
   position: relative;
   width: 100%;
@@ -53,6 +75,10 @@
   flex-direction: column;
   padding: 2px 0 0;
   overflow-anchor: none;
+  /* the scroller itself is overflow-x: hidden (see .infinity-scroll__scroller) so a stray-wide row
+     doesn't produce a full-width horizontal bar; give oversized row content its own scrollbar here
+     instead of letting it disappear under that clip */
+  overflow-x: auto;
 }
 
 /* no-virtualization: every row is real, static-flow DOM — no windowed canvas height, no per-row

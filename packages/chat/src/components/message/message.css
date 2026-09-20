@@ -67,6 +67,9 @@
   padding: var(--chx-message-padding);
   border-radius: var(--chx-message-border-radius);
   background-color: var(--chx-message-background-color);
+  /* long unbreakable tokens (URLs, hashes, code) wrap inside max-width instead of spilling past it */
+  overflow-wrap: anywhere;
+  word-break: break-word;
 }
 
 :host([own]) .message__content {

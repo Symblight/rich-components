@@ -71,3 +71,33 @@
   white-space: nowrap;
   border: 0;
 }
+
+/* the stuck header, slotted into chx-infinity-scroll's `sticky` slot — that sentinel handles the
+   pin (position: sticky), the scrollport-width centering, and the clipping. Here it's just a button:
+   the native chrome reset, the scroll-driven push transform (set inline), and the opacity fade. */
+.message-list__sticky-date {
+  /* it's a button (click jumps to the day's inline divider) — reset the native chrome */
+  margin: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  /* transform (translateY) is set inline every frame — the push is scroll-position-driven, so no
+     transform transition. only opacity fades, on the stick/unstick edge. */
+  opacity: 0;
+  transition: opacity 0.15s ease;
+  /* keep the label on its own compositor layer so the per-frame push transform stays off the paint path */
+  will-change: transform;
+}
+
+.message-list__sticky-date_visible {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .message-list__sticky-date {
+    transition-duration: 0.01ms;
+  }
+}

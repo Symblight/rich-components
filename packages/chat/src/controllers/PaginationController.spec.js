@@ -125,7 +125,9 @@ describe("PaginationController", () => {
         listMessages: (input) =>
           new Promise((_resolve, reject) => {
             seenSignal = input.signal;
-            input.signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+            input.signal.addEventListener("abort", () =>
+              reject(new DOMException("aborted", "AbortError")),
+            );
           }),
       });
 
@@ -145,7 +147,9 @@ describe("PaginationController", () => {
         listMessages: (input) =>
           new Promise((_resolve, reject) => {
             seenSignal = input.signal;
-            input.signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+            input.signal.addEventListener("abort", () =>
+              reject(new DOMException("aborted", "AbortError")),
+            );
           }),
       });
 

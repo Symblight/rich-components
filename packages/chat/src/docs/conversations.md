@@ -30,7 +30,11 @@ API. Single-conversation apps are unaffected — none of this activates unless y
   };
   chatEl.initialConversations = [
     { id: "c1", title: "Product team", participants: [{ id: "alex", displayName: "Alex" }] },
-    { id: "c2", title: "Support bot", participants: [{ id: "assistant", displayName: "Assistant" }] },
+    {
+      id: "c2",
+      title: "Support bot",
+      participants: [{ id: "assistant", displayName: "Assistant" }],
+    },
   ];
   chatEl.initialActiveConversationId = "c1";
 
@@ -103,26 +107,26 @@ general "reset chat state" hook, including for a single-conversation app that ne
 
 ### `chx-chat` — properties
 
-| Property                      | Type                            | Notes                                                                                 |
-| ------------------------------ | -------------------------------- | -------------------------------------------------------------------------------------- |
-| `activeConversationId`         | `string \| undefined`            | Reflected attribute `active-conversation-id`. Controlled — see Uncontrolled vs. controlled. |
-| `initialActiveConversationId`  | `string \| undefined`            | Attribute `initial-active-conversation-id`. Uncontrolled seed, consulted once.         |
-| `conversations`                | `ChxConversation[] \| undefined` | Picker metadata — stored only, never fetched or interpreted by `chx-chat`.             |
-| `initialConversations`         | `ChxConversation[] \| undefined` | Attribute `initial-conversations` (JSON-encoded). Uncontrolled seed, consulted once.   |
-| `restoreScrollPosition`        | `boolean`                        | Attribute `restore-scroll-position`. Default `true`.                                   |
+| Property                      | Type                             | Notes                                                                                       |
+| ----------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------- |
+| `activeConversationId`        | `string \| undefined`            | Reflected attribute `active-conversation-id`. Controlled — see Uncontrolled vs. controlled. |
+| `initialActiveConversationId` | `string \| undefined`            | Attribute `initial-active-conversation-id`. Uncontrolled seed, consulted once.              |
+| `conversations`               | `ChxConversation[] \| undefined` | Picker metadata — stored only, never fetched or interpreted by `chx-chat`.                  |
+| `initialConversations`        | `ChxConversation[] \| undefined` | Attribute `initial-conversations` (JSON-encoded). Uncontrolled seed, consulted once.        |
+| `restoreScrollPosition`       | `boolean`                        | Attribute `restore-scroll-position`. Default `true`.                                        |
 
 ### `chx-chat` — methods
 
-| Method         | Signature                          | Notes                                                          |
-| -------------- | ----------------------------------- | ---------------------------------------------------------------- |
-| `refresh`      | `(conversationId?: string): void`  | Clears and re-fetches one conversation. Defaults to the active one. |
-| `cache.clear`  | `(conversationId?: string): void`  | Clears without re-fetching. No argument clears every conversation.  |
+| Method        | Signature                         | Notes                                                               |
+| ------------- | --------------------------------- | ------------------------------------------------------------------- |
+| `refresh`     | `(conversationId?: string): void` | Clears and re-fetches one conversation. Defaults to the active one. |
+| `cache.clear` | `(conversationId?: string): void` | Clears without re-fetching. No argument clears every conversation.  |
 
 ### `chx-chat` — events
 
-| Event                             | `detail`                    | Notes                                                                                     |
-| ----------------------------------- | ----------------------------- | --------------------------------------------------------------------------------------------- |
-| `chx-active-conversation-change`  | `{ conversationId: string }` | Listened for on `chx-chat` itself — dispatch it from anywhere to switch conversations.       |
+| Event                            | `detail`                     | Notes                                                                                  |
+| -------------------------------- | ---------------------------- | -------------------------------------------------------------------------------------- |
+| `chx-active-conversation-change` | `{ conversationId: string }` | Listened for on `chx-chat` itself — dispatch it from anywhere to switch conversations. |
 
 ### `ChxConversation` / `ChxUser`
 

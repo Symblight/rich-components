@@ -206,7 +206,8 @@ export class PlainListController {
     const viewportRect = el.getBoundingClientRect();
     const rowRect = row.getBoundingClientRect();
     let delta;
-    if (align === "center") delta = rowRect.top - viewportRect.top - (el.clientHeight - rowRect.height) / 2;
+    if (align === "center")
+      delta = rowRect.top - viewportRect.top - (el.clientHeight - rowRect.height) / 2;
     else if (align === "end") delta = rowRect.bottom - viewportRect.bottom;
     else delta = rowRect.top - viewportRect.top;
     return el.scrollTop + delta;

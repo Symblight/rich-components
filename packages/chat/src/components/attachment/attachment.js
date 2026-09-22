@@ -1,4 +1,4 @@
-import { html, LitElement } from "lit";
+import { html, LitElement, nothing } from "lit";
 import { customElement } from "lit/decorators.js";
 import { classMap } from "lit/directives/class-map.js";
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
@@ -17,12 +17,13 @@ import errorOutline from "@material-design-icons/svg/outlined/error_outline.svg?
 
 /**
  * @tag chx-attachment
- * @summary One attached-file card — icon, name, and a remove action.
+ * @summary One attached-file card — icon or image preview, name, and a hover-revealed remove action.
  * Always backed by a real `File` via `.file`.
  */
 @customElement("chx-attachment")
 export class ChxAttachment extends LitElement {
   #contentId = `chx-attachment-content-${crypto.randomUUID()}`;
+  #removeId = `chx-attachment-remove-${crypto.randomUUID()}`;
 
   /** @type {import("lit").PropertyDeclarations} */
   static properties = {
@@ -31,6 +32,8 @@ export class ChxAttachment extends LitElement {
     loadingLabel: { type: String, attribute: "loading-label" },
     error: { type: Boolean, reflect: true, attribute: true },
     errorLabel: { type: String, attribute: "error-label" },
+    removable: { type: Boolean, reflect: true, attribute: true },
+    imageUrl: { state: true },
   };
 
   /** @returns {import("lit").CSSResultGroup} */
@@ -55,6 +58,12 @@ export class ChxAttachment extends LitElement {
 
     /** @type {string} */
     this.errorLabel = "Upload failed";
+
+    /** @type {boolean} Shows the hover-revealed remove button. */
+    this.removable = true;
+
+    /** @type {string | undefined} Object URL for an image `file`, revoked/recreated as it changes. */
+    this.imageUrl = undefined;
   }
 
   /** @returns {string} */
@@ -65,6 +74,24 @@ export class ChxAttachment extends LitElement {
   /** @returns {string | Bytes} */
   get displaySize() {
     return this.file == null ? "" : new Bytes(this.file.size);
+  }
+
+  /** @returns {boolean} */
+  get isImage() {
+    return this.file?.type.startsWith("image/") ?? false;
+  }
+
+  /** @param {import("lit").PropertyValues<this>} changed */
+  willUpdate(changed) {
+    if (changed.has("file")) {
+      if (this.imageUrl) URL.revokeObjectURL(this.imageUrl);
+      this.imageUrl = this.file != null && this.isImage ? URL.createObjectURL(this.file) : undefined;
+    }
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    if (this.imageUrl) URL.revokeObjectURL(this.imageUrl);
   }
 
   handleRemoveClick = () => {
@@ -78,23 +105,29 @@ export class ChxAttachment extends LitElement {
   };
 
   render() {
+    const showImage = this.imageUrl != null && !this.loading && !this.error;
+
     return html`
       <md-card
-        class=${classMap({ attachment: true, attachment_error: this.error })}
+        class=${classMap({ attachment: true, attachment_error: this.error, attachment_image: showImage })}
         part="card"
         variant="filled"
       >
-        <div class="attachment__icon" part="icon">
-          ${
-                      this.error
-                        ? html` <md-icon>${unsafeSVG(errorOutline)}</md-icon>`
-                        : this.loading
-                          ? html` <md-progress-circular></md-progress-circular>`
-                          : html` <slot name="icon">
-                              <md-icon>${unsafeSVG(description)}</md-icon>
-                            </slot>`
-                    }
-        </div>
+        ${
+          showImage
+            ? html`<img class="attachment__image" part="image" src=${this.imageUrl} alt="" />`
+            : html`<div class="attachment__icon" part="icon">
+                ${
+                  this.error
+                    ? html` <md-icon>${unsafeSVG(errorOutline)}</md-icon>`
+                    : this.loading
+                      ? html` <md-progress-circular></md-progress-circular>`
+                      : html` <slot name="icon">
+                          <md-icon>${unsafeSVG(description)}</md-icon>
+                        </slot>`
+                }
+              </div>`
+        }
         <div class="attachment__content" part="content" id=${this.#contentId}>
           <slot
             >${this.error ? this.errorLabel : this.loading ? this.loadingLabel : this.displayName}</slot
@@ -103,13 +136,19 @@ export class ChxAttachment extends LitElement {
         <md-tooltip placement="bottom" for=${this.#contentId}
           >${this.error ? this.errorLabel : this.loading ? this.loadingLabel : this.displayName}</md-tooltip
         >
-        <div class="attachment__actions" part="actions">
-          <slot name="actions">
-            <md-icon-button class="attachment__remove" @click=${this.handleRemoveClick}>
-              <md-icon>${unsafeSVG(close)}</md-icon>
-            </md-icon-button>
-          </slot>
-        </div>
+        ${
+          this.removable
+            ? html`<md-icon-button
+                  class="attachment__remove"
+                  part="remove"
+                  id=${this.#removeId}
+                  @click=${this.handleRemoveClick}
+                >
+                  <md-icon>${unsafeSVG(close)}</md-icon>
+                </md-icon-button>
+                <md-tooltip placement="bottom" for=${this.#removeId}>Remove ${this.displayName}</md-tooltip>`
+            : nothing
+        }
       </md-card>
     `;
   }

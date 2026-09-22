@@ -116,7 +116,9 @@ export class PaginationController {
     );
     const existingIds = new Set(messages.map((message) => message.id));
     const deduped = stamped.filter((message) => !existingIds.has(message.id));
-    const firstOwnIndex = messages.findIndex((message) => message.conversationId === conversationId);
+    const firstOwnIndex = messages.findIndex(
+      (message) => message.conversationId === conversationId,
+    );
     if (firstOwnIndex === -1) return [...messages, ...deduped];
     return [...messages.slice(0, firstOwnIndex), ...deduped, ...messages.slice(firstOwnIndex)];
   }

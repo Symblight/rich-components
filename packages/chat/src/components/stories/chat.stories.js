@@ -3,7 +3,6 @@ import { html } from "lit";
 import { ref } from "lit/directives/ref.js";
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 
-import stop from "@material-design-icons/svg/outlined/stop.svg?raw";
 import plus from "@material-design-icons/svg/outlined/add.svg?raw";
 import contentCopyIcon from "@material-design-icons/svg/outlined/content_copy.svg?raw";
 import "@symblight/wc-material/button";
@@ -42,7 +41,6 @@ export const Basic = {
           <md-icon-button variant="tonal" selected> ${unsafeSVG(plus)} </md-icon-button>
         </div>
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>
     </chx-chat>
   `,
@@ -77,7 +75,6 @@ export const EmptyState = {
             <md-icon-button variant="tonal" selected> ${unsafeSVG(plus)} </md-icon-button>
           </div>
           <md-button slot="actions" variant="text">Opus 4.8</md-button>
-          <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
         </chx-message-composer>
       </chx-chat>
     </div>
@@ -99,8 +96,8 @@ function makeMessages(count) {
           id: `msg-${i}-t1`,
           type: "text",
           text: own
-              ? `My message #${i}`
-              : `Assistant reply #${i}, a bit longer to see wrapping happen.`,
+            ? `My message #${i}`
+            : `Assistant reply #${i}, a bit longer to see wrapping happen.`,
         },
       ],
     };
@@ -127,8 +124,8 @@ function createSlowReplyAdapter() {
   let replyCount = 0;
   return {
     sendMessage: async (
-        /** @type {any} */ message,
-        /** @type {{signal: AbortSignal}} */ { signal },
+      /** @type {any} */ message,
+      /** @type {{signal: AbortSignal}} */ { signal },
     ) => {
       await new Promise((resolve) => setTimeout(resolve, 1800)); // nothing sent yet — chx-chat's own
       //   state (a delivery in flight, no reply message) is what drives `streaming`, not this story
@@ -164,17 +161,12 @@ function createSlowReplyAdapter() {
 /** @type {Story} */
 export const WithMessages = {
   render: () => html`
-    <chx-chat
-      .userId=${"me"}
-      .messages=${makeMessages(20)}
-      .adapter=${createSlowReplyAdapter()}
-    >
+    <chx-chat .userId=${"me"} .messages=${makeMessages(20)} .adapter=${createSlowReplyAdapter()}>
       <chx-message-list slot="message-list" scroll-behavior="smooth">
         <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
       </chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>
     </chx-chat>
   `,
@@ -276,7 +268,6 @@ export const CustomizedMessages = {
         <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
       </chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>
     </chx-chat>
   `,
@@ -301,11 +292,11 @@ export const Typing = {
         class="typing-story"
         style="height: 100%; display: flex; flex-direction: column; gap: 0.5rem;"
         @click=${(/** @type {MouseEvent} */ event) => {
-      if (!(/** @type {HTMLElement} */ (event.target).closest(".typing-story__toggle-typing")))
-        return;
-      if (!chatEl) return;
-      chatEl.setTyping(!chatEl.messageListElement?.typing);
-    }}
+          if (!(/** @type {HTMLElement} */ (event.target).closest(".typing-story__toggle-typing")))
+            return;
+          if (!chatEl) return;
+          chatEl.setTyping(!chatEl.messageListElement?.typing);
+        }}
       >
         <md-button
           class="typing-story__toggle-typing"
@@ -325,7 +316,6 @@ export const Typing = {
           </chx-message-list>
           <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
             <md-button slot="actions" variant="text">Opus 4.8</md-button>
-            <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
           </chx-message-composer>
         </chx-chat>
       </div>
@@ -345,17 +335,12 @@ export const Typing = {
 /** @type {Story} */
 export const Streaming = {
   render: () => html`
-    <chx-chat
-      .userId=${"me"}
-      .messages=${makeMessages(6)}
-      .adapter=${createSlowReplyAdapter()}
-    >
+    <chx-chat .userId=${"me"} .messages=${makeMessages(6)} .adapter=${createSlowReplyAdapter()}>
       <chx-message-list slot="message-list">
         <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
       </chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>
     </chx-chat>
   `,
@@ -412,8 +397,8 @@ export const ReadTracking = {
               id: `read-msg-${generation}-${i}-t1`,
               type: "text",
               text: own
-                  ? `My message #${i}`
-                  : `Unread reply #${i} — scroll past me to mark me read.`,
+                ? `My message #${i}`
+                : `Unread reply #${i} — scroll past me to mark me read.`,
             },
           ],
         };
@@ -449,22 +434,26 @@ export const ReadTracking = {
         class="read-tracking-story"
         style="height: 100%; display: flex; flex-direction: column; gap: 0.5rem;"
         @click=${(/** @type {MouseEvent} */ event) => {
-      const target = /** @type {HTMLElement} */ (event.target);
-      if (target.closest(".read-tracking-story__reset")) {
-        if (!chatEl) return;
-        generation++;
-        chatEl.messages = makeUnreadMessages(24);
-        return;
-      }
-      if (target.closest(".read-tracking-story__simulate-read-event")) {
-        if (!chatEl || !onReadEvent) return;
-        // Toggles the first still-unread message — same messageId shape a real ChxReadEvent
-        // carries, per src/types/realtime.js.
-        const message = chatEl.messages.find((m) => m.readState === "unread");
-        if (!message) return;
-        onReadEvent({ type: "read", conversationId: message.conversationId, messageId: message.id });
-      }
-    }}
+          const target = /** @type {HTMLElement} */ (event.target);
+          if (target.closest(".read-tracking-story__reset")) {
+            if (!chatEl) return;
+            generation++;
+            chatEl.messages = makeUnreadMessages(24);
+            return;
+          }
+          if (target.closest(".read-tracking-story__simulate-read-event")) {
+            if (!chatEl || !onReadEvent) return;
+            // Toggles the first still-unread message — same messageId shape a real ChxReadEvent
+            // carries, per src/types/realtime.js.
+            const message = chatEl.messages.find((m) => m.readState === "unread");
+            if (!message) return;
+            onReadEvent({
+              type: "read",
+              conversationId: message.conversationId,
+              messageId: message.id,
+            });
+          }
+        }}
       >
         <div style="display: flex; gap: 0.5rem;">
           <md-button class="read-tracking-story__reset" variant="outlined">
@@ -478,26 +467,28 @@ export const ReadTracking = {
           .userId=${"me"}
           .messages=${makeUnreadMessages(24)}
           .adapter=${{
-      markRead: async (/** @type {{conversationId?: string, messageId: string}} */ input) => {
-        console.log("adapter.markRead", input);
-      },
-      subscribe: (/** @type {{onEvent: (event: any) => void}} */ handlers) => {
-        onReadEvent = handlers.onEvent;
-        return () => {
-          onReadEvent = undefined;
-        };
-      },
-    }}
+            markRead: async (/** @type {{conversationId?: string, messageId: string}} */ input) => {
+              console.log("adapter.markRead", input);
+            },
+            subscribe: (/** @type {{onEvent: (event: any) => void}} */ handlers) => {
+              onReadEvent = handlers.onEvent;
+              return () => {
+                onReadEvent = undefined;
+              };
+            },
+          }}
           read-tracking
           style="flex: 1; min-height: 0;"
           ${ref((el) => (chatEl = /** @type {import("../base/chat.js").ChxChat} */ (el)))}
-          @chx-message-read=${(/** @type {CustomEvent<{messageId: string, messageIds: string[]}>} */ event) => {
-      const chat = /** @type {any} */ (event.currentTarget);
-      const covered = new Set(event.detail.messageIds);
-      chat.messages = chat.messages.map((/** @type {any} */ message) =>
-          covered.has(message.id) ? { ...message, readState: "read" } : message,
-      );
-    }}
+          @chx-message-read=${(
+            /** @type {CustomEvent<{messageId: string, messageIds: string[]}>} */ event,
+          ) => {
+            const chat = /** @type {any} */ (event.currentTarget);
+            const covered = new Set(event.detail.messageIds);
+            chat.messages = chat.messages.map((/** @type {any} */ message) =>
+              covered.has(message.id) ? { ...message, readState: "read" } : message,
+            );
+          }}
         >
           <chx-message-list
             slot="message-list"
@@ -536,16 +527,16 @@ export const ScrollToBottomAffordance = {
         class="scroll-to-bottom-story"
         style="height: 100%; display: flex; flex-direction: column; gap: 0.5rem;"
         @click=${(/** @type {MouseEvent} */ event) => {
-      if (
-          !(
+          if (
+            !(
               /** @type {HTMLElement} */ (event.target).closest(
-                  ".scroll-to-bottom-story__scroll-up",
+                ".scroll-to-bottom-story__scroll-up",
               )
+            )
           )
-      )
-        return;
-      chatEl?.messageListElement?.list?.scrollToIndex(0, { align: "start" });
-    }}
+            return;
+          chatEl?.messageListElement?.list?.scrollToIndex(0, { align: "start" });
+        }}
       >
         <md-button
           class="scroll-to-bottom-story__scroll-up"
@@ -568,7 +559,6 @@ export const ScrollToBottomAffordance = {
           </chx-message-list>
           <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
             <md-button slot="actions" variant="text">Opus 4.8</md-button>
-            <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
           </chx-message-composer>
         </chx-chat>
       </div>
@@ -621,8 +611,8 @@ function seededRandom(seed) {
 function makeSentence(seed) {
   const wordCount = 4 + Math.floor(seededRandom(seed) * 12); // 4-15 words
   const words = Array.from(
-      { length: wordCount },
-      (_, i) => WORDS[Math.floor(seededRandom(seed * 31 + i) * WORDS.length)],
+    { length: wordCount },
+    (_, i) => WORDS[Math.floor(seededRandom(seed * 31 + i) * WORDS.length)],
   );
   return `${words[0][0].toUpperCase()}${words[0].slice(1)} ${words.slice(1).join(" ")}.`;
 }
@@ -704,13 +694,13 @@ export const Pagination = {
       class="pagination-story"
       style="height: 100%; display: flex; flex-direction: column; gap: 0.5rem;"
       @click=${(/** @type {MouseEvent} */ event) => {
-    if (!(/** @type {HTMLElement} */ (event.target).closest(".pagination-story__load-more")))
-      return;
-    const container = /** @type {HTMLElement} */ (event.currentTarget);
-    /** @type {(HTMLElement & {loadMoreHistory: () => Promise<void>}) | null} */ (
-        container.querySelector("chx-chat")
-    )?.loadMoreHistory();
-  }}
+        if (!(/** @type {HTMLElement} */ (event.target).closest(".pagination-story__load-more")))
+          return;
+        const container = /** @type {HTMLElement} */ (event.currentTarget);
+        /** @type {(HTMLElement & {loadMoreHistory: () => Promise<void>}) | null} */ (
+          container.querySelector("chx-chat")
+        )?.loadMoreHistory();
+      }}
     >
       <md-button
         class="pagination-story__load-more"
@@ -732,7 +722,6 @@ export const Pagination = {
         </chx-message-list>
         <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
           <md-button slot="actions" variant="text">Opus 4.8</md-button>
-          <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
         </chx-message-composer>
       </chx-chat>
     </div>
@@ -750,13 +739,13 @@ export const PaginationNoVirtualization = {
       class="pagination-story"
       style="height: 100%; display: flex; flex-direction: column; gap: 0.5rem;"
       @click=${(/** @type {MouseEvent} */ event) => {
-    if (!(/** @type {HTMLElement} */ (event.target).closest(".pagination-story__load-more")))
-      return;
-    const container = /** @type {HTMLElement} */ (event.currentTarget);
-    /** @type {(HTMLElement & {loadMoreHistory: () => Promise<void>}) | null} */ (
-        container.querySelector("chx-chat")
-    )?.loadMoreHistory();
-  }}
+        if (!(/** @type {HTMLElement} */ (event.target).closest(".pagination-story__load-more")))
+          return;
+        const container = /** @type {HTMLElement} */ (event.currentTarget);
+        /** @type {(HTMLElement & {loadMoreHistory: () => Promise<void>}) | null} */ (
+          container.querySelector("chx-chat")
+        )?.loadMoreHistory();
+      }}
     >
       <md-button
         class="pagination-story__load-more"
@@ -779,7 +768,6 @@ export const PaginationNoVirtualization = {
         </chx-message-list>
         <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
           <md-button slot="actions" variant="text">Opus 4.8</md-button>
-          <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
         </chx-message-composer>
       </chx-chat>
     </div>
@@ -803,13 +791,13 @@ export const LoadingHistoryCustomDelay = {
       class="pagination-story"
       style="height: 100%; display: flex; flex-direction: column; gap: 0.5rem;"
       @click=${(/** @type {MouseEvent} */ event) => {
-    if (!(/** @type {HTMLElement} */ (event.target).closest(".pagination-story__load-more")))
-      return;
-    const container = /** @type {HTMLElement} */ (event.currentTarget);
-    /** @type {(HTMLElement & {loadMoreHistory: () => Promise<void>}) | null} */ (
-        container.querySelector("chx-chat")
-    )?.loadMoreHistory();
-  }}
+        if (!(/** @type {HTMLElement} */ (event.target).closest(".pagination-story__load-more")))
+          return;
+        const container = /** @type {HTMLElement} */ (event.currentTarget);
+        /** @type {(HTMLElement & {loadMoreHistory: () => Promise<void>}) | null} */ (
+          container.querySelector("chx-chat")
+        )?.loadMoreHistory();
+      }}
     >
       <md-button
         class="pagination-story__load-more"
@@ -832,18 +820,16 @@ export const LoadingHistoryCustomDelay = {
         </chx-message-list>
         <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
           <md-button slot="actions" variant="text">Opus 4.8</md-button>
-          <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
         </chx-message-composer>
       </chx-chat>
     </div>
   `,
 };
 
-
 /**
  * `chx-message-list`'s `initial-loading` slot overridden with a consumer-supplied element — the
  * default `<md-progress-circular>` fallback only ever renders when the slot is empty (same
- * slot-with-fallback-content mechanics as `chx-attachment`'s own `actions` slot), so slotting
+ * slot-with-fallback-content mechanics as `chx-loading-history`'s own default slot), so slotting
  * anything into `slot="initial-loading"` replaces it outright, no opt-out flag needed. Here it's
  * seven `<md-skeleton variant="rectangular">` bubbles of varied width/height, sized/aligned to
  * roughly preview a denser message history about to load, alternating side like `WithMessages`' real
@@ -897,12 +883,10 @@ export const InitialLoadingCustom = {
       </chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>
     </chx-chat>
   `,
 };
-
 
 /**
  * `chx-message-list`'s `content-align` attribute — with only a couple of messages inside a tall
@@ -925,7 +909,6 @@ export const ContentAlignStart = {
       </chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>
     </chx-chat>
   `,
@@ -938,7 +921,6 @@ export const ComposerOnly = {
     <chx-chat>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>
     </chx-chat>
   `,
@@ -1004,7 +986,6 @@ export const PasteChip = {
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <chx-paste-long-text slot="paste-long-text" paste-threshold="200"></chx-paste-long-text>
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>
     </chx-chat>
   `,
@@ -1134,9 +1115,9 @@ function makeDatedMessages() {
 function renderDividerRow(message, previousElement) {
   if (message.parts[0]?.type === "system") {
     const divider = /** @type {any} */ (
-        previousElement?.tagName.toLowerCase() === "chx-divider"
-            ? previousElement
-            : document.createElement("chx-divider")
+      previousElement?.tagName.toLowerCase() === "chx-divider"
+        ? previousElement
+        : document.createElement("chx-divider")
     );
     divider.textContent = message.parts[0].text ?? "";
     divider.style.width = "100%";
@@ -1144,9 +1125,9 @@ function renderDividerRow(message, previousElement) {
   }
 
   const el = /** @type {any} */ (
-      previousElement?.tagName.toLowerCase() === "chx-message"
-          ? previousElement
-          : document.createElement("chx-message")
+    previousElement?.tagName.toLowerCase() === "chx-message"
+      ? previousElement
+      : document.createElement("chx-message")
   );
   el.own = message.own;
   el.busy = message.parts.some((/** @type {any} */ part) => part.state === "streaming");
@@ -1194,7 +1175,6 @@ export const Dividers = {
       </chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>
     </chx-chat>
   `,
@@ -1207,37 +1187,36 @@ export const CustomParts = {
       .userId=${"me"}
       .partElements=${{ "ticket-summary": renderTicketSummaryPart }}
       .messages=${[
-    {
-      id: "msg-1",
-      authorId: "me",
-      own: true,
-      createdAt: Date.now(),
-      status: "sent",
-      parts: [{ id: "msg-1-t1", type: "text", text: "What's the status on my last ticket?" }],
-    },
-    {
-      id: "msg-2",
-      authorId: "assistant",
-      own: false,
-      createdAt: Date.now(),
-      status: "sent",
-      parts: [
-        { id: "msg-2-t1", type: "text", text: "Here's the latest:" },
         {
-          id: "msg-2-c1",
-          type: "ticket-summary",
-          ticketId: "SUP-4821",
-          status: "blocked",
-          summary: "Waiting on a screen recording from the customer to reproduce the issue.",
+          id: "msg-1",
+          authorId: "me",
+          own: true,
+          createdAt: Date.now(),
+          status: "sent",
+          parts: [{ id: "msg-1-t1", type: "text", text: "What's the status on my last ticket?" }],
         },
-      ],
-    },
-  ]}
+        {
+          id: "msg-2",
+          authorId: "assistant",
+          own: false,
+          createdAt: Date.now(),
+          status: "sent",
+          parts: [
+            { id: "msg-2-t1", type: "text", text: "Here's the latest:" },
+            {
+              id: "msg-2-c1",
+              type: "ticket-summary",
+              ticketId: "SUP-4821",
+              status: "blocked",
+              summary: "Waiting on a screen recording from the customer to reproduce the issue.",
+            },
+          ],
+        },
+      ]}
     >
       <chx-message-list slot="message-list"></chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>
     </chx-chat>
   `,

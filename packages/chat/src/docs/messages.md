@@ -3,7 +3,8 @@
 `chx-chat` owns an internal, optimistic message store — sending, streaming replies, retrying, and
 scroll behavior all work out of the box. `<chx-message-list>` is where messages actually render;
 `chx-chat` pushes its store down to whatever list is slotted in, the same way it pushes
-`label`/`loading` to the composer.
+`loading` to the composer — raised on its own while a turn is in flight, which is what turns the
+composer's send button into a stop button. See `agentic.md`'s "Stopping a turn" for `status`/`stop()`.
 
 ## Quick start
 
@@ -90,8 +91,17 @@ re-render on every single token.
 ```js
 chatEl.retry(messageId); // re-send a message currently status: "failed"
 chatEl.regenerate(replyIdOrItsAnchoringSendId); // redo an assistant reply (needs adapter.regenerate)
-chatEl.cancel(messageId); // abort an in-flight send/regenerate
+chatEl.cancel(messageId); // abort one in-flight send/regenerate
+chatEl.stop(); // abort every delivery for the active conversation — what the composer's stop button does
 ```
+
+**The `AbortSignal` is yours to honor.** Aborting only stops `chx-chat` reading the stream; nothing
+reaches your backend unless `sendMessage` passes the signal on (the `fetch` above does) or subscribes
+to it. An adapter that returns from its stream's `start()` on abort without closing leaves the reply's
+parts marked `streaming` for good — give every exit path one terminator that enqueues
+`{ kind: signal.aborted ? "abort" : "finish" }` and then closes. `chx-chat`'s own turn state settles
+immediately either way, so the composer's button never gets stuck. See
+[Agentic parts](./agentic.md#stopping-a-turn).
 
 ### SSE example
 
@@ -165,9 +175,11 @@ chatEl.adapter = {
 };
 ```
 
-Cancellation needs no special handling in the adapter itself: aborting `signal` rejects the
-in-flight `reader.read()`, the `try`/`finally` above still runs, and `chx-chat`'s own delivery
-logic tells a genuine abort apart from a real failure via `signal.aborted` — see `cancel()` above.
+Cancellation needs no extra handling **in this shape**, because it already does both things the
+warning above asks for: the signal is forwarded into `fetch`, so aborting rejects the in-flight
+`reader.read()`, and the `try`/`finally` closes the stream on every exit path. `chx-chat` then tells
+a genuine abort apart from a real failure via `signal.aborted` — see `cancel()`/`stop()` above. An
+adapter that forwards neither is the one that strands a reply mid-stream.
 
 ## Live updates — `adapter.subscribe`/`getMessages`
 
@@ -242,33 +254,40 @@ messageListEl.addEventListener("chx-scroll-to-bottom", () => hideJumpToLatestBut
 
 ### `chx-chat` — properties
 
-| Property               | Type                                                                   | Notes                                                                                                  |
-| ---------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------ |
-| `userId`               | `string`                                                               | Identifies the local user — required for `own`/`adapter.subscribe`/`addMessage` to classify correctly. |
-| `messages`             | `ChxMessage[]`                                                         | Optional controlled override — see Quick start. Default `[]`.                                          |
-| `messageElement`       | `(message, previousElement?) => HTMLElement \| undefined`              | Whole-message render override — see Custom rendering.                                                  |
-| `partElements`         | `Record<string, (part, previousElement?) => HTMLElement> \| undefined` | Per-`part.type` render overrides — see Custom rendering.                                               |
-| `adapter`              | `ChxChatAdapter \| undefined`                                          | `{ getMessages?, subscribe?, sendMessage?, regenerate? }` — see Streaming/Live updates.                |
-| `connectionState`      | `"connecting" \| "connected" \| "error" \| undefined`                  | Reflected attribute `connection-state`. Read-only in practice.                                         |
-| `chunkBatchIntervalMs` | `number`                                                               | Default `16`. Read once at construction — set before first connecting the element.                     |
+| Property               | Type                                                                   | Notes                                                                                                                                     |
+| ---------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| `userId`               | `string`                                                               | Identifies the local user — required for `own`/`adapter.subscribe`/`addMessage` to classify correctly.                                    |
+| `messages`             | `ChxMessage[]`                                                         | Optional controlled override — see Quick start. Default `[]`.                                                                             |
+| `messageElement`       | `(message, previousElement?) => HTMLElement \| undefined`              | Whole-message render override — see Custom rendering.                                                                                     |
+| `partElements`         | `Record<string, (part, previousElement?) => HTMLElement> \| undefined` | Per-`part.type` render overrides — see Custom rendering.                                                                                  |
+| `adapter`              | `ChxChatAdapter \| undefined`                                          | `{ getMessages?, subscribe?, sendMessage?, regenerate? }` — see Streaming/Live updates.                                                   |
+| `connectionState`      | `"connecting" \| "connected" \| "error" \| undefined`                  | Reflected attribute `connection-state`. Read-only in practice.                                                                            |
+| `chunkBatchIntervalMs` | `number`                                                               | Default `16`. Read once at construction — set before first connecting the element.                                                        |
+| `loading`              | `boolean`                                                              | Reflected. An override, not a state — the composer is pushed `loading \|\| busy`, so an in-flight turn already shows its stop button.     |
+| `status`               | `"ready" \| "submitted" \| "streaming" \| "error"`                     | **Read-only**, derived from the active conversation's in-flight deliveries. `submitted` is the window between a send and its first chunk. |
+| `busy`                 | `boolean`                                                              | **Read-only** — `status` narrowed to `submitted \| streaming`.                                                                            |
 
 ### `chx-chat` — methods
 
-| Method                                                 | Signature                                                                      | Notes                                                                                                      |
-| ------------------------------------------------------ | ------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------- |
-| `addMessage`                                           | `(message: Omit<ChxMessage, "own" \| "createdAt"> & {own?, createdAt?}): void` | Ingests one message into the store, matched by `id`.                                                       |
-| `retry`                                                | `(messageId: string): void`                                                    | Re-sends a `status: "failed"` message. No-op otherwise.                                                    |
-| `regenerate`                                           | `(messageId: string): void`                                                    | Redoes an assistant reply (needs `adapter.regenerate`). Accepts the reply's id or its anchoring send's id. |
-| `cancel`                                               | `(messageId: string): void`                                                    | Aborts an in-flight send/regenerate.                                                                       |
-| `attachFile` / `setText` / `focus`                     | —                                                                              | Delegate to the composer — see the attachments docs.                                                      |
+| Method                             | Signature                                                                      | Notes                                                                                                                                        |
+| ---------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `addMessage`                       | `(message: Omit<ChxMessage, "own" \| "createdAt"> & {own?, createdAt?}): void` | Ingests one message into the store, matched by `id`.                                                                                         |
+| `retry`                            | `(messageId: string): void`                                                    | Re-sends a `status: "failed"` message. No-op otherwise.                                                                                      |
+| `regenerate`                       | `(messageId: string): void`                                                    | Redoes an assistant reply (needs `adapter.regenerate`). Accepts the reply's id or its anchoring send's id.                                   |
+| `cancel`                           | `(messageId: string): void`                                                    | Aborts one in-flight send/regenerate, backgrounded conversations included.                                                                   |
+| `stop`                             | `(): void`                                                                     | Aborts every in-flight delivery for the active conversation. Settles the turn state at once; ending the messages is still the adapter's job. |
+| `attachFile` / `setText` / `focus` | —                                                                              | Delegate to the composer — see the attachments docs.                                                                                         |
 
 ### `chx-chat` — events
 
-| Event                   | `detail`                     | Notes                                                                                                                             |
-| ----------------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
-| `chx-messages-change`   | `{ messages: ChxMessage[] }` | Fired after every local mutation (send, chunk, retry, ingest). Purely a notification — the UI already reflects `detail.messages`. |
-| `chx-send-error`        | `{ messageId, error }`       | Fired alongside `chx-messages-change` when `adapter.sendMessage` throws.                                                          |
-| `chx-connection-change` | `{ state, error? }`          | Fired on every `adapter.subscribe` connection-state transition.                                                                   |
+| Event                   | `detail`                                 | Notes                                                                                                                             |
+| ----------------------- | ---------------------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
+| `chx-messages-change`   | `{ messages: ChxMessage[] }`             | Fired after every local mutation (send, chunk, retry, ingest). Purely a notification — the UI already reflects `detail.messages`. |
+| `chx-send-error`        | `{ messageId, error }`                   | Fired alongside `chx-messages-change` when `adapter.sendMessage` throws.                                                          |
+| `chx-connection-change` | `{ state, error? }`                      | Fired on every `adapter.subscribe` connection-state transition.                                                                   |
+| `chx-stop`              | —                                        | Dispatched by the composer's stop button; `chx-chat` answers it with `stop()`. Listen lower and `stopPropagation()` to intercept. |
+| `chx-delivery-start`    | `{ messageId, conversationId }`          | A send/regenerate began streaming. Carries the id `cancel()` takes — a send's own id is generated inside `chx-chat`.              |
+| `chx-delivery-end`      | `{ messageId, conversationId, outcome }` | `outcome` is `completed` / `cancelled` / `failed`.                                                                                |
 
 ### `chx-message-list` — properties
 

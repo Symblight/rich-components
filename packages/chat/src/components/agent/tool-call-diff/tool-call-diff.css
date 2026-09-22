@@ -1,0 +1,12 @@
+:host {
+  display: block;
+}
+
+/* Author `:host` display beats the UA `[hidden]` rule, so the host has to opt back out itself. */
+:host([hidden]) {
+  display: none;
+}
+
+.tool-call-diff__block {
+  --chx-code-block-font-size: 0.8125rem;
+}

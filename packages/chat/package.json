@@ -1,7 +1,7 @@
 {
   "name": "@symblight/chat",
   "version": "0.1.0",
-  "description": "A Material Design 3 chat web component built with Lit — scrollable message list with a composer (text field, send button, emoji picker) docked to the bottom",
+  "description": "A Material Design 3 chat web component built with Lit \u2014 scrollable message list with a composer (text field, send button, emoji picker) docked to the bottom",
   "author": "Aleksei Tkachenko <leshtkachenko@gmail.com>",
   "license": "MIT",
   "keywords": [
@@ -23,6 +23,10 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
+    },
+    "./agent": {
+      "import": "./dist/agent.js",
+      "types": "./dist/agent.d.ts"
     }
   },
   "files": [

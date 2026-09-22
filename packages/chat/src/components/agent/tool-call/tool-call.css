@@ -1,0 +1,122 @@
+:host {
+  display: block;
+  --chx-tool-call-background-color: var(--md-sys-color-surface-container-low);
+  --chx-tool-call-border-color: var(--md-sys-color-outline-variant);
+  --chx-tool-call-border-radius: 0.75rem;
+  --chx-tool-call-color: var(--md-sys-color-on-surface);
+  --chx-tool-call-summary-color: var(--md-sys-color-on-surface-variant);
+  --chx-tool-call-focus-ring-color: var(--md-sys-color-primary);
+  --chx-tool-call-icon-size: 1.125rem;
+  --chx-tool-call-font-size: 0.875rem;
+  --chx-tool-call-padding: 0.5rem 0.75rem;
+  --chx-tool-call-content-gap: 0.5rem;
+  --chx-tool-call-running-color: var(--md-sys-color-primary);
+  --chx-tool-call-awaiting-permission-color: var(--md-sys-color-tertiary);
+  --chx-tool-call-completed-color: var(--md-sys-color-on-surface-variant);
+  --chx-tool-call-cancelled-color: var(--md-sys-color-outline);
+  --chx-tool-call-failed-color: var(--md-sys-color-error);
+}
+
+/* Author `:host` display beats the UA `[hidden]` rule, so the host has to opt back out itself. */
+:host([hidden]) {
+  display: none;
+}
+
+.tool-call {
+  box-sizing: border-box;
+  overflow: hidden;
+  background-color: var(--chx-tool-call-background-color);
+  border: 1px solid var(--chx-tool-call-border-color);
+  border-radius: var(--chx-tool-call-border-radius);
+  color: var(--chx-tool-call-color);
+  font-size: var(--chx-tool-call-font-size);
+}
+
+/* The card the banner above the composer is currently asking about — the permission UI itself is
+   deliberately elsewhere, so the accent is the only thing tying the question to its subject. */
+:host([status="awaiting-permission"]) .tool-call {
+  border-color: var(--chx-tool-call-awaiting-permission-color);
+}
+
+/* The whole header is the disclosure control — the native marker is replaced by the status icon,
+   which already says pending/running/done at a glance. */
+.tool-call__summary {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: var(--chx-tool-call-padding);
+  cursor: pointer;
+  list-style: none;
+  color: var(--chx-tool-call-summary-color);
+
+  &::-webkit-details-marker {
+    display: none;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--chx-tool-call-focus-ring-color);
+    outline-offset: -2px;
+  }
+}
+
+.tool-call__kind-icon {
+  font-size: var(--chx-tool-call-icon-size);
+  flex: none;
+}
+
+.tool-call__label {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  color: var(--chx-tool-call-color);
+  overflow-wrap: anywhere;
+}
+
+/* Both are sized at 1em by their own internal svg, so font-size is the size knob for each. */
+.tool-call__status-icon,
+.tool-call__status-progress {
+  font-size: var(--chx-tool-call-icon-size);
+  flex: none;
+}
+
+.tool-call__status-progress {
+  color: var(--chx-tool-call-running-color);
+  /* currentColor, so the spinner follows the running-color token above */
+  --md-progress-circular-active-indicator-color: currentColor;
+  --md-progress-circular-track-color: var(--chx-tool-call-border-color);
+}
+
+:host([status="awaiting-permission"]) .tool-call__status-icon {
+  color: var(--chx-tool-call-awaiting-permission-color);
+}
+
+:host([status="completed"]) .tool-call__status-icon {
+  color: var(--chx-tool-call-completed-color);
+}
+
+/* Without its own color a cancelled call reads exactly like a pending one. */
+:host([status="cancelled"]) .tool-call__status-icon {
+  color: var(--chx-tool-call-cancelled-color);
+}
+
+:host([status="failed"]) .tool-call__status-icon {
+  color: var(--chx-tool-call-failed-color);
+}
+
+.tool-call__content {
+  display: flex;
+  flex-direction: column;
+  gap: var(--chx-tool-call-content-gap);
+  padding: 0 0.75rem 0.75rem;
+}
+
+.tool-call__locations {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.tool-call__error {
+  padding: var(--chx-tool-call-padding);
+  color: var(--chx-tool-call-failed-color);
+  overflow-wrap: anywhere;
+}

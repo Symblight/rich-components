@@ -24,7 +24,9 @@ describe("chx-scroll-to-bottom-affordance", () => {
   it("fires chx-scroll-to-bottom-click with the current scrollBehavior on click", async () => {
     const el = /** @type {ChxScrollToBottomAffordance} */ (
       await fixture(
-        html`<chx-scroll-to-bottom-affordance scroll-behavior="instant"></chx-scroll-to-bottom-affordance>`,
+        html`<chx-scroll-to-bottom-affordance
+          scroll-behavior="instant"
+        ></chx-scroll-to-bottom-affordance>`,
       )
     );
     const button = /** @type {HTMLElement} */ (el.shadowRoot?.querySelector("md-icon-button"));

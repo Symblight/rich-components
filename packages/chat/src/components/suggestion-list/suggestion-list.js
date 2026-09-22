@@ -54,9 +54,7 @@ export class ChxSuggestionList extends LitElement {
     const suggestions = this.#getSuggestions();
     if (suggestions.length === 0) return;
     this.#activeIndex = Math.min(this.#activeIndex, suggestions.length - 1);
-    suggestions.forEach((suggestion, index) =>
-      suggestion.setTabbable(index === this.#activeIndex),
-    );
+    suggestions.forEach((suggestion, index) => suggestion.setTabbable(index === this.#activeIndex));
   };
 
   /**
@@ -68,7 +66,9 @@ export class ChxSuggestionList extends LitElement {
    */
   #handleClick = (event) => {
     const suggestion = /** @type {HTMLElement | undefined} */ (
-      event.composedPath().find((el) => /** @type {HTMLElement} */ (el).tagName === "CHX-SUGGESTION")
+      event
+        .composedPath()
+        .find((el) => /** @type {HTMLElement} */ (el).tagName === "CHX-SUGGESTION")
     );
     if (!suggestion) return;
 
@@ -126,7 +126,13 @@ export class ChxSuggestionList extends LitElement {
 
   render() {
     return html`
-      <div class="suggestion-list" part="list" role="group" aria-label="Suggestions" @keydown=${this.#handleKeydown}>
+      <div
+        class="suggestion-list"
+        part="list"
+        role="group"
+        aria-label="Suggestions"
+        @keydown=${this.#handleKeydown}
+      >
         <slot @slotchange=${this.#handleSlotchange} @click=${this.#handleClick}></slot>
       </div>
     `;

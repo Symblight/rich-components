@@ -17,12 +17,15 @@ function streamOf(items) {
 function setup(options = {}) {
   /** @type {any[][]} */
   const flushes = [];
-  const buffer = createChunkBuffer({ flushInterval: options.flushInterval ?? 5, onFlush: (m) => flushes.push(m) });
+  const buffer = createChunkBuffer({
+    flushInterval: options.flushInterval ?? 5,
+    getMessages: () => [],
+    getUserId: () => "me",
+    onFlush: (m) => flushes.push(m),
+  });
   return {
     flushes,
     buffer,
-    getMessages: () => [],
-    getUserId: () => "me",
     ingest: (/** @type {any} */ item) => ("chunk" in item ? item.chunk : item),
   };
 }

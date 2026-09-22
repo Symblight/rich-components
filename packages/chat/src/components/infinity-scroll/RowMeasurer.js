@@ -171,7 +171,7 @@ export class RowMeasurer {
       if (tag.includes("-") && !customElements.get(tag)) {
         await customElements.whenDefined(tag);
       }
-      if (typeof /** @type {any} */ (child).updateComplete?.then === "function") {
+      if (typeof (/** @type {any} */ (child).updateComplete?.then) === "function") {
         await /** @type {any} */ (child).updateComplete;
       }
     } catch {

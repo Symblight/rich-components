@@ -11,7 +11,9 @@
  * @property {string} [authorId]
  * @property {string} partId
  * @property {string} [partType]
- * @property {Partial<Pick<ChxMessagePart, "text" | "html">>} delta
+ * @property {Partial<Omit<ChxMessagePart, "id" | "type" | "state">>} delta - `text` appends to the
+ *   part's existing value; every other field (`html`, `status`, or any part-specific field) replaces
+ *   it outright — see `applyChunkToParts`
  */
 
 /**
@@ -41,6 +43,11 @@
  */
 
 /**
+ * chx-chat's derived turn state for the active conversation — see its `status` getter.
+ * @typedef {"ready" | "submitted" | "streaming" | "error"} ChxChatStatus
+ */
+
+/**
  * @typedef {(message: ChxMessage, previousElement?: HTMLElement) => HTMLElement} ChxMessageRenderer
  */
 
@@ -66,7 +73,12 @@
  *   `.claude/plans/messages/realtime-sync.md`; deliberately separate from `onMessage`/`onTyping`
  *   above, which keep covering the two event kinds they already handled before `onEvent` existed
  * @property {(message: ChxMessage, options: {signal: AbortSignal}) => Promise<ReadableStream<ChxMessageChunk | ChxMessageEnvelope> | void>} [sendMessage] - `message.conversationId` carries which
- *   conversation this send belongs to, same field as everywhere else — no separate parameter
+ *   conversation this send belongs to, same field as everywhere else — no separate parameter.
+ *   **`signal` is yours to honor.** Aborting only stops chx-chat reading the stream; nothing is sent
+ *   upstream for you. An adapter must subscribe to it and tear the turn down on its own side — for
+ *   ACP that means the `session/cancel` notification plus an answer to any outstanding
+ *   `session/request_permission` — or the agent keeps working with nobody listening. Closing the
+ *   stream with an explicit `{kind: "abort"}` chunk is cleaner than letting the read throw
  * @property {(replyMessageId: string, options: {signal: AbortSignal, conversationId?: string}) => Promise<ReadableStream<ChxMessageChunk | ChxMessageEnvelope> | void>} [regenerate]
  * @property {(input: {conversationId: string | undefined, messageId: string}) => Promise<void>} [markRead] - called
  *   fire-and-forget when a message crosses `chx-message-list`'s `readThreshold`, see `chx-message-read`

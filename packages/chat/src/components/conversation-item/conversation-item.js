@@ -87,13 +87,15 @@ export class ChxConversationItem extends LitElement {
             () => html`<span class="conversation-item__last-message">${this.lastMessage}</span>`,
           )}
         </div>
-        ${this.unreadCount > 0
-          ? html`<md-badge
-              slot="trailing"
-              class="conversation-item__badge"
-              .value=${String(this.unreadCount)}
-            ></md-badge>`
-          : nothing}
+        ${
+          this.unreadCount > 0
+            ? html`<md-badge
+                slot="trailing"
+                class="conversation-item__badge"
+                .value=${String(this.unreadCount)}
+              ></md-badge>`
+            : nothing
+        }
       </md-list-item>
     `;
   }

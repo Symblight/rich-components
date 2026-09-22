@@ -24,6 +24,8 @@ import styles from "./chat.css?inline";
 /**
  * @tag chx-chat
  * @summary Chat.
+ * @fires chx-delivery-start - `{messageId, conversationId}`, when a send/regenerate starts streaming.
+ * @fires chx-delivery-end - `{messageId, conversationId, outcome}`, `outcome` being completed/cancelled/failed.
  */
 @customElement("chx-chat")
 export class ChxChat extends LitElement {
@@ -56,6 +58,8 @@ export class ChxChat extends LitElement {
   #stream; // StreamController, assigned in the constructor
   /** @type {Map<string, {controller: AbortController, conversationId: string | undefined}>} */
   #activeDeliveries = new Map(); // messageId/replyId -> in-flight delivery, tagged with the conversation it belongs to
+  /** @type {{conversationId: string | undefined} | null} */
+  #lastDeliveryError = null; // drives `status: "error"`; cleared when that conversation starts a new delivery
   /** @type {(() => void) | undefined} */
   #unsubscribe; // adapter.subscribe's returned unsubscribe fn, assigned in connectedCallback
   /** @type {ChxChatAdapter | undefined} */
@@ -254,7 +258,11 @@ export class ChxChat extends LitElement {
       "chx-active-conversation-change",
       /** @type {EventListener} */ (this.handleActiveConversationChange),
     );
-    this.addEventListener("chx-message-read", /** @type {EventListener} */ (this.#handleMessageRead));
+    this.addEventListener(
+      "chx-message-read",
+      /** @type {EventListener} */ (this.#handleMessageRead),
+    );
+    this.addEventListener("chx-stop", /** @type {EventListener} */ (this.#handleStop));
 
     // Uncontrolled seeds — only apply if still undefined, so a reconnect or an app-provided value no-ops.
     if (this.conversations === undefined) this.conversations = this.initialConversations ?? [];
@@ -317,7 +325,11 @@ export class ChxChat extends LitElement {
       "chx-attachments-change",
       /** @type {EventListener} */ (this.handleAttachmentsChange),
     );
-    this.removeEventListener("chx-message-read", /** @type {EventListener} */ (this.#handleMessageRead));
+    this.removeEventListener(
+      "chx-message-read",
+      /** @type {EventListener} */ (this.#handleMessageRead),
+    );
+    this.removeEventListener("chx-stop", /** @type {EventListener} */ (this.#handleStop));
     for (const { controller } of this.#activeDeliveries.values()) controller.abort();
     this.#unsubscribe?.();
   }
@@ -531,7 +543,10 @@ export class ChxChat extends LitElement {
       ],
     };
 
-    this.#applyMessages(reconcileMessages(this.#internalMessages, message, this.userId), conversationId);
+    this.#applyMessages(
+      reconcileMessages(this.#internalMessages, message, this.userId),
+      conversationId,
+    );
     this.#deliver(message, conversationId); // not awaited — see #deliver's own doc for what this does
   }
 
@@ -590,7 +605,7 @@ export class ChxChat extends LitElement {
    */
   get #effectiveConversationId() {
     if (!this.#usesConversations) return DEFAULT_CONVERSATION_ID;
-    return this.#isEmptyState ? null : this.activeConversationId ?? null;
+    return this.#isEmptyState ? null : (this.activeConversationId ?? null);
   }
 
   /**
@@ -633,7 +648,11 @@ export class ChxChat extends LitElement {
   /** @param {ChxMessage[]} messages */
   #announce(messages) {
     this.dispatchEvent(
-      new CustomEvent("chx-messages-change", { detail: { messages }, bubbles: true, composed: true }),
+      new CustomEvent("chx-messages-change", {
+        detail: { messages },
+        bubbles: true,
+        composed: true,
+      }),
     );
   }
 
@@ -661,7 +680,8 @@ export class ChxChat extends LitElement {
   async #deliver(message, conversationId) {
     if (!this.adapter?.sendMessage) return;
     const controller = new AbortController();
-    this.#activeDeliveries.set(message.id, { controller, conversationId });
+    let failed = false;
+    this.#trackDelivery(message.id, controller, conversationId);
     try {
       const stream = await this.adapter.sendMessage(message, { signal: controller.signal });
       if (!stream) return;
@@ -671,11 +691,16 @@ export class ChxChat extends LitElement {
       // inside deliverStream, never reaches this catch) or the adapter's own fetch/EventSource
       // throwing once the signal fires — this branch only ever sees the second case
       const cancelled = controller.signal.aborted;
-      const replyStatus = /** @type {"failed" | "cancelled"} */ (cancelled ? "cancelled" : "failed");
+      failed = !cancelled;
+      const replyStatus = /** @type {"failed" | "cancelled"} */ (
+        cancelled ? "cancelled" : "failed"
+      );
       const updated = {
         ...message,
         status: replyStatus,
-        ...(cancelled ? {} : { error: { message: String(/** @type {any} */ (error)?.message ?? error) } }),
+        ...(cancelled
+          ? {}
+          : { error: { message: String(/** @type {any} */ (error)?.message ?? error) } }),
       };
       const next = reconcileMessages(this.#internalMessages, updated, this.userId);
       // a reply shell can already exist (some chunks arrived before the throw) — close it out too
@@ -683,9 +708,7 @@ export class ChxChat extends LitElement {
       this.#applyMessages(
         orphanedReply
           ? next.map((m) =>
-              m.id === orphanedReply.id
-                ? finalizeStreamingParts({ ...m, status: replyStatus })
-                : m,
+              m.id === orphanedReply.id ? finalizeStreamingParts({ ...m, status: replyStatus }) : m,
             )
           : next,
         conversationId,
@@ -700,7 +723,13 @@ export class ChxChat extends LitElement {
         );
       }
     } finally {
-      this.#activeDeliveries.delete(message.id);
+      // an `{kind:"abort"}` chunk settles the stream cleanly, never throwing — so the outcome reads
+      // the signal here rather than trusting the catch to have run
+      this.#untrackDelivery(
+        message.id,
+        controller.signal.aborted ? "cancelled" : failed ? "failed" : "completed",
+        conversationId,
+      );
     }
   }
 
@@ -713,11 +742,123 @@ export class ChxChat extends LitElement {
     const message = this.#internalMessages.find((m) => m.id === messageId);
     if (!message || message.status !== "failed") return;
     const conversationId = message.conversationId;
-    const resetMessage = { ...message, status: /** @type {"sending"} */ ("sending"), error: undefined };
+    const resetMessage = {
+      ...message,
+      status: /** @type {"sending"} */ ("sending"),
+      error: undefined,
+    };
     const withoutStaleReply = this.#internalMessages.filter((m) => m.replyToId !== messageId);
-    this.#applyMessages(reconcileMessages(withoutStaleReply, resetMessage, this.userId), conversationId);
+    this.#applyMessages(
+      reconcileMessages(withoutStaleReply, resetMessage, this.userId),
+      conversationId,
+    );
     this.#deliver(resetMessage, conversationId);
   }
+
+  /**
+   * `#activeDeliveries` is a plain Map, not a reactive property, so `status`/`busy` (and the
+   * composer's `loading`, derived from them) only re-render if the update is kicked by hand. The one
+   * place a delivery is registered — `#deliver` and `#deliverRegenerate` both go through here.
+   * @param {string} deliveryId
+   * @param {AbortController} controller
+   * @param {string} [conversationId]
+   */
+  #trackDelivery(deliveryId, controller, conversationId) {
+    this.#activeDeliveries.set(deliveryId, { controller, conversationId });
+    if (this.#lastDeliveryError && this.#lastDeliveryError.conversationId === conversationId) {
+      this.#lastDeliveryError = null;
+    }
+    this.requestUpdate();
+    this.dispatchEvent(
+      new CustomEvent("chx-delivery-start", {
+        detail: { messageId: deliveryId, conversationId },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  /**
+   * The counterpart to `#trackDelivery` above — same requestUpdate reasoning.
+   * @param {string} deliveryId
+   * @param {"completed" | "cancelled" | "failed"} outcome
+   * @param {string} [conversationId]
+   */
+  #untrackDelivery(deliveryId, outcome, conversationId) {
+    // Idempotent: an abort settles the delivery here right away, and the stream's own unwind lands
+    // here again later — whenever the adapter gets around to it, if ever.
+    if (!this.#activeDeliveries.delete(deliveryId)) return;
+    if (outcome === "failed") this.#lastDeliveryError = { conversationId };
+    this.requestUpdate();
+    this.dispatchEvent(
+      new CustomEvent("chx-delivery-end", {
+        detail: { messageId: deliveryId, conversationId, outcome },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  /** @returns {boolean} */
+  #hasActiveDelivery() {
+    for (const delivery of this.#activeDeliveries.values()) {
+      if (delivery.conversationId === this.activeConversationId) return true;
+    }
+    return false;
+  }
+
+  /**
+   * The active conversation's turn state, derived — nothing assigns it. `submitted` is the window
+   * between a send and its first chunk (`#isWaitingForReply`), `streaming` is a reply shell filling
+   * in, `error` is a delivery that failed without being cancelled, cleared by the next send.
+   * A backgrounded conversation's own delivery never shows up here, same rule `#isWaitingForReply`
+   * follows. Read it to drive a stop affordance, a disabled send, or a retry prompt.
+   * @returns {import("../../types/adapter.js").ChxChatStatus}
+   */
+  get status() {
+    if (this.#hasActiveDelivery()) return this.#isWaitingForReply() ? "submitted" : "streaming";
+    // the null check has to be explicit: `undefined` is a real conversationId here (the
+    // single-conversation case), so optional chaining would read "error" for every idle chat
+    if (
+      this.#lastDeliveryError &&
+      this.#lastDeliveryError.conversationId === this.activeConversationId
+    ) {
+      return "error";
+    }
+    return "ready";
+  }
+
+  /** True while the active conversation has a turn in flight — `status` narrowed to the one bit the composer needs. @returns {boolean} */
+  get busy() {
+    return this.status === "submitted" || this.status === "streaming";
+  }
+
+  /**
+   * Aborts every in-flight delivery for the active conversation — what the composer's stop button
+   * reaches through `chx-stop`. A backgrounded conversation's delivery is deliberately left alone;
+   * use `cancel(messageId)` for that.
+   *
+   * Aborting only stops this client reading the stream. An agent transport has to react to the
+   * signal itself — send ACP's `session/cancel`, answer any outstanding `session/request_permission`
+   * — or the agent keeps working with nothing listening. See `src/docs/agentic.md`.
+   *
+   * Which is why the delivery is settled here rather than left to the stream to unwind: an adapter
+   * that returns from its `start()` on abort without closing the stream leaves the read pending
+   * forever, and waiting on that would strand the composer in its stop state. Trailing chunks from
+   * a well-behaved adapter still land — settling is about this chat's own turn state, nothing else.
+   */
+  stop() {
+    for (const [deliveryId, delivery] of [...this.#activeDeliveries]) {
+      if (delivery.conversationId !== this.activeConversationId) continue;
+      delivery.controller.abort();
+      this.#untrackDelivery(deliveryId, "cancelled", delivery.conversationId);
+    }
+  }
+
+  /** Composer/textbox stop button — see `stop()`. Intercept by listening lower and calling `stopPropagation()`. */
+  #handleStop = () => {
+    this.stop();
+  };
 
   /**
    * Aborts an in-flight `sendMessage`/`regenerate` delivery — `messageId` is whichever id that
@@ -726,7 +867,10 @@ export class ChxChat extends LitElement {
    * @param {string} messageId
    */
   cancel(messageId) {
-    this.#activeDeliveries.get(messageId)?.controller.abort();
+    const delivery = this.#activeDeliveries.get(messageId);
+    if (!delivery) return;
+    delivery.controller.abort();
+    this.#untrackDelivery(messageId, "cancelled", delivery.conversationId); // see stop()
   }
 
   /**
@@ -757,20 +901,27 @@ export class ChxChat extends LitElement {
    */
   async #deliverRegenerate(replyId, replyToId, conversationId) {
     const controller = new AbortController();
-    this.#activeDeliveries.set(replyId, { controller, conversationId });
+    let failed = false;
+    this.#trackDelivery(replyId, controller, conversationId);
     try {
-      const stream = await this.adapter?.regenerate?.(replyId, { signal: controller.signal, conversationId });
+      const stream = await this.adapter?.regenerate?.(replyId, {
+        signal: controller.signal,
+        conversationId,
+      });
       if (!stream) return;
       await this.#stream.deliverStream(stream, { replyToId, conversationId });
     } catch (error) {
       // regenerate() already removed the old reply — if a fresh one started streaming before the
       // failure, close it out too; if nothing arrived yet, there's nothing to find or close
       const cancelled = controller.signal.aborted;
+      failed = !cancelled;
       const orphanedReply = this.#internalMessages.find(
         (m) => m.replyToId === replyToId && m.status === "sending",
       );
       if (orphanedReply) {
-        const replyStatus = /** @type {"failed" | "cancelled"} */ (cancelled ? "cancelled" : "failed");
+        const replyStatus = /** @type {"failed" | "cancelled"} */ (
+          cancelled ? "cancelled" : "failed"
+        );
         this.#applyMessages(
           this.#internalMessages.map((m) =>
             m.id === orphanedReply.id ? finalizeStreamingParts({ ...m, status: replyStatus }) : m,
@@ -788,7 +939,11 @@ export class ChxChat extends LitElement {
         );
       }
     } finally {
-      this.#activeDeliveries.delete(replyId);
+      this.#untrackDelivery(
+        replyId,
+        controller.signal.aborted ? "cancelled" : failed ? "failed" : "completed",
+        conversationId,
+      );
     }
   }
 
@@ -830,7 +985,9 @@ export class ChxChat extends LitElement {
   pushComposerProperties() {
     const composer = this.messageComposerElement;
     if (!composer) return;
-    composer.loading = this.loading;
+    // `loading` stays an app-settable override for a transport chx-chat doesn't drive (a messenger's
+    // local echo); a delivery in flight raises it on its own. See `status`.
+    composer.loading = this.loading || this.busy;
     composer.dragging = this.dragging;
     composer.messagesEmpty = this.#internalMessages.length === 0;
     composer.disabled = this.#isEmptyState; // no active conversation → can't compose/send
@@ -919,11 +1076,16 @@ export class ChxChat extends LitElement {
       const stamped =
         conversationId === undefined
           ? this.messages
-          : this.messages.map((m) => (m.conversationId === conversationId ? m : { ...m, conversationId }));
+          : this.messages.map((m) =>
+              m.conversationId === conversationId ? m : { ...m, conversationId },
+            );
       this.#internalMessages =
         conversationId === undefined
           ? stamped
-          : [...this.#internalMessages.filter((m) => m.conversationId !== conversationId), ...stamped];
+          : [
+              ...this.#internalMessages.filter((m) => m.conversationId !== conversationId),
+              ...stamped,
+            ];
       this.#lastAnnounced = this.messages;
     }
   }
@@ -937,7 +1099,8 @@ export class ChxChat extends LitElement {
    * @param {string | undefined} conversationId
    */
   async #restoreScroll(conversationId) {
-    const offset = conversationId === undefined ? undefined : this.#scrollOffsets.get(conversationId);
+    const offset =
+      conversationId === undefined ? undefined : this.#scrollOffsets.get(conversationId);
     if (offset === undefined) return;
     await this.messageListElement?.updateComplete;
     this.messageListElement?.list?.scrollToOffset(offset);
@@ -982,6 +1145,9 @@ export class ChxChat extends LitElement {
   render() {
     return html`
       <slot name="message-list" @slotchange=${this.handleMessageListSlotchange}></slot>
+      <!-- purely a placement slot: chx-chat neither gates nor fills it, the app owns what's in it
+           and when (see src/docs/agentic.md's permission flow) -->
+      <slot name="input-banner"></slot>
       <slot name="message-composer" @slotchange=${this.handleMessageComposerSlotchange}></slot>
     `;
   }

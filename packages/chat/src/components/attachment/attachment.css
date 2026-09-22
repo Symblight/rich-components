@@ -14,12 +14,17 @@
 
 .attachment {
   box-sizing: border-box;
+  position: relative;
   display: block;
   width: var(--chx-attachment-size);
   height: var(--chx-attachment-size);
   color: var(--chx-attachment-foreground-color);
   --md-card-container-color: var(--chx-attachment-background-color);
   --md-card-shape: var(--chx-attachment-shape);
+}
+
+.attachment_image::part(content) {
+  padding: 0;
 }
 
 .attachment_error {
@@ -51,6 +56,27 @@
   }
 }
 
+.attachment__image {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border-radius: var(--chx-attachment-shape);
+  object-fit: cover;
+}
+
+.attachment_image .attachment__content {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  white-space: nowrap;
+  border: 0;
+}
+
 .attachment__content {
   max-width: 100%;
   overflow: hidden;
@@ -61,17 +87,23 @@
   white-space: nowrap;
 }
 
-.attachment__actions {
+.attachment__remove {
   position: absolute;
+  z-index: 1;
   top: -0.35rem;
   right: -0.35rem;
-}
-
-.attachment__remove {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.1s ease;
   --md-icon-button-font-size: var(--chx-attachment-remove-size);
   --md-icon-button-background-color: var(--chx-attachment-remove-background-color);
 
   &::part(button) {
     padding: 0.15rem;
   }
+}
+
+.attachment:is(:hover, :focus-within) .attachment__remove {
+  opacity: 1;
+  pointer-events: auto;
 }

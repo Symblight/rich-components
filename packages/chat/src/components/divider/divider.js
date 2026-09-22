@@ -55,7 +55,8 @@ export class ChxDivider extends LitElement {
   #defaultFormatDate = (/** @type {number | Date} */ date) => {
     const d = date instanceof Date ? date : new Date(date);
     const now = new Date();
-    const startOfDay = (/** @type {Date} */ x) => new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
+    const startOfDay = (/** @type {Date} */ x) =>
+      new Date(x.getFullYear(), x.getMonth(), x.getDate()).getTime();
     const diffDays = Math.round((startOfDay(now) - startOfDay(d)) / 86400000);
     if (diffDays === 0) return "Today";
     if (diffDays === 1) return "Yesterday";
@@ -68,7 +69,12 @@ export class ChxDivider extends LitElement {
   };
 
   /** Show a divider on the first message and whenever the calendar day changes. */
-  #defaultShouldShowDivider = (/** @type {{date: number | Date, previousDate: number | Date | undefined}} */ { date, previousDate }) => {
+  #defaultShouldShowDivider = (
+    /** @type {{date: number | Date, previousDate: number | Date | undefined}} */ {
+      date,
+      previousDate,
+    },
+  ) => {
     if (previousDate == null) return true;
     const a = date instanceof Date ? date : new Date(date);
     const b = previousDate instanceof Date ? previousDate : new Date(previousDate);

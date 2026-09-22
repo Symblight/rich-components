@@ -1,5 +1,5 @@
 :host {
-  display: block;
+  display: flex;
   box-sizing: border-box;
   --chx-message-composer-gap: 0.5rem;
   max-width: 60rem;

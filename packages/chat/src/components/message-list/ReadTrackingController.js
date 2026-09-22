@@ -49,7 +49,11 @@ export class ReadTrackingController {
     if (entry.index > previousMaxIndex) {
       for (let index = previousMaxIndex + 1; index < entry.index; index++) {
         const candidate = messages[index];
-        if (candidate && candidate.readState === "unread" && !this.#readMessageIds.has(candidate.id)) {
+        if (
+          candidate &&
+          candidate.readState === "unread" &&
+          !this.#readMessageIds.has(candidate.id)
+        ) {
           this.#readMessageIds.add(candidate.id);
           coveredIds.push(candidate.id);
         }
@@ -60,7 +64,10 @@ export class ReadTrackingController {
     this.#readMessageIds.add(key);
     coveredIds.push(key);
 
-    this.#emit("chx-message-read", { messageId: /** @type {string} */ (coveredIds.at(-1)), messageIds: coveredIds });
+    this.#emit("chx-message-read", {
+      messageId: /** @type {string} */ (coveredIds.at(-1)),
+      messageIds: coveredIds,
+    });
   }
 
   /**
@@ -87,6 +94,8 @@ export class ReadTrackingController {
     const messages = this.#getMessages();
     if (messages === this.#lastMessages) return;
     this.#lastMessages = messages;
-    this.#messagesById = new Map(messages.map((message, index) => [message.id, { message, index }]));
+    this.#messagesById = new Map(
+      messages.map((message, index) => [message.id, { message, index }]),
+    );
   }
 }

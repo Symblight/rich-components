@@ -11,7 +11,7 @@ const OBJECT_REPLACEMENT = "￼"; // PM's leafText fallback for non-command leav
  * @property {string | null} character
  * @property {string | null} query
  * @property {string | null} target
- * @property {(Element & { commandCharacter?: string }) | null} element
+ * @property {(Element & { commandCharacter?: string, maxQuerySpaces?: number, canConfirm?: () => boolean }) | null} element
  */
 
 /** @type {import("prosemirror-state").PluginKey<CommandPluginState>} */
@@ -37,6 +37,12 @@ function findActiveTrigger(textBeforeCaret, characters) {
     }
   }
   return null;
+}
+
+/** Whitespace characters in a query, against which a field's `maxQuerySpaces` is budgeted.
+ * @param {string} query */
+function countSpaces(query) {
+  return [...query].filter((char) => WHITESPACE.test(char)).length;
 }
 
 /** @type {CommandPluginState} */
@@ -106,6 +112,13 @@ export function createCommandPlugin({ getCommandFields }) {
             trigger.character,
         );
         if (!element) return INACTIVE_STATE;
+
+        // the session, not just the menu, ends once the query outgrows the field's space budget —
+        // otherwise a stray "@" keeps it open for the rest of the line and swallows Enter below.
+        // 0 (the default) is the ordinary mention: a space closes it
+        const maxQuerySpaces =
+          /** @type {{ maxQuerySpaces?: number }} */ (element).maxQuerySpaces ?? 0;
+        if (countSpaces(trigger.query) > maxQuerySpaces) return INACTIVE_STATE;
 
         const target =
           value.active && value.element === element ? value.target : crypto.randomUUID();
@@ -177,6 +190,12 @@ export function createCommandPlugin({ getCommandFields }) {
         }
 
         if (event.key === "Enter") {
+          // a field with nothing to resolve (empty or closed menu) lets Enter through to the
+          // keymap's submit — matters once maxQuerySpaces keeps a session open across words.
+          // A field that doesn't implement it keeps the old unconditional behaviour
+          const element = /** @type {{ canConfirm?: () => boolean }} */ (state.element);
+          if (element?.canConfirm && !element.canConfirm()) return false;
+
           queueMicrotask(() => {
             state.element?.dispatchEvent(
               new CustomEvent("chx-command-confirm", {

@@ -107,7 +107,9 @@ export class FocusBehaviorController {
    * @param {HTMLElement} messageElement
    */
   #suppressInteriorTabbing(messageElement) {
-    for (const el of messageElement.querySelectorAll(FocusBehaviorController.#INTERIOR_FOCUSABLE_SELECTOR)) {
+    for (const el of messageElement.querySelectorAll(
+      FocusBehaviorController.#INTERIOR_FOCUSABLE_SELECTOR,
+    )) {
       if (el.hasAttribute("data-roving-hidden-tabindex")) continue; // already suppressed
       el.setAttribute("data-roving-hidden-tabindex", el.getAttribute("tabindex") ?? "");
       el.setAttribute("tabindex", "-1");

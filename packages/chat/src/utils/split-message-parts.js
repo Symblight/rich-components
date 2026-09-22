@@ -36,7 +36,8 @@ export function splitMessageParts(id, html, rules) {
   const lines = [...wrapper.children];
   lines.forEach((line, lineIndex) => {
     for (const node of line.childNodes) {
-      const rule = node instanceof Element && rules.find((candidate) => node.matches(candidate.selector));
+      const rule =
+        node instanceof Element && rules.find((candidate) => node.matches(candidate.selector));
       if (rule) {
         flush();
         parts.push({
@@ -78,7 +79,12 @@ export function createSplitOnSendHandler(rules) {
   return (event) => {
     const last = event.detail.messages.at(-1);
     const part = last?.parts[0];
-    if (!last?.own || last.parts.length !== 1 || part?.type !== "text" || typeof part.html !== "string") {
+    if (
+      !last?.own ||
+      last.parts.length !== 1 ||
+      part?.type !== "text" ||
+      typeof part.html !== "string"
+    ) {
       return;
     }
 

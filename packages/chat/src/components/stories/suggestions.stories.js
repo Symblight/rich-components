@@ -1,9 +1,6 @@
 import { html } from "lit";
 
 import { ref } from "lit/directives/ref.js";
-import { unsafeSVG } from "lit/directives/unsafe-svg.js";
-
-import stop from "@material-design-icons/svg/outlined/stop.svg?raw";
 
 import "@symblight/wc-material/button";
 
@@ -92,7 +89,6 @@ export const Basic = {
           <chx-suggestion value="Summarize a document">Summarize a document</chx-suggestion>
           <chx-suggestion value="Ask a question">Ask a question</chx-suggestion>
         </chx-suggestion-list>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>
     </chx-chat>
   `,
@@ -111,10 +107,11 @@ export const AutoSubmit = {
       <chx-message-list slot="message-list"></chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <chx-suggestion-list slot="suggestions" auto-submit>
-          <chx-suggestion value="What's the weather like today?">What's the weather?</chx-suggestion>
+          <chx-suggestion value="What's the weather like today?"
+            >What's the weather?</chx-suggestion
+          >
           <chx-suggestion value="Tell me a fun fact">Tell me a fun fact</chx-suggestion>
         </chx-suggestion-list>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>
     </chx-chat>
   `,
@@ -129,11 +126,7 @@ export const AutoSubmit = {
 /** @type {Story} */
 export const AlwaysVisible = {
   render: () => html`
-    <chx-chat
-      .userId=${"me"}
-      .messages=${makeMessages(4)}
-      .adapter=${createReplyAdapter()}
-    >
+    <chx-chat .userId=${"me"} .messages=${makeMessages(4)} .adapter=${createReplyAdapter()}>
       <chx-message-list slot="message-list"></chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <chx-suggestion-list slot="suggestions" always-visible>
@@ -141,7 +134,6 @@ export const AlwaysVisible = {
           <chx-suggestion value="Summarize a document">Summarize a document</chx-suggestion>
           <chx-suggestion value="Ask a question">Ask a question</chx-suggestion>
         </chx-suggestion-list>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>
     </chx-chat>
   `,
@@ -171,7 +163,6 @@ export const ValueDiffersFromLabel = {
             🧒 Explain like I'm 5
           </chx-suggestion>
         </chx-suggestion-list>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>
     </chx-chat>
   `,
@@ -250,9 +241,11 @@ export const Dynamic = {
       <chx-chat .userId=${"me"} .adapter=${createReplyAdapter()}>
         <chx-message-list slot="message-list"></chx-message-list>
         <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
-          <chx-suggestion-list slot="suggestions" ${ref(fetchInitialSuggestions)}></chx-suggestion-list>
+          <chx-suggestion-list
+            slot="suggestions"
+            ${ref(fetchInitialSuggestions)}
+          ></chx-suggestion-list>
           <md-button slot="actions" variant="text" @click=${cycleTopic}>Different topic</md-button>
-          <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
         </chx-message-composer>
       </chx-chat>
     `;

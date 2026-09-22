@@ -169,9 +169,10 @@ export class ChxAttachments extends LitElement {
    * @param {File} file
    */
   insertChip(file) {
-    const composer = /** @type {(Element & {editor?: import("../../editor/Editor.js").Editor}) | null} */ (
-      this.closest("chx-message-composer")
-    );
+    const composer =
+      /** @type {(Element & {editor?: import("../../editor/Editor.js").Editor}) | null} */ (
+        this.closest("chx-message-composer")
+      );
     const editor = composer?.editor;
     if (!editor) return;
 

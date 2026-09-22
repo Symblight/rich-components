@@ -9,7 +9,9 @@ describe("chx-chat", () => {
   describe("messages", () => {
     it("sending a message updates the internal store and fires chx-messages-change synchronously", async () => {
       const el = /** @type {ChxChat} */ (
-        await fixture(html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`)
+        await fixture(
+          html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`,
+        )
       );
       el.userId = "me"; // userId's default Lit attribute name is lowercased, not kebab-cased —
       //   "user-id" as a plain attribute never binds, so this is set as a property instead
@@ -43,12 +45,19 @@ describe("chx-chat", () => {
 
     it("assigning a new messages array externally replaces internal state", async () => {
       const el = /** @type {ChxChat} */ (
-        await fixture(html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`)
+        await fixture(
+          html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`,
+        )
       );
       await el.updateComplete;
 
       const externalMessages = [
-        { id: "ext-1", own: false, createdAt: Date.now(), parts: [{ id: "ext-1-t1", type: "text", text: "hi" }] },
+        {
+          id: "ext-1",
+          own: false,
+          createdAt: Date.now(),
+          parts: [{ id: "ext-1-t1", type: "text", text: "hi" }],
+        },
       ];
       el.messages = externalMessages;
       await el.updateComplete;
@@ -67,12 +76,19 @@ describe("chx-chat", () => {
       // validateMessages' console.error, since the mutation below introduces an id-less message
       // that would otherwise be flagged.
       const el = /** @type {ChxChat} */ (
-        await fixture(html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`)
+        await fixture(
+          html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`,
+        )
       );
       await el.updateComplete;
 
       const externalMessages = [
-        { id: "ext-1", own: false, createdAt: Date.now(), parts: [{ id: "ext-1-t1", type: "text", text: "hi" }] },
+        {
+          id: "ext-1",
+          own: false,
+          createdAt: Date.now(),
+          parts: [{ id: "ext-1-t1", type: "text", text: "hi" }],
+        },
       ];
       el.messages = externalMessages;
       await el.updateComplete;
@@ -82,7 +98,9 @@ describe("chx-chat", () => {
       const errorCalls = [];
       console.error = (...args) => errorCalls.push(args);
       try {
-        externalMessages.push(/** @type {any} */ ({ own: false, createdAt: Date.now(), parts: [] }));
+        externalMessages.push(
+          /** @type {any} */ ({ own: false, createdAt: Date.now(), parts: [] }),
+        );
         el.messages = externalMessages;
         await el.updateComplete;
       } finally {
@@ -143,8 +161,18 @@ describe("chx-chat", () => {
     it("processes delta chunks into the right final state, batched at the configured interval", async () => {
       const el = await setupChat(() =>
         streamOf([
-          { messageId: "reply-1", authorId: "assistant", partId: "reply-1-t1", delta: { text: "Hel" } },
-          { messageId: "reply-1", authorId: "assistant", partId: "reply-1-t1", delta: { text: "lo" } },
+          {
+            messageId: "reply-1",
+            authorId: "assistant",
+            partId: "reply-1-t1",
+            delta: { text: "Hel" },
+          },
+          {
+            messageId: "reply-1",
+            authorId: "assistant",
+            partId: "reply-1-t1",
+            delta: { text: "lo" },
+          },
           { kind: "finish", messageId: "reply-1" },
         ]),
       );
@@ -167,7 +195,12 @@ describe("chx-chat", () => {
     it("an abort chunk sets the reply's status to cancelled", async () => {
       const el = await setupChat(() =>
         streamOf([
-          { messageId: "reply-1", authorId: "assistant", partId: "reply-1-t1", delta: { text: "wait" } },
+          {
+            messageId: "reply-1",
+            authorId: "assistant",
+            partId: "reply-1-t1",
+            delta: { text: "wait" },
+          },
           { kind: "abort", messageId: "reply-1" },
         ]),
       );
@@ -215,7 +248,9 @@ describe("chx-chat", () => {
       let lastSnapshot = [];
       el.addEventListener(
         "chx-messages-change",
-        /** @type {EventListener} */ ((e) => (lastSnapshot = /** @type {CustomEvent} */ (e).detail.messages)),
+        /** @type {EventListener} */ (
+          (e) => (lastSnapshot = /** @type {CustomEvent} */ (e).detail.messages)
+        ),
       );
 
       const failed = waitForMessage(el, (m) => m.own === true && m.status === "failed");
@@ -239,8 +274,14 @@ describe("chx-chat", () => {
     it("drops a duplicate eventId chunk", async () => {
       const el = await setupChat(() =>
         streamOf([
-          { eventId: "e1", chunk: { messageId: "reply-1", partId: "reply-1-t1", delta: { text: "Hi" } } },
-          { eventId: "e1", chunk: { messageId: "reply-1", partId: "reply-1-t1", delta: { text: "Hi" } } },
+          {
+            eventId: "e1",
+            chunk: { messageId: "reply-1", partId: "reply-1-t1", delta: { text: "Hi" } },
+          },
+          {
+            eventId: "e1",
+            chunk: { messageId: "reply-1", partId: "reply-1-t1", delta: { text: "Hi" } },
+          },
           { kind: "finish", messageId: "reply-1" },
         ]),
       );
@@ -303,7 +344,13 @@ describe("chx-chat", () => {
         },
       };
       el.messages = [
-        /** @type {any} */ ({ id: "m1", own: true, createdAt: Date.now(), status: "sending", parts: [] }),
+        /** @type {any} */ ({
+          id: "m1",
+          own: true,
+          createdAt: Date.now(),
+          status: "sending",
+          parts: [],
+        }),
       ];
       await el.updateComplete;
 
@@ -382,7 +429,9 @@ describe("chx-chat", () => {
       let lastSnapshot = [];
       el.addEventListener(
         "chx-messages-change",
-        /** @type {EventListener} */ ((e) => (lastSnapshot = /** @type {CustomEvent} */ (e).detail.messages)),
+        /** @type {EventListener} */ (
+          (e) => (lastSnapshot = /** @type {CustomEvent} */ (e).detail.messages)
+        ),
       );
 
       const resent = waitForMessage(el, (m) => m.id === "m1" && m.status === "sending");
@@ -401,12 +450,24 @@ describe("chx-chat", () => {
       el.adapter = {
         regenerate: async () =>
           streamOf([
-            { messageId: "reply-2", authorId: "assistant", partId: "reply-2-t1", delta: { text: "new" } },
+            {
+              messageId: "reply-2",
+              authorId: "assistant",
+              partId: "reply-2-t1",
+              delta: { text: "new" },
+            },
             { kind: "finish", messageId: "reply-2" },
           ]),
       };
       el.messages = [
-        /** @type {any} */ ({ id: "user-1", own: true, authorId: "me", createdAt: Date.now(), status: "sent", parts: [] }),
+        /** @type {any} */ ({
+          id: "user-1",
+          own: true,
+          authorId: "me",
+          createdAt: Date.now(),
+          status: "sent",
+          parts: [],
+        }),
         /** @type {any} */ ({
           id: "reply-1",
           own: false,
@@ -423,7 +484,9 @@ describe("chx-chat", () => {
       const snapshots = [];
       el.addEventListener(
         "chx-messages-change",
-        /** @type {EventListener} */ ((e) => snapshots.push(/** @type {CustomEvent} */ (e).detail.messages)),
+        /** @type {EventListener} */ (
+          (e) => snapshots.push(/** @type {CustomEvent} */ (e).detail.messages)
+        ),
       );
 
       const done = waitForMessage(el, (m) => m.id === "reply-2" && m.status === "sent");
@@ -440,7 +503,13 @@ describe("chx-chat", () => {
     it("regenerate is a no-op when adapter.regenerate is unset", async () => {
       const el = /** @type {ChxChat} */ (await fixture(html`<chx-chat></chx-chat>`));
       el.messages = [
-        /** @type {any} */ ({ id: "user-1", own: true, createdAt: Date.now(), status: "sent", parts: [] }),
+        /** @type {any} */ ({
+          id: "user-1",
+          own: true,
+          createdAt: Date.now(),
+          status: "sent",
+          parts: [],
+        }),
         /** @type {any} */ ({
           id: "reply-1",
           own: false,
@@ -466,7 +535,9 @@ describe("chx-chat", () => {
       el.adapter = {
         sendMessage: (_message, { signal }) =>
           new Promise((_resolve, reject) => {
-            signal.addEventListener("abort", () => reject(new DOMException("aborted", "AbortError")));
+            signal.addEventListener("abort", () =>
+              reject(new DOMException("aborted", "AbortError")),
+            );
           }),
       };
       await el.updateComplete;
@@ -477,9 +548,11 @@ describe("chx-chat", () => {
       let sentId = "";
       el.addEventListener(
         "chx-messages-change",
-        /** @type {EventListener} */ ((e) => {
-          if (!sentId) sentId = /** @type {CustomEvent} */ (e).detail.messages[0].id;
-        }),
+        /** @type {EventListener} */ (
+          (e) => {
+            if (!sentId) sentId = /** @type {CustomEvent} */ (e).detail.messages[0].id;
+          }
+        ),
         { once: true },
       );
 
@@ -528,7 +601,14 @@ describe("chx-chat", () => {
           ),
       };
       el.messages = [
-        /** @type {any} */ ({ id: "user-1", own: true, authorId: "me", createdAt: Date.now(), status: "sent", parts: [] }),
+        /** @type {any} */ ({
+          id: "user-1",
+          own: true,
+          authorId: "me",
+          createdAt: Date.now(),
+          status: "sent",
+          parts: [],
+        }),
         /** @type {any} */ ({
           id: "reply-1",
           own: false,
@@ -662,7 +742,12 @@ describe("chx-chat", () => {
         await el.updateComplete;
 
         const changed = waitForMessage(el, (m) => m.id === "incoming-1");
-        handlers.onMessage({ id: "incoming-1", authorId: "them", createdAt: Date.now(), parts: [] });
+        handlers.onMessage({
+          id: "incoming-1",
+          authorId: "them",
+          createdAt: Date.now(),
+          parts: [],
+        });
         const message = await changed;
 
         expect(message.own).to.be.false; // authorId "them" !== userId "me"
@@ -763,7 +848,9 @@ describe("chx-chat", () => {
   describe("loadMoreHistory", () => {
     it("prepends the result and no-ops without a matching adapter/in-flight/hasMore state", async () => {
       const el = /** @type {ChxChat} */ (await fixture(html`<chx-chat></chx-chat>`));
-      el.messages = [/** @type {any} */ ({ id: "m2", own: false, createdAt: Date.now(), parts: [] })];
+      el.messages = [
+        /** @type {any} */ ({ id: "m2", own: false, createdAt: Date.now(), parts: [] }),
+      ];
       await el.updateComplete;
 
       // no adapter.listMessages at all — a no-op, not an error
@@ -787,9 +874,13 @@ describe("chx-chat", () => {
       };
 
       const changed = new Promise((resolve) =>
-        el.addEventListener("chx-messages-change", (e) => resolve(/** @type {CustomEvent} */ (e).detail.messages), {
-          once: true,
-        }),
+        el.addEventListener(
+          "chx-messages-change",
+          (e) => resolve(/** @type {CustomEvent} */ (e).detail.messages),
+          {
+            once: true,
+          },
+        ),
       );
       await el.loadMoreHistory();
       const messages = /** @type {any[]} */ (await changed);
@@ -827,7 +918,9 @@ describe("chx-chat", () => {
     it("chx-message-list's onLoadMore (wired by chx-chat) triggers loadMoreHistory", async () => {
       let calls = 0;
       const el = /** @type {ChxChat} */ (
-        await fixture(html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`)
+        await fixture(
+          html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`,
+        )
       );
       el.adapter = {
         listMessages: async () => {
@@ -847,7 +940,9 @@ describe("chx-chat", () => {
   describe("setTyping", () => {
     it("pushes typing down to chx-message-list and fires chx-typing-change", async () => {
       const el = /** @type {ChxChat} */ (
-        await fixture(html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`)
+        await fixture(
+          html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`,
+        )
       );
       const list = /** @type {ChxMessageList} */ (el.messageListElement);
       expect(list.typing).to.be.false;
@@ -867,7 +962,9 @@ describe("chx-chat", () => {
 
     it("is a no-op (no re-fired event) when called with the value already in effect", async () => {
       const el = /** @type {ChxChat} */ (
-        await fixture(html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`)
+        await fixture(
+          html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`,
+        )
       );
       el.setTyping(true);
       await el.updateComplete;
@@ -913,7 +1010,9 @@ describe("chx-chat", () => {
       /** @type {(stream: ReadableStream) => void} */
       let resolveSendMessage = () => {};
       const el = /** @type {ChxChat} */ (
-        await fixture(html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`)
+        await fixture(
+          html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`,
+        )
       );
       el.userId = "me";
       el.adapter = {
@@ -974,7 +1073,9 @@ describe("chx-chat", () => {
 
     it("stays false once a message exists, even while its parts are still streaming", async () => {
       const el = /** @type {ChxChat} */ (
-        await fixture(html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`)
+        await fixture(
+          html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`,
+        )
       );
       el.userId = "me";
       el.adapter = {

@@ -30,7 +30,7 @@ describe("chx-message", () => {
     expect(el.getAttribute("role")).to.equal("article");
   });
 
-  it("reflects busy as an explicit aria-busy=\"true\"/\"false\" (not presence-only)", async () => {
+  it('reflects busy as an explicit aria-busy="true"/"false" (not presence-only)', async () => {
     const el = /** @type {ChxMessage} */ (await fixture(html`<chx-message></chx-message>`));
     expect(el.getAttribute("aria-busy")).to.equal("false");
 

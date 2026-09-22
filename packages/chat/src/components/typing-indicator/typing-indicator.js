@@ -28,6 +28,8 @@ export class ChxTypingIndicator extends LitElement {
   }
 
   render() {
-    return html`<div class="typing-indicator__label" aria-live="polite">${this.value || "Typing…"}</div>`;
+    return html`<div class="typing-indicator__label" aria-live="polite">
+      ${this.value || "Typing…"}
+    </div>`;
   }
 }

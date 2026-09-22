@@ -17,7 +17,12 @@ describe("getOrCreateMessage", () => {
     );
     expect(messages).to.have.lengthOf(1);
     expect(index).to.equal(0);
-    expect(messages[0]).to.include({ id: "r1", authorId: "assistant", own: false, status: "sending" });
+    expect(messages[0]).to.include({
+      id: "r1",
+      authorId: "assistant",
+      own: false,
+      status: "sending",
+    });
     expect(messages[0].parts).to.deep.equal([]);
   });
 
@@ -60,10 +65,11 @@ describe("applyChunkToParts", () => {
   });
 
   it("appends text deltas onto an existing streaming part", () => {
-    const parts = applyChunkToParts(
-      [{ id: "p1", type: "text", state: "streaming", text: "Hel" }],
-      { messageId: "r1", partId: "p1", delta: { text: "lo" } },
-    );
+    const parts = applyChunkToParts([{ id: "p1", type: "text", state: "streaming", text: "Hel" }], {
+      messageId: "r1",
+      partId: "p1",
+      delta: { text: "lo" },
+    });
     expect(parts[0].text).to.equal("Hello");
   });
 
@@ -81,7 +87,9 @@ describe("applyChunkToParts", () => {
     const calls = [];
     console.warn = (...args) => calls.push(args);
     try {
-      const donePartsIn = [{ id: "p1", type: "text", state: /** @type {"done"} */ ("done"), text: "x" }];
+      const donePartsIn = [
+        { id: "p1", type: "text", state: /** @type {"done"} */ ("done"), text: "x" },
+      ];
       const parts = applyChunkToParts(donePartsIn, {
         messageId: "r1",
         partId: "p1",
@@ -92,6 +100,28 @@ describe("applyChunkToParts", () => {
     } finally {
       console.warn = original;
     }
+  });
+
+  it("keeps patching a done part that carries a tool-call status", () => {
+    const parts = applyChunkToParts(
+      /** @type {any} */ ([
+        { id: "t1", type: "tool_call", state: "done", status: "in_progress", title: "npm test" },
+      ]),
+      { messageId: "r1", partId: "t1", delta: /** @type {any} */ ({ status: "failed" }) },
+    );
+    expect(parts[0].status).to.equal("failed");
+    // untouched fields survive the patch — `title` is part of chx-tool-call's still-draft surface,
+    // not yet on ChxMessagePart
+    expect(/** @type {any} */ (parts[0]).title).to.equal("npm test");
+    expect(parts[0].state).to.equal("done"); // the turn is still over
+  });
+
+  it("exempts a done part on having a status at all, not on it being non-terminal", () => {
+    const parts = applyChunkToParts(
+      /** @type {any} */ ([{ id: "t1", type: "tool_call", state: "done", status: "cancelled" }]),
+      { messageId: "r1", partId: "t1", delta: /** @type {any} */ ({ status: "failed" }) },
+    );
+    expect(parts[0].status).to.equal("failed"); // a real trailing update overrides a local cancel
   });
 });
 
@@ -116,6 +146,44 @@ describe("finalizeStreamingParts", () => {
     });
     expect(finalizeStreamingParts(message)).to.equal(message);
   });
+
+  it("leaves a tool call's status alone on an ordinary finish", () => {
+    const message = /** @type {any} */ ({
+      id: "r1",
+      parts: [{ id: "t1", type: "tool_call", state: "streaming", status: "in_progress" }],
+    });
+    const next = finalizeStreamingParts(message);
+    expect(next.parts[0].state).to.equal("done");
+    expect(next.parts[0].status).to.equal("in_progress"); // a background tool may still report back
+  });
+
+  it("settles an unsettled tool call under {cancelled}", () => {
+    const message = /** @type {any} */ ({
+      id: "r1",
+      parts: [
+        { id: "t1", type: "tool_call", state: "streaming", status: "in_progress" },
+        { id: "t2", type: "tool_call", state: "done", status: "awaiting-permission" },
+        { id: "p1", type: "text", state: "streaming", text: "a" },
+      ],
+    });
+    const next = finalizeStreamingParts(message, { cancelled: true });
+    expect(next.parts[0].status).to.equal("cancelled");
+    expect(next.parts[1].status).to.equal("cancelled"); // already done, still settled
+    expect(next.parts[2].state).to.equal("done");
+    expect(next.parts[2].status).to.equal(undefined); // text parts have no status to settle
+  });
+
+  it("leaves an already-settled status alone under {cancelled}", () => {
+    const message = /** @type {any} */ ({
+      id: "r1",
+      parts: [
+        { id: "t1", type: "tool_call", state: "done", status: "completed" },
+        { id: "t2", type: "tool_call", state: "done", status: "failed" },
+      ],
+    });
+    const next = finalizeStreamingParts(message, { cancelled: true });
+    expect(next).to.equal(message); // nothing to change, reference-stable
+  });
 });
 
 describe("finalizePart", () => {
@@ -139,7 +207,14 @@ describe("finalizePart", () => {
 describe("reconcileChunk", () => {
   it("finish sets status sent and finalizes streaming parts", () => {
     const messages = reconcileChunk(
-      /** @type {any} */ ([{ id: "r1", own: false, status: "sending", parts: [{ id: "p1", type: "text", state: "streaming", text: "hi" }] }]),
+      /** @type {any} */ ([
+        {
+          id: "r1",
+          own: false,
+          status: "sending",
+          parts: [{ id: "p1", type: "text", state: "streaming", text: "hi" }],
+        },
+      ]),
       { kind: "finish", messageId: "r1" },
       "me",
     );
@@ -159,7 +234,12 @@ describe("reconcileChunk", () => {
   it("part-end finalizes one part without touching message status", () => {
     const messages = reconcileChunk(
       /** @type {any} */ ([
-        { id: "r1", own: false, status: "sending", parts: [{ id: "p1", type: "text", state: "streaming", text: "hi" }] },
+        {
+          id: "r1",
+          own: false,
+          status: "sending",
+          parts: [{ id: "p1", type: "text", state: "streaming", text: "hi" }],
+        },
       ]),
       { kind: "part-end", messageId: "r1", partId: "p1" },
       "me",
@@ -168,9 +248,43 @@ describe("reconcileChunk", () => {
     expect(messages[0].parts[0].state).to.equal("done");
   });
 
+  it("abort settles a mid-flight tool call, and a trailing update still lands", () => {
+    let messages = reconcileChunk(
+      /** @type {any} */ ([
+        {
+          id: "r1",
+          own: false,
+          status: "sending",
+          parts: [{ id: "t1", type: "tool_call", state: "streaming", status: "in_progress" }],
+        },
+      ]),
+      { kind: "abort", messageId: "r1" },
+      "me",
+    );
+    expect(messages[0].status).to.equal("cancelled");
+    expect(messages[0].parts[0].state).to.equal("done");
+    expect(messages[0].parts[0].status).to.equal("cancelled"); // no spinner left behind
+
+    // the agent's own final update arrives after the cancel — dropping it is what froze the card
+    messages = reconcileChunk(
+      messages,
+      { messageId: "r1", partId: "t1", delta: /** @type {any} */ ({ status: "failed" }) },
+      "me",
+    );
+    expect(messages[0].parts[0].status).to.equal("failed");
+  });
+
   it("a delta chunk creates a shell then patches it across calls", () => {
-    let messages = reconcileChunk([], { messageId: "r1", partId: "p1", delta: { text: "Hel" } }, "me");
-    messages = reconcileChunk(messages, { messageId: "r1", partId: "p1", delta: { text: "lo" } }, "me");
+    let messages = reconcileChunk(
+      [],
+      { messageId: "r1", partId: "p1", delta: { text: "Hel" } },
+      "me",
+    );
+    messages = reconcileChunk(
+      messages,
+      { messageId: "r1", partId: "p1", delta: { text: "lo" } },
+      "me",
+    );
     expect(messages).to.have.lengthOf(1);
     expect(messages[0].parts[0].text).to.equal("Hello");
   });

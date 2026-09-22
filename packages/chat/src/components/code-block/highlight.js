@@ -1,5 +1,10 @@
 import { highlightTree, classHighlighter } from "@lezer/highlight";
-import { javascriptLanguage, typescriptLanguage, tsxLanguage, jsxLanguage } from "@codemirror/lang-javascript";
+import {
+  javascriptLanguage,
+  typescriptLanguage,
+  tsxLanguage,
+  jsxLanguage,
+} from "@codemirror/lang-javascript";
 import { cssLanguage } from "@codemirror/lang-css";
 import { htmlLanguage } from "@codemirror/lang-html";
 import { jsonLanguage } from "@codemirror/lang-json";
@@ -46,15 +51,42 @@ export const LANGUAGES = {
   rust: { label: "Rust" },
   sql: { label: "SQL" },
   yaml: { label: "YAML" },
+  // No Lezer grammar — hunk coloring is a line-prefix pass in `highlightDiff`, which is all a diff
+  // needs and far less than a real grammar would cost.
   diff: { label: "Diff" },
 };
 
 /** @type {Record<string, string>} */
 const ESCAPE_MAP = { "&": "&amp;", "<": "&lt;", ">": "&gt;" };
 
-/** @param {string} text @returns {string} */
+/** Quotes aren't escaped: every run lands in text-content position, never in an attribute value.
+ *  Putting a `title=`/`data-*` on a token span breaks that — this output goes to `unsafeHTML`.
+ *  @param {string} text @returns {string} */
 function escapeHtml(text) {
   return text.replace(/[&<>]/g, (char) => ESCAPE_MAP[char]);
+}
+
+/**
+ * Colors a unified diff by line prefix — added/removed/meta, nothing finer. Spans stay inline and
+ * carry no newline of their own, so a full-line background is deliberately out of scope: it would
+ * need `display: block`, which double-spaces against the `<pre>`'s own newlines.
+ * @param {string} code
+ * @returns {string}
+ */
+function highlightDiff(code) {
+  let html = "";
+  for (const line of code.split(/(?<=\n)/)) {
+    const newline = line.endsWith("\n") ? "\n" : "";
+    const body = newline ? line.slice(0, -1) : line;
+    const escaped = escapeHtml(body);
+    if (/^(diff |index |@@|\+\+\+|---)/.test(body))
+      html += `<span class="tok-diffMeta">${escaped}</span>`;
+    else if (body.startsWith("+")) html += `<span class="tok-diffAdded">${escaped}</span>`;
+    else if (body.startsWith("-")) html += `<span class="tok-diffRemoved">${escaped}</span>`;
+    else html += escaped;
+    html += newline;
+  }
+  return html;
 }
 
 /**
@@ -68,6 +100,8 @@ function escapeHtml(text) {
  * @returns {string}
  */
 export function highlightToHTML(code, lang) {
+  if (lang === "diff") return highlightDiff(code);
+
   const language = LANGUAGES[lang]?.language;
   if (!language) return escapeHtml(code);
 

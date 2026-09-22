@@ -16,8 +16,6 @@ import styles from "./command-picker.css?inline";
 /** @typedef {HTMLElement & { open: boolean, toggle: (options?: {force?: boolean}) => Promise<void>, openAtPoint: (x: number, y: number) => void }} MenuElement */
 /** @typedef {HTMLElement & { value: string, selected: boolean }} MenuItemElement */
 
-const WHITESPACE = /\s/; // matches U+00A0 too, not just a plain " "
-
 /**
  * @tag chx-command-picker
  * @summary Command picker.
@@ -27,6 +25,7 @@ export class ChxCommandPicker extends LitElement {
   /** @type {import("lit").PropertyDeclarations} */
   static properties = {
     commandCharacter: { type: String, attribute: true },
+    maxQuerySpaces: { type: Number, attribute: true },
   };
 
   /** @returns {import("lit").CSSResultGroup} */
@@ -50,6 +49,14 @@ export class ChxCommandPicker extends LitElement {
 
     /** @type {string} */
     this.commandCharacter = "@";
+
+    /**
+     * Whitespace characters the query may contain before the search ends — read by the command
+     * plugin, not by this component. `0` is the ordinary mention: a space closes the search. Raise
+     * it for values that legitimately contain spaces, e.g. a file path under `My Documents`.
+     * @type {number}
+     */
+    this.maxQuerySpaces = 0;
   }
 
   connectedCallback() {
@@ -115,8 +122,27 @@ export class ChxCommandPicker extends LitElement {
   }
 
   closeMenu() {
+    // a closed menu must not keep a selected item — chx-command-confirm reads the selection back,
+    // and canConfirm() answers for a session that may still be open behind the closed menu
+    for (const item of /** @type {MenuItemElement[]} */ ([
+      ...this.menuElement.querySelectorAll("md-menu-item"),
+    ])) {
+      item.selected = false;
+    }
     this.menuElement.toggle({ force: false });
     this.#highlightedIndex = -1;
+  }
+
+  /**
+   * Whether Enter should resolve an option rather than send the message — asked by the command
+   * plugin before it swallows the key, so a still-open search with no visible menu doesn't block
+   * sending.
+   * @returns {boolean}
+   */
+  canConfirm() {
+    return Boolean(
+      this.menuElement?.open && this.menuElement.querySelector("md-menu-item[selected]"),
+    );
   }
 
   /** @param {number} index */
@@ -143,10 +169,8 @@ export class ChxCommandPicker extends LitElement {
       return;
     }
     this.#anchorPoint = { x, y };
-    if (WHITESPACE.test(value)) {
-      this.closeMenu();
-      return;
-    }
+    // no whitespace check here any more — when a search should end, the command plugin deactivates
+    // and sends `value: null` above, so termination lives in exactly one place (see maxQuerySpaces)
     if (this.menuElement.children.length > 0) {
       this.menuElement.openAtPoint(x, y);
       this.setHighlighted(Math.max(this.#highlightedIndex, 0));

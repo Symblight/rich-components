@@ -57,7 +57,7 @@ export class ChxConversations extends LitElement {
    * @returns {ChxConversation[]}
    */
   get conversations() {
-    return this.#chat ? this.#chat.conversations ?? [] : this.#privateConversations;
+    return this.#chat ? (this.#chat.conversations ?? []) : this.#privateConversations;
   }
 
   /** @param {ChxConversation[]} value */
@@ -90,8 +90,7 @@ export class ChxConversations extends LitElement {
   #resolveChat() {
     if (!this.for) return null;
     const root = this.getRootNode();
-    const scope =
-      root instanceof Document || root instanceof ShadowRoot ? root : document;
+    const scope = root instanceof Document || root instanceof ShadowRoot ? root : document;
     return /** @type {any} */ (scope.getElementById(this.for));
   }
 
@@ -106,7 +105,10 @@ export class ChxConversations extends LitElement {
         /** @type {EventListener} */ (this.#onChatActiveChange),
       );
       next.addEventListener("chx-conversations-change", this.#onChatConversationsChange);
-      next.addEventListener("chx-typing-change", /** @type {EventListener} */ (this.#onChatTypingChange));
+      next.addEventListener(
+        "chx-typing-change",
+        /** @type {EventListener} */ (this.#onChatTypingChange),
+      );
       // Mark the chat conversation-driven, so a removed/empty selection shows its empty state instead
       // of the single-conversation default. See empty-state.md.
       /** @type {any} */ (next).conversationsPresent = true;
@@ -124,7 +126,10 @@ export class ChxConversations extends LitElement {
       /** @type {EventListener} */ (this.#onChatActiveChange),
     );
     this.#chat.removeEventListener("chx-conversations-change", this.#onChatConversationsChange);
-    this.#chat.removeEventListener("chx-typing-change", /** @type {EventListener} */ (this.#onChatTypingChange));
+    this.#chat.removeEventListener(
+      "chx-typing-change",
+      /** @type {EventListener} */ (this.#onChatTypingChange),
+    );
     this.#chat = null;
   }
 
@@ -239,15 +244,18 @@ export class ChxConversations extends LitElement {
     const cached = this.#itemCache.get(key);
     if (this.buildItem) {
       const previous = cached?.builderKey === this.buildItem ? cached.element : undefined;
-      const element = /** @type {ConversationItemElement} */ (this.buildItem(conversation, previous));
+      const element = /** @type {ConversationItemElement} */ (
+        this.buildItem(conversation, previous)
+      );
       this.#itemCache.set(key, { builderKey: this.buildItem, element });
       return element;
     }
-    const element = /** @type {ConversationItemElement & {title: string, lastMessage: string, unreadCount: number, unread: boolean}} */ (
-      cached && cached.builderKey === undefined
-        ? cached.element
-        : document.createElement("chx-conversation-item")
-    );
+    const element =
+      /** @type {ConversationItemElement & {title: string, lastMessage: string, unreadCount: number, unread: boolean}} */ (
+        cached && cached.builderKey === undefined
+          ? cached.element
+          : document.createElement("chx-conversation-item")
+      );
     element.title = conversation.title ?? "";
     element.lastMessage = conversation.lastMessagePreview ?? "";
     element.unreadCount = conversation.unreadCount ?? 0;

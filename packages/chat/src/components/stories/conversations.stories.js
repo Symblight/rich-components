@@ -245,7 +245,9 @@ export const ConversationsList = {
 
     // The real feature's output: `detail.messageIds` is every message this event covered (the
     // watermark sweep), so subtract exactly that many from the active conversation's badge.
-    const handleMessageRead = (/** @type {CustomEvent<{messageId: string, messageIds: string[]}>} */ event) => {
+    const handleMessageRead = (
+      /** @type {CustomEvent<{messageId: string, messageIds: string[]}>} */ event,
+    ) => {
       const conversationId = chatEl?.activeConversationId;
       if (!conversationId) return;
       adjustUnread(conversationId, -(event.detail.messageIds?.length ?? 1));
@@ -266,8 +268,10 @@ export const ConversationsList = {
     ) => {
       const id = event.detail.conversationId;
       const conversation = chatEl?.conversations?.find((c) => c.id === id);
-      if (headerTitleEl) headerTitleEl.textContent = conversation?.title ?? "No conversation selected";
-      if (headerSubtitleEl) headerSubtitleEl.textContent = formatParticipants(conversation?.participants);
+      if (headerTitleEl)
+        headerTitleEl.textContent = conversation?.title ?? "No conversation selected";
+      if (headerSubtitleEl)
+        headerSubtitleEl.textContent = formatParticipants(conversation?.participants);
       if (!id) return;
       chatEl?.updateComplete.then(() => {
         // Resync this conversation's preview from whatever's now visible — switching into an
@@ -296,7 +300,13 @@ export const ConversationsList = {
       if (!conversationId) return;
       adapter.emitRealtimeEvent({ type: "typing", conversationId, userId: "them", isTyping: true });
       setTimeout(
-        () => adapter.emitRealtimeEvent({ type: "typing", conversationId, userId: "them", isTyping: false }),
+        () =>
+          adapter.emitRealtimeEvent({
+            type: "typing",
+            conversationId,
+            userId: "them",
+            isTyping: false,
+          }),
         2500,
       );
     };
@@ -425,7 +435,9 @@ export const ConversationsList = {
           Simulate conversation removed
         </md-button>
       </div>
-      <div style="display: flex; gap: 0; height: 100%; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; overflow: hidden;">
+      <div
+        style="display: flex; gap: 0; height: 100%; border: 1px solid var(--md-sys-color-outline-variant); border-radius: 12px; overflow: hidden;"
+      >
         <chx-conversations
           for="conversations-demo-chat"
           aria-label="Conversations"

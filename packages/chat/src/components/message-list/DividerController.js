@@ -96,7 +96,12 @@ export class DividerController {
   shouldShow(message, index) {
     if (!this.#element) return false;
     const previousDate = index > 0 ? this.#getMessages()[index - 1]?.createdAt : undefined;
-    return this.#element.shouldShowDivider({ date: message.createdAt, message, previousDate, index });
+    return this.#element.shouldShowDivider({
+      date: message.createdAt,
+      message,
+      previousDate,
+      index,
+    });
   }
 
   /** Extra height a due divider contributes to the row estimate.

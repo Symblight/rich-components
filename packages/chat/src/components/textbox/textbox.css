@@ -72,10 +72,12 @@
 
 .textbox__row_simplified {
   display: grid;
-  grid-template: "attachments attachments attachments" auto "leading-actions text-input trailing-actions" 1fr / minmax(
+  grid-template:
+    "attachments attachments attachments" auto "leading-actions text-input trailing-actions" 1fr / minmax(
       0,
       auto
-    ) 1fr auto;
+    )
+    1fr auto;
   row-gap: 0;
 }
 

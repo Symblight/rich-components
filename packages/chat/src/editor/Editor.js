@@ -70,7 +70,10 @@ export class Editor {
    *   placeholder?: string,
    * }} options
    */
-  constructor(mount, { onChange, onSubmit, getCommandFields, onCommandSelected, attributes, placeholder }) {
+  constructor(
+    mount,
+    { onChange, onSubmit, getCommandFields, onCommandSelected, attributes, placeholder },
+  ) {
     this.#onChange = onChange;
     this.#onCommandSelected = onCommandSelected;
 
@@ -210,7 +213,11 @@ export class Editor {
     const chipNode = this.view.state.schema.nodes.chip.create({ templateId, label, icon, data });
 
     const { from, to } = this.view.state.selection;
-    const tr = landCaretAfterNode(this.view.state.tr.replaceWith(from, to, chipNode), from, chipNode);
+    const tr = landCaretAfterNode(
+      this.view.state.tr.replaceWith(from, to, chipNode),
+      from,
+      chipNode,
+    );
     this.view.dispatch(tr);
     this.view.focus();
   }

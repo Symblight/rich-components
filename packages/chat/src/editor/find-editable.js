@@ -19,7 +19,10 @@ export function findEditableDescendant(root) {
  * @returns {Selection | null} */
 function getSelectionFor(element) {
   const root = element.getRootNode();
-  if (root instanceof ShadowRoot && typeof (/** @type {any} */ (root).getSelection) === "function") {
+  if (
+    root instanceof ShadowRoot &&
+    typeof (/** @type {any} */ (root).getSelection) === "function"
+  ) {
     return /** @type {any} */ (root).getSelection();
   }
   return window.getSelection();

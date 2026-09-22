@@ -1,0 +1,61 @@
+:host {
+  display: block;
+  box-sizing: border-box;
+  inline-size: 100%;
+  --chx-input-mode-banner-background-color: var(--md-sys-color-surface-container-high);
+  --chx-input-mode-banner-color: var(--md-sys-color-on-surface);
+  --chx-input-mode-banner-accent-color: var(--md-sys-color-primary);
+  --chx-input-mode-banner-border-radius: 0.75rem;
+  --chx-input-mode-banner-padding: 0.5rem 0.5rem 0.5rem 0.75rem;
+  --chx-input-mode-banner-gap: 0.5rem;
+  --chx-input-mode-banner-font-size: 0.875rem;
+  --chx-input-mode-banner-icon-size: 1.125rem;
+}
+
+/* `:host { display: block }` is an author rule and would otherwise beat the UA's `[hidden]`,
+   so the app's `hidden` toggle needs this to work at all. */
+:host([hidden]) {
+  display: none;
+}
+
+:host([variant="danger"]) {
+  --chx-input-mode-banner-background-color: var(--md-sys-color-error-container);
+  --chx-input-mode-banner-color: var(--md-sys-color-on-error-container);
+  --chx-input-mode-banner-accent-color: var(--md-sys-color-error);
+}
+
+.input-mode-banner {
+  display: flex;
+  align-items: center;
+  gap: var(--chx-input-mode-banner-gap);
+  box-sizing: border-box;
+  padding: var(--chx-input-mode-banner-padding);
+  background-color: var(--chx-input-mode-banner-background-color);
+  color: var(--chx-input-mode-banner-color);
+  border-radius: var(--chx-input-mode-banner-border-radius);
+  font-size: var(--chx-input-mode-banner-font-size);
+}
+
+/* The icon is the only thing carrying the accent color now. `contents`, not `flex`: an empty
+   wrapper would still take one of the row's `gap`s, so an un-slotted icon would pad the label away
+   from the edge for no reason. */
+.input-mode-banner__icon {
+  display: contents;
+  color: var(--chx-input-mode-banner-accent-color);
+  font-size: var(--chx-input-mode-banner-icon-size);
+}
+
+.input-mode-banner__label {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+}
+
+.input-mode-banner__actions {
+  display: contents;
+}
+
+.input-mode-banner__dismiss {
+  flex: none;
+  --md-icon-button-font-size: 1.125rem;
+}

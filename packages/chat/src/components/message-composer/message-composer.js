@@ -1,5 +1,10 @@
 import { html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
+import { unsafeSVG } from "lit/directives/unsafe-svg.js";
+
+import "@symblight/wc-material/icon";
+
+import stop from "@material-design-icons/svg/outlined/stop.svg?raw";
 
 import styles from "./message-composer.css?inline";
 
@@ -16,6 +21,8 @@ export class ChxMessageComposer extends LitElement {
     loading: { type: Boolean, reflect: true },
     disabled: { type: Boolean, reflect: true },
     placeholder: { type: String },
+    sendLabel: { type: String, attribute: "send-label" },
+    stopLabel: { type: String, attribute: "stop-label" },
     dropHint: { type: String, attribute: "drop-hint" },
     dragging: { type: Boolean, reflect: true },
     messagesEmpty: { type: Boolean },
@@ -27,13 +34,20 @@ export class ChxMessageComposer extends LitElement {
     /** @type {string} Applied as the editor's aria-label too — see chx-textbox. */
     this.placeholder = "Put your text...";
 
+    /** @type {string} Pushed down to chx-textbox — the action button's name while it sends. */
+    this.sendLabel = "Send";
+
+    /** @type {string} Pushed down to chx-textbox — the action button's name while a turn is in flight. */
+    this.stopLabel = "Stop";
+
     /** @type {string} Pushed down to chx-textbox — shown while an OS file drag is over the field. */
     this.dropHint = "Release to attach";
 
     /** @type {boolean} Pushed down by chx-chat — see chx-chat's DropTargetController. */
     this.dragging = false;
 
-    /** @type {boolean} */
+    /** @type {boolean} Pushed down by chx-chat — `loading || busy`, so it is raised by an in-flight
+     *  delivery on its own. Swaps chx-textbox's action button from send to stop. */
     this.loading = false;
 
     /** @type {boolean} Pushed down by chx-chat — true in the empty state (no active conversation). Blocks send + editing. */
@@ -212,10 +226,14 @@ export class ChxMessageComposer extends LitElement {
   /**
    * `chx-send-message` is cancelable — a listener calling preventDefault()
    * vetoes the send and keeps the draft (editor content + attachments) intact.
+   * A submit can't mean "stop": while `loading` the action button is `type="button"` and dispatches
+   * `chx-stop` instead, so the two intents never share this path (they used to, and the stop click
+   * died silently on the empty-draft guard below).
    * @param {SubmitEvent} event
    */
   #handleSend(event) {
     event.preventDefault();
+    if (this.loading) return;
     const textbox = this.textboxElement;
     if (!textbox) return;
 
@@ -284,6 +302,8 @@ export class ChxMessageComposer extends LitElement {
           class="message-composer__field"
           part="textbox"
           .placeholder=${this.placeholder}
+          .sendLabel=${this.sendLabel}
+          .stopLabel=${this.stopLabel}
           .dropHint=${this.dropHint}
           .getTriggerFields=${this.#getTriggerFields}
           ?loading=${this.loading}
@@ -297,7 +317,9 @@ export class ChxMessageComposer extends LitElement {
             slot="attachments"
             @slotchange=${this.handleAttachmentsSlotchange}
           ></slot>
-          <slot name="flight-icon" slot="flight-icon"></slot>
+          <!-- The default lives here, not in chx-textbox: a forwarding <slot> counts as assigned
+               content, so the inner fallback would never render through it. -->
+          <slot name="stop" slot="stop"><md-icon>${unsafeSVG(stop)}</md-icon></slot>
 
           <div slot="trailing" class="message-composer__actions-wrapper">
             <div class="message-composer__actions">

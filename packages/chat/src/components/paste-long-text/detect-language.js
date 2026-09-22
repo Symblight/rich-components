@@ -87,7 +87,8 @@ export function detectLanguage(
     if (!language) continue;
 
     let ratio = parseErrorRatio(language, text);
-    if (EXPRESSION_AMBIGUOUS.has(lang)) ratio = Math.min(ratio, parseErrorRatio(language, `(${text}\n)`));
+    if (EXPRESSION_AMBIGUOUS.has(lang))
+      ratio = Math.min(ratio, parseErrorRatio(language, `(${text}\n)`));
     if (ratio > maxErrorRatio) continue;
     if (!best || ratio < best.errorRatio) best = { lang, errorRatio: ratio };
   }

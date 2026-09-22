@@ -44,7 +44,11 @@ describe("chx-message-list", () => {
         await fixture(html`<chx-message-list style="height: 400px;"></chx-message-list>`)
       );
       el.messages = [
-        makeMessage({ id: "m1", own: true, parts: [{ id: "m1-t1", type: "text", text: "hi there" }] }),
+        makeMessage({
+          id: "m1",
+          own: true,
+          parts: [{ id: "m1-t1", type: "text", text: "hi there" }],
+        }),
       ];
       await el.updateComplete;
 
@@ -89,7 +93,9 @@ describe("chx-message-list", () => {
           return node;
         },
       };
-      el.messages = [makeMessage({ parts: [{ id: "m1-p1", type: "reasoning", text: "thinking" }] })];
+      el.messages = [
+        makeMessage({ parts: [{ id: "m1-p1", type: "reasoning", text: "thinking" }] }),
+      ];
       await el.updateComplete;
 
       const first = infinityScrollOf(el).shadowRoot?.querySelector(".reasoning");
@@ -117,11 +123,15 @@ describe("chx-message-list", () => {
       );
       el.messages = [makeMessage({ id: "m1" }), makeMessage({ id: "m2" })];
       await el.updateComplete;
-      await waitFor(() => infinityScrollOf(el).shadowRoot?.querySelectorAll("chx-message").length === 2);
+      await waitFor(
+        () => infinityScrollOf(el).shadowRoot?.querySelectorAll("chx-message").length === 2,
+      );
 
       el.messages = [makeMessage({ id: "m1" })];
       await el.updateComplete;
-      await waitFor(() => infinityScrollOf(el).shadowRoot?.querySelectorAll("chx-message").length === 1);
+      await waitFor(
+        () => infinityScrollOf(el).shadowRoot?.querySelectorAll("chx-message").length === 1,
+      );
 
       // re-introducing m2 gets a fresh element, not a stale cached one — the old cache entry was
       // swept, so `key` can't spuriously match and hand back a stale `previousElement`
@@ -133,7 +143,9 @@ describe("chx-message-list", () => {
         makeMessage({ id: "m2", parts: [{ id: "m2-p1", type: "reasoning", text: "new" }] }),
       ];
       await el.updateComplete;
-      await waitFor(() => infinityScrollOf(el).shadowRoot?.querySelectorAll("chx-message").length === 2);
+      await waitFor(
+        () => infinityScrollOf(el).shadowRoot?.querySelectorAll("chx-message").length === 2,
+      );
     });
   });
 
@@ -151,7 +163,9 @@ describe("chx-message-list", () => {
       ];
       await el.updateComplete;
 
-      const messageEl = /** @type {ChxMessageEl} */ (infinityScrollOf(el).shadowRoot?.querySelector("chx-message"));
+      const messageEl = /** @type {ChxMessageEl} */ (
+        infinityScrollOf(el).shadowRoot?.querySelector("chx-message")
+      );
       await messageEl.updateComplete; // aria-busy is a reflected property — chx-message's own
       //   reactive update cycle, a third async hop past chx-message-list's own updateComplete
       expect(messageEl.getAttribute("aria-label")).to.equal("Your message");
@@ -171,7 +185,9 @@ describe("chx-message-list", () => {
 
     it("chx-infinity-scroll carries role=log/aria-live=polite/aria-label=messagesLabel", async () => {
       const el = /** @type {ChxMessageList} */ (
-        await fixture(html`<chx-message-list messages-label="Chat" style="height: 400px;"></chx-message-list>`)
+        await fixture(
+          html`<chx-message-list messages-label="Chat" style="height: 400px;"></chx-message-list>`,
+        )
       );
       await el.updateComplete;
 
@@ -187,12 +203,16 @@ describe("chx-message-list", () => {
       );
       const status = el.shadowRoot?.querySelector('[role="status"]');
 
-      el.messages = [makeMessage({ parts: [{ id: "m1-t1", type: "text", text: "H", state: "streaming" }] })];
+      el.messages = [
+        makeMessage({ parts: [{ id: "m1-t1", type: "text", text: "H", state: "streaming" }] }),
+      ];
       await el.updateComplete;
       expect(status?.textContent).to.equal("Assistant is responding");
 
       // further deltas while still streaming — text must not change
-      el.messages = [makeMessage({ parts: [{ id: "m1-t1", type: "text", text: "He", state: "streaming" }] })];
+      el.messages = [
+        makeMessage({ parts: [{ id: "m1-t1", type: "text", text: "He", state: "streaming" }] }),
+      ];
       await el.updateComplete;
       expect(status?.textContent).to.equal("Assistant is responding");
 
@@ -203,7 +223,9 @@ describe("chx-message-list", () => {
       expect(status?.textContent).to.equal("Assistant is responding");
 
       // the part finishes — the complete edge
-      el.messages = [makeMessage({ parts: [{ id: "m1-t1", type: "text", text: "Hello", state: "done" }] })];
+      el.messages = [
+        makeMessage({ parts: [{ id: "m1-t1", type: "text", text: "Hello", state: "done" }] }),
+      ];
       await el.updateComplete;
       expect(status?.textContent).to.equal("Response complete");
     });
@@ -212,12 +234,17 @@ describe("chx-message-list", () => {
       const el = /** @type {ChxMessageList} */ (
         await fixture(html`<chx-message-list style="height: 400px;"></chx-message-list>`)
       );
-      el.messages = [makeMessage({ id: "own", own: true }), makeMessage({ id: "not-own", own: false })];
+      el.messages = [
+        makeMessage({ id: "own", own: true }),
+        makeMessage({ id: "not-own", own: false }),
+      ];
       await el.updateComplete;
 
       const shadow = infinityScrollOf(el).shadowRoot;
       const own = /** @type {HTMLElement} */ (shadow?.querySelector('[data-message-id="own"]'));
-      const notOwn = /** @type {HTMLElement} */ (shadow?.querySelector('[data-message-id="not-own"]'));
+      const notOwn = /** @type {HTMLElement} */ (
+        shadow?.querySelector('[data-message-id="not-own"]')
+      );
       expect(own.style.alignSelf).to.equal("flex-end");
       expect(notOwn.style.alignSelf).to.equal("flex-start");
 
@@ -228,7 +255,9 @@ describe("chx-message-list", () => {
       };
       el.messages = [makeMessage({ id: "custom-own", own: true })];
       await el.updateComplete;
-      const custom = /** @type {HTMLElement} */ (shadow?.querySelector('[data-message-id="custom-own"]'));
+      const custom = /** @type {HTMLElement} */ (
+        shadow?.querySelector('[data-message-id="custom-own"]')
+      );
       expect(custom.style.alignSelf).to.equal("flex-end");
     });
   });
@@ -238,11 +267,17 @@ describe("chx-message-list", () => {
       const el = /** @type {ChxMessageList} */ (
         await fixture(html`<chx-message-list style="height: 400px;"></chx-message-list>`)
       );
-      el.messages = [makeMessage({ id: "m1" }), makeMessage({ id: "m2" }), makeMessage({ id: "m3" })];
+      el.messages = [
+        makeMessage({ id: "m1" }),
+        makeMessage({ id: "m2" }),
+        makeMessage({ id: "m3" }),
+      ];
       await el.updateComplete;
 
       const messages = () =>
-        /** @type {ChxMessageEl[]} */ ([...(infinityScrollOf(el).shadowRoot?.querySelectorAll("chx-message") ?? [])]);
+        /** @type {ChxMessageEl[]} */ ([
+          ...(infinityScrollOf(el).shadowRoot?.querySelectorAll("chx-message") ?? []),
+        ]);
 
       // seeded on first render — the only sensible default, otherwise Tab has nowhere to land
       expect(messages()[0].tabIndex).to.equal(0);
@@ -309,7 +344,9 @@ describe("chx-message-list", () => {
       el.messages = [makeMessage({ id: "m1", parts: [{ id: "m1-p1", type: "action" }] })];
       await el.updateComplete;
 
-      const message = /** @type {ChxMessageEl} */ (infinityScrollOf(el).shadowRoot?.querySelector("chx-message"));
+      const message = /** @type {ChxMessageEl} */ (
+        infinityScrollOf(el).shadowRoot?.querySelector("chx-message")
+      );
       const button = /** @type {HTMLButtonElement} */ (message.querySelector("button"));
 
       expect(message.tabIndex).to.equal(0);
@@ -344,7 +381,9 @@ describe("chx-message-list", () => {
       await el.updateComplete;
 
       const messages = () =>
-        /** @type {ChxMessageEl[]} */ ([...(infinityScrollOf(el).shadowRoot?.querySelectorAll("chx-message") ?? [])]);
+        /** @type {ChxMessageEl[]} */ ([
+          ...(infinityScrollOf(el).shadowRoot?.querySelectorAll("chx-message") ?? []),
+        ]);
       expect(messages()[0].tabIndex).to.equal(0);
 
       messages()[1].focus(); // a real click moves focus the same way — native focusin bubbles
@@ -370,7 +409,9 @@ describe("chx-message-list", () => {
       expect(first?.tabIndex).to.equal(0);
 
       first?.focus();
-      first?.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, composed: true }));
+      first?.dispatchEvent(
+        new KeyboardEvent("keydown", { key: "End", bubbles: true, composed: true }),
+      );
 
       await waitFor(() => messageEl("m199") !== null);
       const last = messageEl("m199");
@@ -389,7 +430,10 @@ describe("chx-message-list", () => {
         await fixture(html`<chx-message-list style="height: 400px;"></chx-message-list>`)
       );
       el.messages = Array.from({ length: 200 }, (_, i) =>
-        makeMessage({ id: `m${i}`, parts: [{ id: `m${i}-t1`, type: "text", text: `Message ${i}` }] }),
+        makeMessage({
+          id: `m${i}`,
+          parts: [{ id: `m${i}-t1`, type: "text", text: `Message ${i}` }],
+        }),
       );
       await el.updateComplete;
 
@@ -403,7 +447,10 @@ describe("chx-message-list", () => {
         await fixture(html`<chx-message-list style="height: 400px;"></chx-message-list>`)
       );
       el.messages = Array.from({ length: 200 }, (_, i) =>
-        makeMessage({ id: `m${i}`, parts: [{ id: `m${i}-t1`, type: "text", text: `Message ${i}` }] }),
+        makeMessage({
+          id: `m${i}`,
+          parts: [{ id: `m${i}-t1`, type: "text", text: `Message ${i}` }],
+        }),
       );
       await el.updateComplete;
 
@@ -577,7 +624,9 @@ describe("chx-message-list", () => {
       const el = /** @type {ChxMessageList} */ (
         await fixture(html`
           <chx-message-list style="height: 400px;">
-            <chx-scroll-to-bottom-affordance slot="scroll-to-bottom"></chx-scroll-to-bottom-affordance>
+            <chx-scroll-to-bottom-affordance
+              slot="scroll-to-bottom"
+            ></chx-scroll-to-bottom-affordance>
           </chx-message-list>
         `)
       );
@@ -588,7 +637,9 @@ describe("chx-message-list", () => {
       const el = /** @type {ChxMessageList} */ (
         await fixture(html`
           <chx-message-list style="height: 400px;">
-            <chx-scroll-to-bottom-affordance slot="scroll-to-bottom"></chx-scroll-to-bottom-affordance>
+            <chx-scroll-to-bottom-affordance
+              slot="scroll-to-bottom"
+            ></chx-scroll-to-bottom-affordance>
           </chx-message-list>
         `)
       );

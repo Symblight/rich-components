@@ -198,7 +198,10 @@ export class ChxInfinityScroll extends LitElement {
       // footer. A no-op in the common no-footer case (both already agree on the same offset), so
       // this stays cheap and doesn't need a conditional.
       this.#controller.virtualizer.scrollToEnd({ behavior: resolvedBehavior });
-      this.#scrollElement?.scrollTo({ top: this.#scrollElement.scrollHeight, behavior: resolvedBehavior });
+      this.#scrollElement?.scrollTo({
+        top: this.#scrollElement.scrollHeight,
+        behavior: resolvedBehavior,
+      });
     }
     this.dispatchEvent(new CustomEvent("chx-scroll-to-bottom", { bubbles: true, composed: true }));
   }

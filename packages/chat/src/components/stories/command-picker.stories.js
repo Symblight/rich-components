@@ -2,7 +2,6 @@ import { html } from "lit";
 
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 
-import stop from "@material-design-icons/svg/outlined/stop.svg?raw";
 import homeIcon from "@material-design-icons/svg/outlined/home.svg?raw";
 import editNoteIcon from "@material-design-icons/svg/outlined/edit_note.svg?raw";
 import terminalIcon from "@material-design-icons/svg/outlined/terminal.svg?raw";
@@ -72,6 +71,9 @@ const FILE_TREE = [
   { type: "js", name: "textbox.js", dir: "src/components/textbox" },
   { type: "css", name: "textbox.css", dir: "src/components/textbox" },
   { type: "js", name: "chat.js", dir: "src/components/base" },
+  // spaced path — exercises maxQuerySpaces, which a plain "@name" search never reaches
+  { type: "folder", name: "My Documents", dir: "src" },
+  { type: "js", name: "scroll helpers.js", dir: "src/My Documents" },
 ];
 
 /** @type {Record<string, string>} */
@@ -104,8 +106,9 @@ function buildFileMenuItems(matches) {
 }
 
 /**
- * Same integration point as createQueryHandler, filtering FILE_TREE by
- * name instead of a flat string.
+ * Same integration point as createQueryHandler, matching against the whole `dir/name` path rather
+ * than the bare filename — what a real "@" file mention does, and what makes a spaced query like
+ * `@My Documents/scroll` resolve (see the picker's `maxQuerySpaces`).
  * @param {typeof FILE_TREE} tree
  * @returns {(event: Event) => void}
  */
@@ -119,7 +122,10 @@ function createFileQueryHandler(tree) {
     picker.clearOptions();
     if (query === null) return;
 
-    const matches = tree.filter((entry) => entry.name.toLowerCase().includes(query.toLowerCase()));
+    const needle = query.toLowerCase();
+    const matches = tree.filter((entry) =>
+      `${entry.dir}/${entry.name}`.toLowerCase().includes(needle),
+    );
     picker.addOptions(buildFileMenuItems(matches));
   };
 }
@@ -226,11 +232,13 @@ const defaultChipPartElements = { chip: buildChipElement };
 /** @type {Story} */
 export const Basic = {
   render: () => html`
-    <chx-chat .partElements=${defaultChipPartElements} @chx-messages-change=${handleChipMessagesChange}>
+    <chx-chat
+      .partElements=${defaultChipPartElements}
+      @chx-messages-change=${handleChipMessagesChange}
+    >
       <chx-message-list slot="message-list"></chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
         <chx-command-picker commandCharacter="@" id="picker-basic" slot="command-field">
           <md-menu-item value="index.js">index.js</md-menu-item>
           <md-menu-item value="chat.js">chat.js</md-menu-item>
@@ -248,6 +256,10 @@ export const Basic = {
  * name; the full mocked path travels separately as a `data-path` attribute
  * on the chip element — label/value split, same idea as CustomChipPerOptionIcon
  * below.
+ *
+ * `maxQuerySpaces="2"` keeps the search alive across spaces, so `@My Documents/scroll` resolves —
+ * try it against the two spaced entries in FILE_TREE. Without it (the default `0`) the first space
+ * ends the search and Enter goes back to sending the message.
  */
 /** @type {Story} */
 export const DynamicSearch = {
@@ -259,9 +271,9 @@ export const DynamicSearch = {
       <chx-message-list slot="message-list"></chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
         <chx-command-picker
           commandCharacter="@"
+          maxQuerySpaces="2"
           id="picker-dynamic"
           slot="command-field"
           @chx-command-query=${createFileQueryHandler(FILE_TREE)}
@@ -330,7 +342,6 @@ export const CustomChipPerOptionIcon = {
       <chx-message-list slot="message-list"></chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
         <chx-command-picker
           commandCharacter="@"
           id="picker-per-option-icon"
@@ -351,11 +362,13 @@ export const CustomChipPerOptionIcon = {
 /** @type {Story} */
 export const CustomChip = {
   render: () => html`
-    <chx-chat .partElements=${defaultChipPartElements} @chx-messages-change=${handleChipMessagesChange}>
+    <chx-chat
+      .partElements=${defaultChipPartElements}
+      @chx-messages-change=${handleChipMessagesChange}
+    >
       <chx-message-list slot="message-list"></chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
         <chx-command-picker
           commandCharacter="@"
           id="picker-custom-chip"
@@ -381,11 +394,13 @@ export const CustomChip = {
 /** @type {Story} */
 export const ChipHydratesInMessageList = {
   render: () => html`
-    <chx-chat .partElements=${defaultChipPartElements} @chx-messages-change=${handleChipMessagesChange}>
+    <chx-chat
+      .partElements=${defaultChipPartElements}
+      @chx-messages-change=${handleChipMessagesChange}
+    >
       <chx-message-list slot="message-list"></chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
         <chx-command-picker
           commandCharacter="@"
           id="picker-hydration"
@@ -400,11 +415,13 @@ export const ChipHydratesInMessageList = {
 /** @type {Story} */
 export const CustomCommands = {
   render: () => html`
-    <chx-chat .partElements=${defaultChipPartElements} @chx-messages-change=${handleChipMessagesChange}>
+    <chx-chat
+      .partElements=${defaultChipPartElements}
+      @chx-messages-change=${handleChipMessagesChange}
+    >
       <chx-message-list slot="message-list"></chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
         <chx-command-picker
           commandCharacter="@"
           id="files"
@@ -429,7 +446,9 @@ export const CustomCommands = {
  * @returns {HTMLElement}
  */
 function buildFilesChip(attrs) {
-  const chip = /** @type {import("../chip/chip.js").ChxChip} */ (document.createElement("chx-chip"));
+  const chip = /** @type {import("../chip/chip.js").ChxChip} */ (
+    document.createElement("chx-chip")
+  );
   chip.style.setProperty("--chx-chip-container-color", "var(--md-sys-color-primary-container)");
   chip.style.setProperty("--chx-chip-label-color", "var(--md-sys-color-on-primary-container)");
   chip.style.setProperty("--chx-chip-icon-color", "var(--md-sys-color-on-primary-container)");
@@ -443,7 +462,9 @@ function buildFilesChip(attrs) {
 
 /** Same idea as buildFilesChip, distinct icon/color. @param {{templateId: string, label: string, icon: string | null, data: Record<string, string>}} attrs @returns {HTMLElement} */
 function buildCommandsChip(attrs) {
-  const chip = /** @type {import("../chip/chip.js").ChxChip} */ (document.createElement("chx-chip"));
+  const chip = /** @type {import("../chip/chip.js").ChxChip} */ (
+    document.createElement("chx-chip")
+  );
   chip.style.setProperty("--chx-chip-container-color", "var(--md-sys-color-tertiary-container)");
   chip.style.setProperty("--chx-chip-label-color", "var(--md-sys-color-on-tertiary-container)");
   chip.style.setProperty("--chx-chip-icon-color", "var(--md-sys-color-on-tertiary-container)");
@@ -531,7 +552,10 @@ export const MultiPickerHydration = {
               templateId: "files-chip-template",
               label: "message-composer.js",
               icon: null,
-              data: { chipOwnerId: "files", path: "src/components/message-composer/message-composer.js" },
+              data: {
+                chipOwnerId: "files",
+                path: "src/components/message-composer/message-composer.js",
+              },
             },
             { id: "msg-2-p5", type: "text", text: " too." },
           ],
@@ -541,7 +565,6 @@ export const MultiPickerHydration = {
       <chx-message-list slot="message-list"></chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
         <chx-command-picker
           commandCharacter="@"
           id="files"

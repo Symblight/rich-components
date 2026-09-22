@@ -4,7 +4,8 @@
   --chx-code-block-header-color: var(--md-sys-color-on-surface-variant);
   --chx-code-block-body-color: var(--md-sys-color-on-surface);
   --chx-code-block-border-radius: 0.75rem;
-  --chx-code-block-font-family: "SF Mono", ui-monospace, "Cascadia Code", "Roboto Mono", Consolas, monospace;
+  --chx-code-block-font-family:
+    "SF Mono", ui-monospace, "Cascadia Code", "Roboto Mono", Consolas, monospace;
   --chx-code-block-font-size: 0.8125rem;
 
   /* Default token palette — plain-language names, not CodeMirror's own tag jargon, so a consumer
@@ -17,6 +18,8 @@
   --chx-code-block-type-color: #00897b;
   --chx-code-block-tag-color: #c62828;
   --chx-code-block-invalid-color: var(--md-sys-color-error);
+  --chx-code-block-diff-added-color: #2e7d32;
+  --chx-code-block-diff-removed-color: #c62828;
 
   display: flex;
   flex-direction: column;
@@ -33,6 +36,8 @@
     --chx-code-block-property-color: #64b5f6;
     --chx-code-block-type-color: #4db6ac;
     --chx-code-block-tag-color: #e57373;
+    --chx-code-block-diff-added-color: #81c784;
+    --chx-code-block-diff-removed-color: #e57373;
   }
 }
 
@@ -163,4 +168,16 @@
 
 .tok-invalid {
   color: var(--chx-code-block-invalid-color);
+}
+
+.tok-diffAdded {
+  color: var(--chx-code-block-diff-added-color);
+}
+
+.tok-diffRemoved {
+  color: var(--chx-code-block-diff-removed-color);
+}
+
+.tok-diffMeta {
+  color: var(--chx-code-block-comment-color);
 }

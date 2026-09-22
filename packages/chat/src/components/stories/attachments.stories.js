@@ -2,7 +2,6 @@ import { html } from "lit";
 
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 
-import stop from "@material-design-icons/svg/outlined/stop.svg?raw";
 import attachFileIcon from "@material-design-icons/svg/outlined/add.svg?raw";
 import insertDriveFileIcon from "@material-design-icons/svg/outlined/insert_drive_file.svg?raw";
 import imageIcon from "@material-design-icons/svg/outlined/image.svg?raw";
@@ -79,7 +78,6 @@ export const Basic = {
           <md-icon>${unsafeSVG(attachFileIcon)}</md-icon>
         </md-icon-button>
         <chx-attachments slot="attachments"></chx-attachments>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>
     </chx-chat>
   `,
@@ -142,7 +140,6 @@ export const JsDrivenWithLoading = {
           <md-icon>${unsafeSVG(attachFileIcon)}</md-icon>
         </md-icon-button>
         <chx-attachments slot="attachments" @chx-attach=${handleValidatedAttach}></chx-attachments>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>
     </chx-chat>
   `,
@@ -235,7 +232,6 @@ export const CustomCardShape = {
           <md-icon>${unsafeSVG(attachFileIcon)}</md-icon>
         </md-icon-button>
         <chx-attachments slot="attachments" @chx-attach=${handleCustomCardAttach}></chx-attachments>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>
     </chx-chat>
   `,
@@ -289,7 +285,6 @@ export const ChipMode = {
           <md-icon>${unsafeSVG(attachFileIcon)}</md-icon>
         </md-icon-button>
         <chx-attachments id="files" mode="chip" slot="attachments"></chx-attachments>
-        <md-icon slot="flight-icon">${unsafeSVG(stop)}</md-icon>
       </chx-message-composer>
     </chx-chat>
   `,

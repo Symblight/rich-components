@@ -68,9 +68,10 @@ export class ChxPasteLongText extends LitElement {
    * after `firstUpdated()` since Lit resolves `updateComplete` only once that's already happened.
    */
   async #registerWithEditor() {
-    const composer = /** @type {import("../message-composer/message-composer.js").ChxMessageComposer | null} */ (
-      this.closest("chx-message-composer")
-    );
+    const composer =
+      /** @type {import("../message-composer/message-composer.js").ChxMessageComposer | null} */ (
+        this.closest("chx-message-composer")
+      );
     if (!composer) return;
     this.#composer = composer;
 

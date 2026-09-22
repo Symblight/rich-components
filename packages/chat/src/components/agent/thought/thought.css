@@ -1,0 +1,73 @@
+:host {
+  display: block;
+  --chx-thought-color: var(--md-sys-color-on-surface-variant);
+  --chx-thought-marker-color: var(--md-sys-color-outline);
+  --chx-thought-rule-color: var(--md-sys-color-outline-variant);
+  --chx-thought-focus-ring-color: var(--md-sys-color-primary);
+  --chx-thought-content-gap: 0.375rem;
+  --chx-thought-indent: 1rem;
+  --chx-thought-font-size: 0.875rem;
+  color: var(--chx-thought-color);
+  font-size: var(--chx-thought-font-size);
+}
+
+/* Author `:host` display beats the UA `[hidden]` rule, so the host has to opt back out itself. */
+:host([hidden]) {
+  display: none;
+}
+
+.thought__summary {
+  cursor: pointer;
+  list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  color: var(--chx-thought-marker-color);
+
+  /* Safari still needs the WebKit pseudo-element to drop the native triangle. */
+  &::-webkit-details-marker {
+    display: none;
+  }
+
+  /* Own marker, so it can rotate with the disclosure instead of following the platform's. */
+  &::before {
+    content: "";
+    inline-size: 0;
+    block-size: 0;
+    border-block-start: 0.25rem solid transparent;
+    border-block-end: 0.25rem solid transparent;
+    border-inline-start: 0.375rem solid currentColor;
+    transition: rotate 120ms ease;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--chx-thought-focus-ring-color);
+    outline-offset: 2px;
+    border-radius: 0.25rem;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    &::before {
+      transition: none;
+    }
+  }
+}
+
+/* `border-inline-start` already flips the closed marker to point left in RTL, so the open state
+   has to turn the other way to still end up pointing down. */
+:host([open]) .thought__summary::before {
+  rotate: 90deg;
+}
+
+:host([open]:dir(rtl)) .thought__summary::before {
+  rotate: -90deg;
+}
+
+.thought__content {
+  margin-block-start: var(--chx-thought-content-gap);
+  padding-inline-start: var(--chx-thought-indent);
+  border-inline-start: 2px solid var(--chx-thought-rule-color);
+  font-style: italic;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}

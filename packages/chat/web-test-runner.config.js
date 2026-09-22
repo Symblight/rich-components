@@ -134,7 +134,12 @@ export default {
     },
   },
   files: ["src/**/*.spec.js", "!node_modules/"],
-  plugins: [svgRawPlugin(), cssInlinePlugin(), babelDecoratorsPlugin(), bindEventListenerShimPlugin()],
+  plugins: [
+    svgRawPlugin(),
+    cssInlinePlugin(),
+    babelDecoratorsPlugin(),
+    bindEventListenerShimPlugin(),
+  ],
   browsers: [playwrightLauncher({ product: "chromium" })],
   // @atlaskit/pragmatic-drag-and-drop (used by DropTargetController) reads `process.env` at
   // module scope in its own ESM build — a Node global with no browser equivalent. Minimal shim,

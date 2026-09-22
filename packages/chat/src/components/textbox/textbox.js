@@ -7,18 +7,21 @@ import { FormControlMixin, requiredValidator } from "@open-wc/form-control";
 
 import { Editor } from "../../editor/Editor.js";
 
+import visuallyHidden from "../../styles/visually-hidden.css?inline";
 import styles from "./textbox.css?inline";
 
 import "@symblight/wc-material/icon-button";
 import "@symblight/wc-material/icon";
 
 import send from "@material-design-icons/svg/outlined/arrow_upward.svg?raw";
+import stop from "@material-design-icons/svg/outlined/stop.svg?raw";
 
 /**
  * @tag chx-textbox
  * @summary MD3 filled-field container that owns the ProseMirror `EditorView`
  * directly, configured via `placeholder`/`getTriggerFields` and reacting to
  * `chx-textbox-change`/`chx-command-selected`.
+ * @fires chx-stop - fired by the action button while `loading`; chx-chat aborts the turn on it.
  */
 @customElement("chx-textbox")
 export class ChxTextbox extends FormControlMixin(LitElement) {
@@ -32,6 +35,8 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     getTriggerFields: { attribute: false },
     loading: { type: Boolean, reflect: true, attribute: true },
     disabled: { type: Boolean, reflect: true, attribute: true },
+    sendLabel: { type: String, attribute: "send-label" },
+    stopLabel: { type: String, attribute: "stop-label" },
     simplified: { state: true },
     value: { state: true },
   };
@@ -74,6 +79,12 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     /** @type {Boolean} */
     this.loading = false;
 
+    /** @type {String} The action button's accessible name while it sends. */
+    this.sendLabel = "Send";
+
+    /** @type {String} The action button's accessible name while a turn is in flight. */
+    this.stopLabel = "Stop";
+
     /** @type {Boolean} Pushed down from chx-message-composer — empty state: blocks send + makes the editor read-only. */
     this.disabled = false;
 
@@ -83,7 +94,7 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [styles];
+    return [visuallyHidden, styles];
   }
 
   /** The ProseMirror mount div — see the class doc comment. @returns {HTMLElement} */
@@ -300,6 +311,18 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     this.focusEnd();
   };
 
+  /**
+   * One button, two roles. Sending rides the form's own submit; stopping must not — it dispatches
+   * `chx-stop` for chx-chat to act on (`stop()`), and preventDefault backs up `type="button"` in
+   * case a host form still tries to submit.
+   * @param {MouseEvent} event
+   */
+  handleActionClick = (event) => {
+    if (!this.loading) return;
+    event.preventDefault();
+    this.dispatchEvent(new CustomEvent("chx-stop", { bubbles: true, composed: true }));
+  };
+
   render() {
     return html`
             <div class=${classMap({ textbox: true, textbox_dragging: this.dragging })} part="box">
@@ -329,30 +352,30 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
                         <div class="textbox__trailing" part="trailing">
                             <slot name="trailing"></slot>
                             ${when(
-                              this.value !== "" && !this.loading && !this.disabled,
-                              () => html`
-                                <md-icon-button
-                                  ?disabled=${this.value === "" || this.loading || this.disabled}
-                                  type="submit"
-                                  .form=${this.closest("form")}
-                                  variant="filled"
-                                  class="textbox__submit"
-                                  selected
-                                >
-                                  <md-icon>${unsafeSVG(send)}</md-icon>
-                                </md-icon-button>
-                              `,
-                            )}
-                            ${when(
-                              this.loading,
+                              this.loading || (this.value !== "" && !this.disabled),
                               () => html`
                                 <md-icon-button
                                   class="textbox__submit"
-                                  type="submit"
+                                  part="action"
+                                  type=${this.loading ? "button" : "submit"}
                                   .form=${this.closest("form")}
-                                  variant="tonal"
+                                  variant=${this.loading ? "tonal" : "filled"}
+                                  ?selected=${!this.loading}
+                                  @click=${this.handleActionClick}
                                 >
-                                  <slot name="flight-icon"></slot>
+                                  ${
+                                    this.loading
+                                      ? html`<slot name="stop"
+                                          ><md-icon>${unsafeSVG(stop)}</md-icon></slot
+                                        >`
+                                      : html`<md-icon>${unsafeSVG(send)}</md-icon>`
+                                  }
+                                  <!-- md-icon-button slots its children inside the real <button>,
+                                       so this is the accessible name; an aria-label on the host
+                                       would never reach it. -->
+                                  <span class="visually-hidden"
+                                    >${this.loading ? this.stopLabel : this.sendLabel}</span
+                                  >
                                 </md-icon-button>
                               `,
                             )}

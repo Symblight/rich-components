@@ -1,4 +1,3 @@
-/** @import { ChxMessage } from "../types/message.js" */
 /** @import { ChxMessageChunk, ChxMessageEnvelope } from "../types/adapter.js" */
 
 /** @param {ReadableStream<ChxMessageChunk | ChxMessageEnvelope>} stream */
@@ -21,25 +20,20 @@ async function* readChunks(stream) {
  * disconnect, propagating to #deliver's existing failure path.
  * @param {ReadableStream<ChxMessageChunk | ChxMessageEnvelope>} stream
  * @param {{
- *   getMessages: () => ChxMessage[],
- *   getUserId: () => string | undefined,
  *   buffer: ReturnType<typeof import("./streamDeltaBuffer.js").createChunkBuffer>,
  *   ingest: (item: ChxMessageChunk | ChxMessageEnvelope) => ChxMessageChunk | null,
  *   replyToId?: string,
  *   conversationId?: string,
  * }} options
  */
-export async function processStream(
-  stream,
-  { getMessages, getUserId, buffer, ingest, replyToId, conversationId },
-) {
+export async function processStream(stream, { buffer, ingest, replyToId, conversationId }) {
   let sawTerminalChunk = false;
   try {
     for await (const item of readChunks(stream)) {
       const chunk = ingest(item);
       if (!chunk) continue; // duplicate eventId — silently skipped
       if (chunk.kind === "finish" || chunk.kind === "abort") sawTerminalChunk = true;
-      buffer.push(chunk, getMessages(), getUserId(), replyToId, conversationId);
+      buffer.push(chunk, { replyToId, conversationId });
     }
   } finally {
     // must run on every exit path, not just a clean loop completion, or a chunk pushed just before

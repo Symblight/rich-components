@@ -5,7 +5,10 @@ import { reconcileMessages } from "./messages.js";
 describe("reconcileMessages", () => {
   it("appends a message with a new id", () => {
     const existing = /** @type {any} */ ([{ id: "m1", own: true, parts: [] }]);
-    const next = reconcileMessages(existing, /** @type {any} */ ({ id: "m2", own: false, parts: [] }));
+    const next = reconcileMessages(
+      existing,
+      /** @type {any} */ ({ id: "m2", own: false, parts: [] }),
+    );
     expect(next).to.have.lengthOf(2);
     expect(next).to.not.equal(existing);
     expect(next[0]).to.equal(existing[0]);
@@ -24,10 +27,18 @@ describe("reconcileMessages", () => {
   });
 
   it("computes own from authorId === userId when own isn't explicitly supplied", () => {
-    const next = reconcileMessages([], /** @type {any} */ ({ id: "m1", authorId: "me", parts: [] }), "me");
+    const next = reconcileMessages(
+      [],
+      /** @type {any} */ ({ id: "m1", authorId: "me", parts: [] }),
+      "me",
+    );
     expect(next[0].own).to.be.true;
 
-    const next2 = reconcileMessages([], /** @type {any} */ ({ id: "m2", authorId: "them", parts: [] }), "me");
+    const next2 = reconcileMessages(
+      [],
+      /** @type {any} */ ({ id: "m2", authorId: "them", parts: [] }),
+      "me",
+    );
     expect(next2[0].own).to.be.false;
   });
 

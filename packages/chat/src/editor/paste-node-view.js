@@ -44,7 +44,10 @@ export class PasteNodeView {
     this.dom = buildElement({ text, lines, data }, "composer");
     this.dom.setAttribute("contenteditable", "false");
 
-    this.dom.addEventListener("chx-code-block-change", /** @type {EventListener} */ (this.#handleCodeChange));
+    this.dom.addEventListener(
+      "chx-code-block-change",
+      /** @type {EventListener} */ (this.#handleCodeChange),
+    );
     this.dom.addEventListener(
       "chx-code-block-lang-change",
       /** @type {EventListener} */ (this.#handleLangChange),
@@ -103,7 +106,10 @@ export class PasteNodeView {
     const node = this.view.state.doc.nodeAt(pos);
     if (!node) return;
     this.view.dispatch(
-      this.view.state.tr.setNodeAttribute(pos, "data", { ...node.attrs.data, lang: event.detail.lang }),
+      this.view.state.tr.setNodeAttribute(pos, "data", {
+        ...node.attrs.data,
+        lang: event.detail.lang,
+      }),
     );
   };
 
@@ -118,7 +124,8 @@ export class PasteNodeView {
     const dom = /** @type {HTMLElement & {code?: string, lang?: string}} */ (this.dom);
     if (typeof dom.code === "string" && node.attrs.text !== dom.code) dom.code = node.attrs.text;
     const lang = node.attrs.data?.lang;
-    if (typeof dom.lang === "string" && typeof lang === "string" && lang !== dom.lang) dom.lang = lang;
+    if (typeof dom.lang === "string" && typeof lang === "string" && lang !== dom.lang)
+      dom.lang = lang;
     return true;
   }
 

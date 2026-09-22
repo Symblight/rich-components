@@ -5,8 +5,8 @@ dozens of lines before the user can even see what they're about to send. Pasting
 or more lines collapses the paste into a single "N lines" chip instead, same idea as pasting a long
 snippet into ChatGPT/Claude Code. Pasting something that looks like code collapses it into a
 `<chx-code-block>` chip instead, regardless of length. Nothing else about pasting changes: paste is
-always forced to plain text (no rich-text/HTML is ever accepted), the chip is just how a *long* or
-*code* plain-text paste is displayed.
+always forced to plain text (no rich-text/HTML is ever accepted), the chip is just how a _long_ or
+_code_ plain-text paste is displayed.
 
 The chip is a purely visual collapse — it carries the full pasted text internally. Deleting it
 (Backspace/Delete/selecting across it) removes the whole thing at once, same as any other atomic
@@ -56,11 +56,11 @@ Built in, not something you wire up yourself — `chx-paste-long-text` runs the 
 a Lezer-grammar parse-error heuristic (see `detect-language.js`): a language whose grammar parses
 the text with few/no recovery errors is treated as a match. Configurable via properties:
 
-| Property             | Type       | Default                              | Notes                                                                 |
-| --------------------- | ---------- | ------------------------------------- | ---------------------------------------------------------------------- |
-| `min-code-lines`      | `number`   | `2`                                    | Below this line count, a paste is never checked for code.              |
-| `code-languages`      | `string[]` | `["json", "javascript", "typescript", "python", "css"]` | Candidate language ids to try, most-specific first. |
-| `max-code-error-ratio`| `number`   | `0.01`                                 | Highest tolerated share of the input covered by parse-recovery errors. |
+| Property               | Type       | Default                                                 | Notes                                                                  |
+| ---------------------- | ---------- | ------------------------------------------------------- | ---------------------------------------------------------------------- |
+| `min-code-lines`       | `number`   | `2`                                                     | Below this line count, a paste is never checked for code.              |
+| `code-languages`       | `string[]` | `["json", "javascript", "typescript", "python", "css"]` | Candidate language ids to try, most-specific first.                    |
+| `max-code-error-ratio` | `number`   | `0.01`                                                  | Highest tolerated share of the input covered by parse-recovery errors. |
 
 ## Sending — `chx-send-message` and `chx-change`
 
@@ -75,7 +75,7 @@ list" describes for command chips — see `code-block.stories.js`'s `MockedMessa
 
 ## Custom chip rendering — `.buildElement()`
 
-Override `chx-paste-long-text.buildElement(attrs, source)` to change how *any* collapsed paste
+Override `chx-paste-long-text.buildElement(attrs, source)` to change how _any_ collapsed paste
 renders — the single place both a fresh paste and a later reconstruction (undo/redo, restoring a
 draft) draw from, same override shape as `chx-command-picker.buildChip`/
 `chx-attachments.buildAttachment`. Named `buildElement`, not `buildChip`: it can return any element,
@@ -120,7 +120,7 @@ replacing the whole element:
 ```
 
 | Slot        | Purpose                                                                   |
-| ----------- | -------------------------------------------------------------------------- |
+| ----------- | ------------------------------------------------------------------------- |
 | `icon`      | Leading icon — defaults to a document/file glyph.                         |
 | _(unnamed)_ | The label — defaults to `"{lines} lines"`, read off the `lines` property. |
 
@@ -129,14 +129,14 @@ or default slot is overridden with real content, same as any Lit `<slot>` fallba
 
 ## `<chx-paste-long-text>` reference
 
-| Property/attribute      | Type                                                                                          | Default        | Notes                                                                          |
-| ------------------------ | ---------------------------------------------------------------------------------------------- | -------------- | -------------------------------------------------------------------------------- |
-| `paste-threshold`        | `number`                                                                                        | `205`          | Collapse to the generic chip when the pasted line count is `>=` this. `<= 0` disables. |
-| `min-code-lines`         | `number`                                                                                        | `2`            | Below this line count, a paste is never checked for code.                        |
-| `code-languages`         | `string[]`                                                                                      | _(built-in list)_ | Property only — candidate language ids for code detection.                    |
-| `max-code-error-ratio`   | `number`                                                                                        | `0.01`         | Highest tolerated parse-error ratio for a code match.                            |
-| `classify(text, lines)`  | `(text: string, lines: number) => {lang: string} \| null`                                      | _(code detection)_ | Method — override to change what counts as "code" (or recognize other content). |
-| `buildElement(attrs, source)` | `(attrs: {text, lines, data}, source: "composer") => HTMLElement`                          | _(chip/code-block)_ | Method — see "Custom chip rendering" above.                                     |
+| Property/attribute            | Type                                                              | Default             | Notes                                                                                  |
+| ----------------------------- | ----------------------------------------------------------------- | ------------------- | -------------------------------------------------------------------------------------- |
+| `paste-threshold`             | `number`                                                          | `205`               | Collapse to the generic chip when the pasted line count is `>=` this. `<= 0` disables. |
+| `min-code-lines`              | `number`                                                          | `2`                 | Below this line count, a paste is never checked for code.                              |
+| `code-languages`              | `string[]`                                                        | _(built-in list)_   | Property only — candidate language ids for code detection.                             |
+| `max-code-error-ratio`        | `number`                                                          | `0.01`              | Highest tolerated parse-error ratio for a code match.                                  |
+| `classify(text, lines)`       | `(text: string, lines: number) => {lang: string} \| null`         | _(code detection)_  | Method — override to change what counts as "code" (or recognize other content).        |
+| `buildElement(attrs, source)` | `(attrs: {text, lines, data}, source: "composer") => HTMLElement` | _(chip/code-block)_ | Method — see "Custom chip rendering" above.                                            |
 
 ## Not yet supported
 

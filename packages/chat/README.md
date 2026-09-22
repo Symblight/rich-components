@@ -6,47 +6,63 @@ A Material Design 3 chat web component built with [Lit](https://lit.dev). Framew
 
 ## Layout
 
-- **Message list** — the main scrollable area, filling all available height. Renders the conversation as a list of messages.
-- **Composer** — docked to the bottom: a rich-text field for the outgoing message and a send button alongside it.
+- **Message list** — the main scrollable area, filling all available height. Renders the conversation as a list of messages, backed by `chx-chat`'s own optimistic message store: sending, streaming replies, retry/regenerate/stop, pagination and scroll behavior. See [Messages API](./src/docs/messages.md).
+- **Composer** — docked to the bottom: a rich-text field for the outgoing message and a send button alongside it. While a turn is in flight that button becomes a stop button, which aborts the reply.
 - **Commands** — an opt-in `@`/`/`-style trigger-a-menu-get-a-chip feature for the composer. See [Commands API](./src/docs/commands.md).
 - **Attachments** — an opt-in file-attachment row above the composer, with a file picker button, OS drag-and-drop, and a default card per file. See [Attachments API](./src/docs/attachments.md).
 - **Paste chip** — pasting `paste-threshold`+ lines into the composer collapses the paste into a single "N lines" chip instead of flooding the field; expands back to the full text on send. See [Paste chip API](./src/docs/paste-chip.md).
 - **Conversations** — optional: hold more than one conversation's worth of messages at once, each cached independently (messages, pagination, scroll position), and switch which one is on screen by reassigning `activeConversationId`. No built-in picker component — bring your own. See [Conversations API](./src/docs/conversations.md).
+- **Agentic parts** — opt-in elements for an AI agent's structured output: tool-call cards, reasoning disclosures, plan checklists, diffs, and a permission banner docked above the composer. The package ships the elements; the renderers that turn message parts into them are yours. See [Agentic parts API](./src/docs/agentic.md).
 
-Built on top of [`@symblight/wc-material`](https://www.npmjs.com/package/@symblight/wc-material) primitives (text-field, button, icon-button, menu, chips).
+Built on top of [`@symblight/wc-material`](https://www.npmjs.com/package/@symblight/wc-material) primitives (button, icon-button, icon, menu, chips, card, avatar, list, badge, tooltip, progress-circular, skeleton).
 
 ## Public API
 
-`<chx-chat>` is the package's single public export — everything below is reachable directly on it.
+`<chx-chat>` is the entry point — everything below is reachable directly on it.
 `chx-message-composer`/`chx-message-list` are consumer-authored light-DOM children (`slot="message-
 composer"`/`slot="message-list"`) — properties specific to them, like the composer's `placeholder`,
+its `send-label`/`stop-label`, or its `stop` slot (replaces the icon inside the send/stop button),
 are set directly on those elements rather than forwarded through `chx-chat`.
+
+The agentic elements live behind a second entry point, `@symblight/chat/agent`, so a messenger that
+never imports it bundles none of them — see [Agentic parts API](./src/docs/agentic.md).
+
+The tables below cover the surface most apps reach for. The full reference — the adapter contract,
+streaming chunk shapes, `ChxMessage`/`ChxMessagePart`, custom rendering, keyboard/a11y and scroll
+behavior — is in [Messages API](./src/docs/messages.md).
 
 ### Properties
 
-| Property               | Type                              | Notes                                                                                       |
-| ----------------------- | ---------------------------------- | ------------------------------------------------------------------------------------------- |
-| `loading`              | `boolean`                          | Reflected attribute — switches the composer's send button to its loading/flight-icon state. |
-| `activeConversationId` | `string \| undefined`              | Optional — switches which conversation is on screen. See [Conversations API](./src/docs/conversations.md). |
-| `conversations`        | `ChxConversation[] \| undefined`   | Picker metadata, stored only. See [Conversations API](./src/docs/conversations.md).         |
+| Property               | Type                                               | Notes                                                                                                                                                                                                                                                                         |
+| ---------------------- | -------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `loading`              | `boolean`                                          | Reflected attribute — an override, not a state. The composer is pushed `loading \|\| busy`, so an in-flight turn already turns its send button into a stop button without this being set. Assign it only for a transport `chx-chat` doesn't drive (a messenger's local echo). |
+| `status`               | `"ready" \| "submitted" \| "streaming" \| "error"` | **Read-only**, derived from the active conversation's in-flight deliveries; nothing assigns it. `submitted` is the window between a send and its first chunk.                                                                                                                 |
+| `busy`                 | `boolean`                                          | **Read-only** — `status` narrowed to `submitted \| streaming`.                                                                                                                                                                                                                |
+| `activeConversationId` | `string \| undefined`                              | Optional — switches which conversation is on screen. See [Conversations API](./src/docs/conversations.md).                                                                                                                                                                    |
+| `conversations`        | `ChxConversation[] \| undefined`                   | Picker metadata, stored only. See [Conversations API](./src/docs/conversations.md).                                                                                                                                                                                           |
 
 ### Methods
 
-| Method            | Signature                                    | Notes                                                                                                                                                                                                                                                             |
-| ----------------- | -------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `setText`         | `(text: string): void`                       | Replaces the composer's document with plain text — e.g. pre-filling a draft or a suggested reply. Not called `setValue`: `chx-textbox` is form-associated and already inherits a `setValue` with an unrelated, form-value-only meaning (see its own doc comment). |
-| `attachFile`      | `(file: File): void`                         | Attaches a file programmatically — same effect as picking or dropping one. A no-op if no `<chx-attachments>` is connected. See [Attachments API](./src/docs/attachments.md).                                                                                      |
-| `insertAtCommand` | `(target: string \| null, node: Node): void` | Resolves an in-progress command search. See [Commands API](./src/docs/commands.md).                                                                                                                                                                               |
-| `refresh`         | `(conversationId?: string): void`            | Clears and re-fetches a conversation (defaults to the active one, or the only one in a single-conversation app). See [Conversations API](./src/docs/conversations.md).                                                                                            |
+| Method            | Signature                                    | Notes                                                                                                                                                                                                                                                                    |
+| ----------------- | -------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `setText`         | `(text: string): void`                       | Replaces the composer's document with plain text — e.g. pre-filling a draft or a suggested reply. Not called `setValue`: `chx-textbox` is form-associated and already inherits a `setValue` with an unrelated, form-value-only meaning (see its own doc comment).        |
+| `attachFile`      | `(file: File): void`                         | Attaches a file programmatically — same effect as picking or dropping one. A no-op if no `<chx-attachments>` is connected. See [Attachments API](./src/docs/attachments.md).                                                                                             |
+| `insertAtCommand` | `(target: string \| null, node: Node): void` | Resolves an in-progress command search. See [Commands API](./src/docs/commands.md).                                                                                                                                                                                      |
+| `refresh`         | `(conversationId?: string): void`            | Clears and re-fetches a conversation (defaults to the active one, or the only one in a single-conversation app). See [Conversations API](./src/docs/conversations.md).                                                                                                   |
+| `stop`            | `(): void`                                   | Aborts every in-flight delivery for the active conversation — what the composer's stop button reaches through `chx-stop`. Settles this chat's turn state at once; ending the turn's messages is still the adapter's job, see [Agentic parts API](./src/docs/agentic.md). |
+| `cancel`          | `(messageId: string): void`                  | Aborts one delivery by the id it is tracked under (a send's own id, or a reply's id for a `regenerate` in flight) — backgrounded conversations included.                                                                                                                 |
 
 ### Events
 
-| Event              | `detail`                                               | Notes                                                                                                                                          |
-| ------------------ | ------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------------- |
-| `chx-send-message` | `{ value: string, html: string, attachments: File[] }` | Fired when the user sends — `value`/`html` are the composed text, `attachments` is whatever's currently in the attachments row at that moment. Cancelable: `preventDefault()` vetoes the send and keeps the draft intact. |
-| `chx-change`       | `{ value: string, html: string, attachments: File[] }` | Fired on every edit — same shape as `chx-send-message`, kept live while composing.                                                             |
-| `chx-messages-change` | `{ messages: ChxMessage[] }`                        | Fired after every local mutation (send, streamed chunk, retry, ingest) that lands on the active conversation. Purely a notification.           |
-| `chx-active-conversation-change` | `{ conversationId: string }`                | Listened for on `chx-chat` itself — dispatch it from a picker UI to switch conversations. See [Conversations API](./src/docs/conversations.md). |
+| Event                            | `detail`                                               | Notes                                                                                                                                                                                                                     |
+| -------------------------------- | ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `chx-send-message`               | `{ value: string, html: string, attachments: File[] }` | Fired when the user sends — `value`/`html` are the composed text, `attachments` is whatever's currently in the attachments row at that moment. Cancelable: `preventDefault()` vetoes the send and keeps the draft intact. |
+| `chx-change`                     | `{ value: string, html: string, attachments: File[] }` | Fired on every edit — same shape as `chx-send-message`, kept live while composing.                                                                                                                                        |
+| `chx-messages-change`            | `{ messages: ChxMessage[] }`                           | Fired after every local mutation (send, streamed chunk, retry, ingest) that lands on the active conversation. Purely a notification.                                                                                      |
+| `chx-active-conversation-change` | `{ conversationId: string }`                           | Listened for on `chx-chat` itself — dispatch it from a picker UI to switch conversations. See [Conversations API](./src/docs/conversations.md).                                                                           |
+| `chx-stop`                       | —                                                      | Dispatched by the composer's stop button while a turn is in flight; `chx-chat` answers it with `stop()`. Listen lower and call `stopPropagation()` to intercept.                                                          |
+| `chx-delivery-start`             | `{ messageId, conversationId }`                        | A send/regenerate began streaming. Carries the id `cancel()` takes — a send's own id is generated inside `chx-chat` and is not in `chx-send-message`.                                                                     |
+| `chx-delivery-end`               | `{ messageId, conversationId, outcome }`               | `outcome` is `completed` / `cancelled` / `failed`.                                                                                                                                                                        |
 
 Commands (`chx-command-query`/`chx-command-confirm`/`chx-command-navigate`/`chx-command-selected`)
 and attachments (`chx-attach`/`chx-attachment-remove`) each have their own event contract, covered

@@ -17,8 +17,21 @@
     shrinking below its content's height, which stops its own internal scroller from ever engaging */
 }
 
-::slotted(chx-message-composer) {
+/* Between the list and the composer, and laid out like the composer — same width, same inline
+   padding — so it reads as attached to the input it's describing. */
+::slotted([slot="input-banner"]) {
   order: 2;
+  align-self: center;
+  width: 100%;
+  /* mirrors chx-message-composer's own max-width, so the two line up edge to edge */
+  max-width: calc(60rem + 2rem);
+  box-sizing: border-box;
+  padding-inline: 1rem;
+  padding-block-end: 0.5rem;
+}
+
+::slotted(chx-message-composer) {
+  order: 3;
   align-self: center;
   padding-inline: 1rem;
 }

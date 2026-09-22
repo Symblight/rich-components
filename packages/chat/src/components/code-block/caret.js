@@ -3,7 +3,10 @@
  * @returns {Selection | null} */
 function getSelectionFor(container) {
   const root = container.getRootNode();
-  if (root instanceof ShadowRoot && typeof (/** @type {any} */ (root).getSelection) === "function") {
+  if (
+    root instanceof ShadowRoot &&
+    typeof (/** @type {any} */ (root).getSelection) === "function"
+  ) {
     return /** @type {any} */ (root).getSelection();
   }
   return window.getSelection();

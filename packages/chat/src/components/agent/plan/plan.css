@@ -1,0 +1,86 @@
+:host {
+  display: block;
+  --chx-plan-background-color: var(--md-sys-color-surface-container-low);
+  --chx-plan-border-color: var(--md-sys-color-outline-variant);
+  --chx-plan-border-radius: 0.75rem;
+  --chx-plan-color: var(--md-sys-color-on-surface);
+  --chx-plan-header-color: var(--md-sys-color-on-surface-variant);
+  --chx-plan-padding: 0.5rem 0.75rem;
+  --chx-plan-entry-gap: 0.5rem;
+  --chx-plan-font-size: 0.875rem;
+  --chx-plan-icon-size: 1.125rem;
+  --chx-plan-in-progress-color: var(--md-sys-color-primary);
+  --chx-plan-completed-color: var(--md-sys-color-on-surface-variant);
+}
+
+/* Author `:host` display beats the UA `[hidden]` rule, so the host has to opt back out itself. */
+:host([hidden]) {
+  display: none;
+}
+
+.plan {
+  box-sizing: border-box;
+  background-color: var(--chx-plan-background-color);
+  border: 1px solid var(--chx-plan-border-color);
+  border-radius: var(--chx-plan-border-radius);
+  color: var(--chx-plan-color);
+  font-size: var(--chx-plan-font-size);
+}
+
+.plan__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+  padding: var(--chx-plan-padding);
+  color: var(--chx-plan-header-color);
+  font-size: 0.75rem;
+  border-block-end: 1px solid var(--chx-plan-border-color);
+}
+
+.plan__progress {
+  font-variant-numeric: tabular-nums;
+}
+
+.plan__entries {
+  margin: 0;
+  padding: var(--chx-plan-padding);
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--chx-plan-entry-gap);
+}
+
+.plan__entry {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+}
+
+.plan__entry_in-progress {
+  color: var(--chx-plan-in-progress-color);
+}
+
+.plan__entry_completed {
+  color: var(--chx-plan-completed-color);
+  text-decoration: line-through;
+}
+
+/* Both are sized at 1em by their own internal svg, so font-size is the size knob for each. */
+.plan__entry-icon,
+.plan__entry-progress {
+  font-size: var(--chx-plan-icon-size);
+  flex: none;
+  /* the glyph is 1em, and the row's own line-height would otherwise offset it */
+  margin-block-start: 0.0625rem;
+}
+
+.plan__entry-progress {
+  /* currentColor, so the spinner follows .plan__entry_in-progress's own color token */
+  --md-progress-circular-active-indicator-color: currentColor;
+  --md-progress-circular-track-color: var(--chx-plan-border-color);
+}
+
+.plan__entry-content {
+  overflow-wrap: anywhere;
+}

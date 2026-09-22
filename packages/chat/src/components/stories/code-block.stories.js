@@ -116,8 +116,12 @@ export const Basic = {
   render: () => html`
     <chx-code-block lang="javascript" .code=${JS_SNIPPET}>
       <md-button slot="actions" variant="text" @click=${() => console.log("undo")}>Undo</md-button>
-      <md-button slot="actions" variant="outlined" @click=${() => console.log("keep")}>Keep</md-button>
-      <md-button slot="actions" variant="filled" @click=${() => console.log("review")}>Review</md-button>
+      <md-button slot="actions" variant="outlined" @click=${() => console.log("keep")}
+        >Keep</md-button
+      >
+      <md-button slot="actions" variant="filled" @click=${() => console.log("review")}
+        >Review</md-button
+      >
     </chx-code-block>
   `,
 };
@@ -143,7 +147,11 @@ export const Editable = {
     editable: true,
   },
   render: (args) => html`
-    <chx-code-block lang="javascript" .code=${JS_SNIPPET} ?editable=${args.editable}></chx-code-block>
+    <chx-code-block
+      lang="javascript"
+      .code=${JS_SNIPPET}
+      ?editable=${args.editable}
+    ></chx-code-block>
   `,
 };
 
@@ -165,7 +173,8 @@ function renderCodePart(part, previous) {
   block.lang = /** @type {any} */ (part).lang ?? "";
 
   const copyAction = /** @type {HTMLElement & {code: string}} */ (
-    block.querySelector("code-block-copy-action") ?? document.createElement("code-block-copy-action")
+    block.querySelector("code-block-copy-action") ??
+      document.createElement("code-block-copy-action")
   );
   copyAction.slot = "actions";
   copyAction.code = block.code;
@@ -209,7 +218,11 @@ export const MockedMessages = {
           createdAt: Date.now(),
           status: "sent",
           parts: [
-            { id: "msg-1-t1", type: "text", text: "Can you show me the scroll-restore snapshot shape?" },
+            {
+              id: "msg-1-t1",
+              type: "text",
+              text: "Can you show me the scroll-restore snapshot shape?",
+            },
           ],
         },
         {
@@ -219,7 +232,11 @@ export const MockedMessages = {
           createdAt: Date.now(),
           status: "sent",
           parts: [
-            { id: "msg-2-t1", type: "text", text: "Sure — here's the object infinity-scroll captures:" },
+            {
+              id: "msg-2-t1",
+              type: "text",
+              text: "Sure — here's the object infinity-scroll captures:",
+            },
             { id: "msg-2-c1", type: "code", text: JS_SNIPPET, lang: "javascript" },
           ],
         },

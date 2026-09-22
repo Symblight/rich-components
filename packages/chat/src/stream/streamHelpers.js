@@ -32,9 +32,18 @@ export function getOrCreateMessage(messages, chunk, userId, replyToId, conversat
   return { messages: [...messages, shell], index: messages.length };
 }
 
+/** Tool-call statuses that mean nothing further is expected for that part. */
+const SETTLED_STATUSES = new Set(["completed", "failed", "cancelled"]);
+
+/** A tool call still mid-flight — only `tool_call` parts carry a `status` at all.
+ * @param {ChxMessagePart} part */
+function isUnsettled(part) {
+  return part.status !== undefined && !SETTLED_STATUSES.has(part.status);
+}
+
 /**
- * Applies one delta chunk to a parts array — validates type/state before reusing an existing
- * part, stopping one stream from hijacking another's part or reviving a "done" part.
+ * Applies one delta chunk to a parts array — validates state before reusing an existing part,
+ * stopping one stream from reviving another's finished text part.
  * @param {ChxMessagePart[]} parts
  * @param {import("../types/adapter.js").ChxMessageDeltaChunk} chunk
  * @returns {ChxMessagePart[]}
@@ -53,33 +62,53 @@ export function applyChunkToParts(parts, chunk) {
     ];
   }
   const existing = parts[index];
-  if (existing.state === "done") {
+  // a turn-level finish/abort marks every part "done" at once; a part owning a `status` (a tool
+  // call) keeps taking updates past that — its lifecycle is the agent's, not the turn's
+  if (existing.state === "done" && existing.status === undefined) {
     console.warn(`[chx-chat] chunk for already-"done" part "${chunk.partId}" — dropped`, chunk);
     return parts;
   }
+  // id/type/state are structural, never patched by a delta — the type already forbids this,
+  // discarded here too since a misbehaving adapter can still hand us any plain object at runtime
+  const {
+    id: _id,
+    type: _type,
+    state: _state,
+    text: _text,
+    ...rest
+  } = /** @type {any} */ (chunk.delta);
   const patched = {
     ...existing,
+    ...rest, // every field but `text` replaces outright — covers `html` (not safely concatenative
+    //           the way plain text is) and any other part-specific field (e.g. a tool call's
+    //           `status`/`locations`), not just the two this used to special-case
     text: (existing.text ?? "") + (chunk.delta.text ?? ""), // append — matches every real LLM
     //       streaming API's wire convention (OpenAI's delta.content, Anthropic's text_delta.text)
-    ...(chunk.delta.html !== undefined ? { html: chunk.delta.html } : {}), // replace, not append —
-    //   html isn't safely concatenative the way plain text is
   };
   return parts.with(index, patched);
 }
 
 /**
- * Called once a stream ends successfully — flips every still-"streaming" part to "done".
+ * Called once a stream ends — flips every still-"streaming" part to "done". Under `cancelled` (an
+ * `abort`) it also settles any mid-flight tool call, since after a cancel the agent's own final
+ * update may never come; a real one arriving later still overwrites it.
  * @param {ChxMessage} message
+ * @param {{cancelled?: boolean}} [options]
  * @returns {ChxMessage}
  */
-export function finalizeStreamingParts(message) {
+export function finalizeStreamingParts(message, { cancelled = false } = {}) {
   // .map() always allocates a new array even when nothing changes, so reference-stability can't
   // be checked against its result directly — tracked explicitly instead
   let changed = false;
   const parts = message.parts.map((p) => {
-    if (p.state !== "streaming") return p;
+    const settle = cancelled && isUnsettled(p);
+    if (p.state !== "streaming" && !settle) return p;
     changed = true;
-    return /** @type {ChxMessagePart} */ ({ ...p, state: "done" });
+    return /** @type {ChxMessagePart} */ ({
+      ...p,
+      state: "done",
+      ...(settle ? { status: "cancelled" } : {}),
+    });
   });
   return changed ? { ...message, parts } : message;
 }
@@ -119,10 +148,16 @@ export function reconcileChunk(messages, chunk, userId, replyToId, conversationI
     return withMessage.with(index, finalizeStreamingParts({ ...message, status: "sent" }));
   }
   if (chunk.kind === "abort") {
-    return withMessage.with(index, finalizeStreamingParts({ ...message, status: "cancelled" }));
+    return withMessage.with(
+      index,
+      finalizeStreamingParts({ ...message, status: "cancelled" }, { cancelled: true }),
+    );
   }
   if (chunk.kind === "part-end") {
-    return withMessage.with(index, { ...message, parts: finalizePart(message.parts, chunk.partId) });
+    return withMessage.with(index, {
+      ...message,
+      parts: finalizePart(message.parts, chunk.partId),
+    });
   }
 
   const parts = applyChunkToParts(

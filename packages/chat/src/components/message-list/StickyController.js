@@ -63,7 +63,10 @@ export class StickyController {
    *   getAwayFromBottom: () => boolean,
    * }} options
    */
-  constructor(host, { dividerController, getMessages, getInfinityScrollElement, getAwayFromBottom }) {
+  constructor(
+    host,
+    { dividerController, getMessages, getInfinityScrollElement, getAwayFromBottom },
+  ) {
     this.#host = host;
     this.#dividerController = dividerController;
     this.#getMessages = getMessages;
@@ -95,7 +98,10 @@ export class StickyController {
     const infinity = this.#getInfinityScrollElement();
     if (!infinity || this.#topIndex < 0) return;
     // Derive the day's divider (first-of-day) row here, not every scroll frame — it's a click-only need.
-    const targetIndex = this.#dividerController.stickyTargetIndex(this.#getMessages(), this.#topIndex);
+    const targetIndex = this.#dividerController.stickyTargetIndex(
+      this.#getMessages(),
+      this.#topIndex,
+    );
     if (targetIndex < 0) return;
     // Pre-compute the divider's start offset and scroll one divider-height past it in one pass — so the
     // day's first message lands at the top, not the divider. The label (`#button`) is the same
@@ -107,7 +113,9 @@ export class StickyController {
     const dividerHeight = this.#button?.getBoundingClientRect().height || CLICK_OFFSET;
     // top breathing gap = the scroller's own top padding, so the first message clears the edge without a
     // magic constant (tracks the list's own spacing).
-    const gap = this.#scroller ? parseFloat(getComputedStyle(this.#scroller).paddingBlockStart) || 0 : 0;
+    const gap = this.#scroller
+      ? parseFloat(getComputedStyle(this.#scroller).paddingBlockStart) || 0
+      : 0;
     infinity.scrollToOffset(offset + dividerHeight + gap);
   };
 
@@ -123,8 +131,9 @@ export class StickyController {
   sync() {
     const scroller = this.#dividerController.sticky
       ? /** @type {HTMLElement | null} */ (
-          this.#getInfinityScrollElement()?.renderRoot?.querySelector(".infinity-scroll__scroller") ??
-            null
+          this.#getInfinityScrollElement()?.renderRoot?.querySelector(
+            ".infinity-scroll__scroller",
+          ) ?? null
         )
       : null;
     if (scroller === (this.#scroller ?? null)) return;

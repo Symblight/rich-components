@@ -10,10 +10,6 @@ import { processStream } from "../stream/processStream.js";
  * src/stream/, this just glues it to a host's lifecycle.
  */
 export class StreamController {
-  /** @type {() => ChxMessage[]} */
-  #getMessages;
-  /** @type {() => string | undefined} */
-  #getUserId;
   /** @type {Set<string>} */
   #seenEventIds;
   /** @type {ReturnType<typeof createChunkBuffer>} */
@@ -29,10 +25,13 @@ export class StreamController {
    * }} options
    */
   constructor(host, { getMessages, getUserId, onMessagesChange, chunkBatchIntervalMs }) {
-    this.#getMessages = getMessages;
-    this.#getUserId = getUserId;
     this.#seenEventIds = new Set();
-    this.#buffer = createChunkBuffer({ flushInterval: chunkBatchIntervalMs, onFlush: onMessagesChange });
+    this.#buffer = createChunkBuffer({
+      flushInterval: chunkBatchIntervalMs,
+      getMessages,
+      getUserId,
+      onFlush: onMessagesChange,
+    });
     host.addController(this);
   }
 
@@ -56,7 +55,7 @@ export class StreamController {
   applyChunk(item) {
     const chunk = this.#ingest(item);
     if (!chunk) return;
-    this.#buffer.push(chunk, this.#getMessages(), this.#getUserId());
+    this.#buffer.push(chunk);
   }
 
   /**
@@ -65,8 +64,6 @@ export class StreamController {
    */
   async deliverStream(stream, { replyToId, conversationId } = {}) {
     await processStream(stream, {
-      getMessages: this.#getMessages,
-      getUserId: this.#getUserId,
       buffer: this.#buffer,
       ingest: (item) => this.#ingest(item),
       replyToId,

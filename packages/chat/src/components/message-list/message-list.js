@@ -497,7 +497,7 @@ export class ChxMessageList extends LitElement {
               </slot>
             `,
             () => html`
-            <chx-infinity-scroll
+              <chx-infinity-scroll
                 class="message-list__infinity-scroll"
                 role="log"
                 aria-live="polite"
@@ -525,41 +525,40 @@ export class ChxMessageList extends LitElement {
                 .onScrollerFocusin=${this.#focusBehavior.handleFocusIn}
                 .onAwayFromBottomChange=${this.#handleAwayFromBottomChange}
                 ${ref((el) => (this.#infinityScrollElement = /** @type {ChxInfinityScroll | undefined} */ (el)))}
-            >
-              ${when(this.streaming, () => html`<slot name="streaming" slot="footer"></slot>`)}
-              ${when(this.typing, () => html`<slot name="typing" slot="footer"></slot>`)}
-              ${when(
-                this.#stickyController.labelText,
-                () =>
-                  html`<button
-                    slot="sticky"
-                    class=${classMap({
-                      "message-list__sticky-date": true,
-                      "message-list__sticky-date_visible": this.#stickyController.visible,
-                    })}
-                    type="button"
-                    aria-label=${`Jump to ${this.#stickyController.labelText}`}
-                    ?inert=${!this.#stickyController.visible}
-                    @click=${this.#stickyController.handleClick}
-                    ${ref((el) =>
-                      this.#stickyController.setButton(/** @type {HTMLElement | undefined} */ (el)),
-                    )}
-                  >
-                    <chx-divider
-                      part="sticky-date"
-                      label=${this.#stickyController.labelText}
-                      aria-hidden="true"
-                    ></chx-divider>
-                  </button>`,
-              )}
-            </chx-infinity-scroll>
-          `
-          )
+              >
+                ${when(this.streaming, () => html`<slot name="streaming" slot="footer"></slot>`)}
+                ${when(this.typing, () => html`<slot name="typing" slot="footer"></slot>`)}
+                ${when(
+                  this.#stickyController.labelText,
+                  () =>
+                    html`<button
+                      slot="sticky"
+                      class=${classMap({
+                        "message-list__sticky-date": true,
+                        "message-list__sticky-date_visible": this.#stickyController.visible,
+                      })}
+                      type="button"
+                      aria-label=${`Jump to ${this.#stickyController.labelText}`}
+                      ?inert=${!this.#stickyController.visible}
+                      @click=${this.#stickyController.handleClick}
+                      ${ref((el) =>
+                        this.#stickyController.setButton(
+                          /** @type {HTMLElement | undefined} */ (el),
+                        ),
+                      )}
+                    >
+                      <chx-divider
+                        part="sticky-date"
+                        label=${this.#stickyController.labelText}
+                        aria-hidden="true"
+                      ></chx-divider>
+                    </button>`,
+                )}
+              </chx-infinity-scroll>
+            `,
+          ),
       )}
-      ${when(
-        this.#isLoadingHistory(),
-        () => html`<slot name="loading-history"></slot>`,
-      )}
+      ${when(this.#isLoadingHistory(), () => html`<slot name="loading-history"></slot>`)}
       ${when(this.#awayFromBottom, () => html`<slot name="scroll-to-bottom"></slot>`)}
       <slot name="divider" hidden @slotchange=${this.#handleDividerSlotchange}></slot>
     `;

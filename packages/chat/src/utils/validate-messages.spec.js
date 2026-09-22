@@ -28,9 +28,7 @@ describe("validateMessages", () => {
 
   it("errors on a part missing id", () => {
     withStubbedConsole("error", (calls) => {
-      validateMessages(
-        /** @type {any} */ ([{ id: "m1", parts: [{ type: "text", text: "hi" }] }]),
-      );
+      validateMessages(/** @type {any} */ ([{ id: "m1", parts: [{ type: "text", text: "hi" }] }]));
       expect(calls.length).to.equal(1);
     });
   });

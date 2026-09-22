@@ -16,7 +16,8 @@ export default defineConfig({
   build: {
     target: "esnext",
     rollupOptions: {
-      input: "src/index.js",
+      // two entries: a messenger importing only "." never pulls the agentic components in
+      input: ["src/index.js", "src/agent.js"],
       external: [
         "lit",
         /^lit\/.*/,

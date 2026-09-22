@@ -25,6 +25,7 @@ export class ChxCodeBlock extends LitElement {
   static properties = {
     code: { type: String },
     lang: { type: String },
+    label: { type: String },
     langMenu: { type: Boolean, attribute: "lang-menu" },
     editable: { type: Boolean },
     highlightedHTML: { state: true },
@@ -58,6 +59,11 @@ export class ChxCodeBlock extends LitElement {
 
     /** @type {string} See LANGUAGES in highlight.js. */
     this.lang = "";
+
+    /** @type {string} Header text, replacing the language label — a terminal block wants the command
+     *  it ran and a diff wants its file path, neither of which is a language. Empty falls back to
+     *  `LANGUAGES[lang].label`. Also the editable body's aria-label. */
+    this.label = "";
 
     /** @type {boolean} Header label becomes an md-menu trigger for picking `lang`. */
     this.langMenu = false;
@@ -138,34 +144,37 @@ export class ChxCodeBlock extends LitElement {
   #renderBody(label) {
     return when(
       this.editable,
-      () => html`<div
-        class="code-block__body"
-        part="body"
-        contenteditable="true"
-        spellcheck="false"
-        autocapitalize="off"
-        role="textbox"
-        aria-multiline="true"
-        aria-label=${label}
-        @input=${this.#editableBody.handleInput}
-        @keydown=${this.#editableBody.handleKeydown}
-        @paste=${this.#editableBody.handlePaste}
-        @compositionstart=${this.#editableBody.handleCompositionStart}
-        @compositionend=${this.#editableBody.handleCompositionEnd}
-      ></div>`,
       () =>
-        html`<pre class="code-block__body" part="body" tabindex="0"><code>${unsafeHTML(this.highlightedHTML)}</code></pre>`,
+        html`<div
+          class="code-block__body"
+          part="body"
+          contenteditable="true"
+          spellcheck="false"
+          autocapitalize="off"
+          role="textbox"
+          aria-multiline="true"
+          aria-label=${label}
+          @input=${this.#editableBody.handleInput}
+          @keydown=${this.#editableBody.handleKeydown}
+          @paste=${this.#editableBody.handlePaste}
+          @compositionstart=${this.#editableBody.handleCompositionStart}
+          @compositionend=${this.#editableBody.handleCompositionEnd}
+        ></div>`,
+      () =>
+        html`<pre
+          class="code-block__body"
+          part="body"
+          tabindex="0"
+        ><code>${unsafeHTML(this.highlightedHTML)}</code></pre>`,
     );
   }
 
   render() {
-    const label = LANGUAGES[this.lang]?.label ?? "Plain text";
+    const label = this.label || (LANGUAGES[this.lang]?.label ?? "Plain text");
     return html`
       <div class="code-block" part="container">
         <div class="code-block__header" part="header">
-          <div class="code-block__label-group" part="label-group">
-            ${this.#renderLabel(label)}
-          </div>
+          <div class="code-block__label-group" part="label-group">${this.#renderLabel(label)}</div>
           <div class="code-block__actions" part="actions">
             <slot name="actions"></slot>
           </div>

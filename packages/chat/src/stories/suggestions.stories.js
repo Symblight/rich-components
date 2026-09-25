@@ -4,9 +4,9 @@ import { ref } from "lit/directives/ref.js";
 
 import "@symblight/wc-material/button";
 
-import "../../index.js";
-import "../suggestion-list/suggestion-list.js";
-import "../suggestion/suggestion.js";
+import "../index.js";
+import "../components/suggestion-list/suggestion-list.js";
+import "../components/suggestion/suggestion.js";
 
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {

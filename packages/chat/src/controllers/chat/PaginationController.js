@@ -3,8 +3,8 @@
  * @typedef {import("lit").ReactiveControllerHost} ReactiveControllerHost
  */
 
-/** @import { ChxMessage } from "../types/message.js" */
-/** @import { ChxChatAdapter } from "../types/adapter.js" */
+/** @import { ChxMessage } from "../../types/message.js" */
+/** @import { ChxChatAdapter } from "../../types/adapter.js" */
 
 /**
  * @typedef {Object} ConversationPageState

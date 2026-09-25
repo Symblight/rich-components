@@ -3,8 +3,8 @@ import { ref } from "lit/directives/ref.js";
 
 import "@symblight/wc-material/button";
 
-import "../../index.js";
-import "../typing-indicator/typing-indicator.js";
+import "../index.js";
+import "../components/typing-indicator/typing-indicator.js";
 
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
@@ -16,7 +16,7 @@ export default meta;
 
 /** @typedef {import("@storybook/web-components").StoryObj} Story */
 
-/** @param {string} name @param {"system" | "user" | "assistant"} [role] @returns {import("../../types/conversation.js").ChxUser} */
+/** @param {string} name @param {"system" | "user" | "assistant"} [role] @returns {import("../types/conversation.js").ChxUser} */
 function makeUser(name, role) {
   return {
     id: name,
@@ -27,7 +27,7 @@ function makeUser(name, role) {
   };
 }
 
-/** @type {import("../../types/conversation.js").ChxConversation[]} */
+/** @type {import("../types/conversation.js").ChxConversation[]} */
 const CONVERSATIONS = [
   {
     id: "c1",
@@ -52,7 +52,7 @@ const CONVERSATIONS = [
   },
 ];
 
-/** @param {import("../../types/conversation.js").ChxUser[]} [participants] */
+/** @param {import("../types/conversation.js").ChxUser[]} [participants] */
 function formatParticipants(participants) {
   return participants?.map((p) => p.displayName ?? p.id).join(", ") ?? "";
 }
@@ -111,9 +111,9 @@ function makeConversationMessage(conversationId, index) {
  * because this package keeps `onMessage`/`onEvent` as two separate `subscribe` handlers.
  */
 function createConversationsAdapter() {
-  /** @type {((message: import("../../types/message.js").ChxMessage) => void) | undefined} */
+  /** @type {((message: import("../types/message.js").ChxMessage) => void) | undefined} */
   let onMessage;
-  /** @type {((event: import("../../types/realtime.js").ChxRealtimeEvent) => void) | undefined} */
+  /** @type {((event: import("../types/realtime.js").ChxRealtimeEvent) => void) | undefined} */
   let onEvent;
   return {
     listMessages: async (
@@ -135,9 +135,9 @@ function createConversationsAdapter() {
         onEvent = undefined;
       };
     },
-    /** Fake incoming message push — used by "Start flood chats" instead of calling `chatEl.addMessage()` directly. @param {import("../../types/message.js").ChxMessage} message */
+    /** Fake incoming message push — used by "Start flood chats" instead of calling `chatEl.addMessage()` directly. @param {import("../types/message.js").ChxMessage} message */
     emit: (message) => onMessage?.(message),
-    /** Fake incoming realtime event — used by the "Simulate…" buttons. @param {import("../../types/realtime.js").ChxRealtimeEvent} event */
+    /** Fake incoming realtime event — used by the "Simulate…" buttons. @param {import("../types/realtime.js").ChxRealtimeEvent} event */
     emitRealtimeEvent: (event) => onEvent?.(event),
   };
 }
@@ -219,7 +219,7 @@ function createConversationsAdapter() {
 /** @type {Story} */
 export const ConversationsList = {
   render: () => {
-    /** @type {(import("../base/chat.js").ChxChat & {activeConversationId?: string, conversations?: import("../../types/conversation.js").ChxConversation[]}) | undefined} */
+    /** @type {(import("../components/base/chat.js").ChxChat & {activeConversationId?: string, conversations?: import("../types/conversation.js").ChxConversation[]}) | undefined} */
     let chatEl;
     /** @type {HTMLElement | undefined} */
     let headerTitleEl;
@@ -444,7 +444,7 @@ export const ConversationsList = {
             @chx-messages-change=${handleMessagesChange}
             @chx-message-read=${handleMessageRead}
             @chx-active-conversation-change=${handleActiveConversationChange}
-            ${ref((el) => (chatEl = /** @type {import("../base/chat.js").ChxChat} */ (el)))}
+            ${ref((el) => (chatEl = /** @type {import("../components/base/chat.js").ChxChat} */ (el)))}
           >
             <chx-message-list slot="message-list">
               <chx-typing-indicator value="Typing..." slot="typing"></chx-typing-indicator>

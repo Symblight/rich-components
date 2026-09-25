@@ -11,13 +11,13 @@ import "../message/message.js";
 import "../infinity-scroll/infinity-scroll.js";
 import "../loading-history/loading-history.js";
 import "../divider/divider.js";
-import { FocusBehaviorController } from "../../controllers/FocusBehaviorController.js";
-import { BottomAnchorController } from "./BottomAnchorController.js";
-import { ReadTrackingController } from "./ReadTrackingController.js";
-import { DividerController } from "./DividerController.js";
+import { FocusBehaviorController } from "../../controllers/message-list/FocusBehaviorController.js";
+import { BottomAnchorController } from "../../controllers/message-list/BottomAnchorController.js";
+import { ReadTrackingController } from "../../controllers/message-list/ReadTrackingController.js";
+import { DividerController } from "../../controllers/message-list/DividerController.js";
 import { PartRenderer } from "./PartRenderer.js";
-import { StatusController } from "./StatusController.js";
-import { StickyController } from "./StickyController.js";
+import { StatusController } from "../../controllers/message-list/StatusController.js";
+import { StickyController } from "../../controllers/message-list/StickyController.js";
 import styles from "./message-list.css?inline";
 
 /** @import { ChxMessage } from "../../types/message.js" */

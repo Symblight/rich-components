@@ -1,5 +1,5 @@
 /** @import { ChxMessage } from "../../types/message.js" */
-/** @import { ChxInfinityScroll } from "../infinity-scroll/infinity-scroll.js" */
+/** @import { ChxInfinityScroll } from "../../components/infinity-scroll/infinity-scroll.js" */
 /** @import { DividerController } from "./DividerController.js" */
 
 /**

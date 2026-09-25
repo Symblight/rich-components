@@ -1,6 +1,6 @@
-import { DEFAULT_CONVERSATION_ID } from "../constants.js";
+import { DEFAULT_CONVERSATION_ID } from "../../constants.js";
 
-/** @import { ChxConversation } from "../types/conversation.js" */
+/** @import { ChxConversation } from "../../types/conversation.js" */
 
 /**
  * Decides whether a `chx-chat` is running in single- or multi-conversation mode, and what follows

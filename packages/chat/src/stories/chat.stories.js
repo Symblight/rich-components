@@ -10,16 +10,16 @@ import "@symblight/wc-material/icon-button";
 import "@symblight/wc-material/avatar";
 import "@symblight/wc-material/skeleton";
 
-import "../../index.js";
-import "../typing-indicator/typing-indicator.js";
-import "../streaming-indicator/streaming-indicator.js";
-import "../scroll-to-bottom-affordance/scroll-to-bottom-affordance.js";
-import "../loading-history/loading-history.js";
-import "../unread-marker/unread-marker.js";
-import "../divider/divider.js";
-import "../chip/chip.js";
-import "../paste-long-text/paste-long-text.js";
-import { createSplitOnSendHandler } from "../../utils/split-message-parts.js";
+import "../index.js";
+import "../components/typing-indicator/typing-indicator.js";
+import "../components/streaming-indicator/streaming-indicator.js";
+import "../components/scroll-to-bottom-affordance/scroll-to-bottom-affordance.js";
+import "../components/loading-history/loading-history.js";
+import "../components/unread-marker/unread-marker.js";
+import "../components/divider/divider.js";
+import "../components/chip/chip.js";
+import "../components/paste-long-text/paste-long-text.js";
+import { createSplitOnSendHandler } from "../utils/split-message-parts.js";
 
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
@@ -246,7 +246,7 @@ export const CustomizedMessages = {
 /** @type {Story} */
 export const Typing = {
   render: () => {
-    /** @type {import("../base/chat.js").ChxChat | undefined} */
+    /** @type {import("../components/base/chat.js").ChxChat | undefined} */
     let chatEl;
     return html`
       <div
@@ -270,7 +270,7 @@ export const Typing = {
           .userId=${"me"}
           .messages=${makeMessages(6)}
           style="flex: 1; min-height: 0;"
-          ${ref((el) => (chatEl = /** @type {import("../base/chat.js").ChxChat} */ (el)))}
+          ${ref((el) => (chatEl = /** @type {import("../components/base/chat.js").ChxChat} */ (el)))}
         >
           <chx-message-list slot="message-list">
             <chx-typing-indicator value="Alice is typing..." slot="typing"></chx-typing-indicator>
@@ -366,7 +366,7 @@ export const ReadTracking = {
       });
     }
 
-    /** @type {import("../base/chat.js").ChxChat | undefined} */
+    /** @type {import("../components/base/chat.js").ChxChat | undefined} */
     let chatEl;
     // Captured from adapter.subscribe() below — this is the same onEvent chx-chat already passes to
     // any real adapter's own subscribe(), routed to RealtimeSyncController. Simulating a call to it
@@ -424,7 +424,7 @@ export const ReadTracking = {
           }}
           read-tracking
           style="flex: 1; min-height: 0;"
-          ${ref((el) => (chatEl = /** @type {import("../base/chat.js").ChxChat} */ (el)))}
+          ${ref((el) => (chatEl = /** @type {import("../components/base/chat.js").ChxChat} */ (el)))}
           @chx-message-read=${(
             /** @type {CustomEvent<{messageId: string, messageIds: string[]}>} */ event,
           ) => {
@@ -461,7 +461,7 @@ export const ReadTracking = {
 /** @type {Story} */
 export const ScrollToBottomAffordance = {
   render: () => {
-    /** @type {import("../base/chat.js").ChxChat | undefined} */
+    /** @type {import("../components/base/chat.js").ChxChat | undefined} */
     let chatEl;
     return html`
       <div
@@ -490,7 +490,7 @@ export const ScrollToBottomAffordance = {
           .userId=${"me"}
           .messages=${makeMessages(40)}
           style="flex: 1; min-height: 0;"
-          ${ref((el) => (chatEl = /** @type {import("../base/chat.js").ChxChat} */ (el)))}
+          ${ref((el) => (chatEl = /** @type {import("../components/base/chat.js").ChxChat} */ (el)))}
         >
           <chx-message-list slot="message-list" buffer="150">
             <chx-scroll-to-bottom-affordance
@@ -870,7 +870,7 @@ export const ComposerOnly = {
  * Rule for `paste` nodes (`schema.js`) — matches the `<span data-paste-lines>` chip
  * `paste-plugin.js` serializes into `getHTML()`, feeding `splitMessageParts` (see
  * `handlePasteChipMessagesChange` below) the same way `chipPartRule` does for command-picker chips.
- * @type {import("../../types/inline-part-rule.js").InlinePartRule}
+ * @type {import("../types/inline-part-rule.js").InlinePartRule}
  */
 const longTextPartRule = {
   type: "longText",
@@ -887,7 +887,7 @@ const handlePasteChipMessagesChange = createSplitOnSendHandler([longTextPartRule
  * Renders a `type: "longText"` message part as a native `<details>` disclosure — collapsed by
  * default, showing the pasted line count; expand to read the full text. A `chx-chat.partElements`
  * entry, the same generic extension point `messageElement`/other part types already use.
- * @param {import("../../types/message.js").ChxMessagePart} part
+ * @param {import("../types/message.js").ChxMessagePart} part
  * @param {HTMLElement} [previous]
  * @returns {HTMLElement}
  */
@@ -943,7 +943,7 @@ export const PasteChip = {
  * demo, and `partElements` alone is what renders it.
  */
 /**
- * @param {import("../../types/message.js").ChxMessagePart} part
+ * @param {import("../types/message.js").ChxMessagePart} part
  * @param {HTMLElement} [previous]
  * @returns {HTMLElement}
  */

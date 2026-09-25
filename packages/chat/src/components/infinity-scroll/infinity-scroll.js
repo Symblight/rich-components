@@ -3,7 +3,7 @@ import { customElement } from "lit/decorators.js";
 import { repeat } from "lit/directives/repeat.js";
 import { ref } from "lit/directives/ref.js";
 
-import { InfinityScrollController } from "./InfinityScrollController.js";
+import { InfinityScrollController } from "../../controllers/infinity-scroll/InfinityScrollController.js";
 import styles from "./infinity-scroll.css?inline";
 
 /**

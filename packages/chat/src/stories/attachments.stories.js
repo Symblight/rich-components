@@ -9,12 +9,12 @@ import imageIcon from "@material-design-icons/svg/outlined/image.svg?raw";
 import "@symblight/wc-material/icon";
 import "@symblight/wc-material/icon-button";
 
-import "../../index.js";
-import "../attachments/attachments.js";
-import "../attachment/attachment.js";
+import "../index.js";
+import "../components/attachments/attachments.js";
+import "../components/attachment/attachment.js";
 
-import { buildChipElement } from "../../editor/command-chip.js";
-import { chipPartRule, createSplitOnSendHandler } from "../../utils/split-message-parts.js";
+import { buildChipElement } from "../editor/command-chip.js";
+import { chipPartRule, createSplitOnSendHandler } from "../utils/split-message-parts.js";
 
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {

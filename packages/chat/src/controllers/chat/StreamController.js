@@ -1,9 +1,9 @@
-import { createChunkBuffer } from "../stream/streamDeltaBuffer.js";
-import { processStream } from "../stream/processStream.js";
+import { createChunkBuffer } from "../../stream/streamDeltaBuffer.js";
+import { processStream } from "../../stream/processStream.js";
 
 /** @import { ReactiveControllerHost } from "lit" */
-/** @import { ChxMessage } from "../types/message.js" */
-/** @import { ChxMessageChunk, ChxMessageEnvelope } from "../types/adapter.js" */
+/** @import { ChxMessage } from "../../types/message.js" */
+/** @import { ChxMessageChunk, ChxMessageEnvelope } from "../../types/adapter.js" */
 
 /**
  * The only Lit-aware piece of the streaming design — pure batching/reconciliation logic lives in

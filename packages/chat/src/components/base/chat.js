@@ -4,17 +4,17 @@ import { ContextProvider } from "@lit/context";
 
 import "../message-composer/message-composer.js";
 import "../message-list/message-list.js";
-import { DropTargetController } from "../../controllers/DropTargetController.js";
+import { DropTargetController } from "../../controllers/chat/DropTargetController.js";
 import { attachmentsContext } from "../../context/attachments-context.js";
 import { reconcileMessages } from "../../utils/messages.js";
 import { validateMessages } from "../../utils/validate-messages.js";
-import { StreamController } from "../../controllers/StreamController.js";
-import { ConversationModeController } from "../../controllers/ConversationModeController.js";
-import { DeliveryController } from "../../controllers/DeliveryController.js";
-import { PaginationController } from "../../controllers/PaginationController.js";
-import { ScrollMemoryController } from "../../controllers/ScrollMemoryController.js";
-import { TypingController } from "../../controllers/TypingController.js";
-import { RealtimeSyncController } from "../../controllers/RealtimeSyncController.js";
+import { StreamController } from "../../controllers/chat/StreamController.js";
+import { ConversationModeController } from "../../controllers/chat/ConversationModeController.js";
+import { DeliveryController } from "../../controllers/chat/DeliveryController.js";
+import { PaginationController } from "../../controllers/chat/PaginationController.js";
+import { ScrollMemoryController } from "../../controllers/chat/ScrollMemoryController.js";
+import { TypingController } from "../../controllers/chat/TypingController.js";
+import { RealtimeSyncController } from "../../controllers/chat/RealtimeSyncController.js";
 import { finalizeStreamingParts } from "../../stream/streamHelpers.js";
 import { DEFAULT_CONVERSATION_ID } from "../../constants.js";
 

@@ -12,7 +12,7 @@ import "@symblight/wc-material/menu";
 import expandMoreIcon from "@material-design-icons/svg/outlined/expand_more.svg?raw";
 
 import { LANGUAGES, highlightToHTML } from "./highlight.js";
-import { EditableBodyController } from "./EditableBodyController.js";
+import { EditableBodyController } from "../../controllers/code-block/EditableBodyController.js";
 import styles from "./code-block.css?inline";
 
 /**

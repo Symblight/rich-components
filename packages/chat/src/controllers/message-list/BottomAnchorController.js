@@ -1,4 +1,4 @@
-/** @import { ChxInfinityScroll } from "../infinity-scroll/infinity-scroll.js" */
+/** @import { ChxInfinityScroll } from "../../components/infinity-scroll/infinity-scroll.js" */
 /** @import { StickyController } from "./StickyController.js" */
 
 /**

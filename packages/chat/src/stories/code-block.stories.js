@@ -12,10 +12,10 @@ import checkIcon from "@material-design-icons/svg/outlined/check.svg?raw";
 
 import { marked } from "marked";
 
-import "../../index.js";
-import "../code-block/code-block.js";
-import "../paste-long-text/paste-long-text.js";
-import { createSplitOnSendHandler } from "../../utils/split-message-parts.js";
+import "../index.js";
+import "../components/code-block/code-block.js";
+import "../components/paste-long-text/paste-long-text.js";
+import { createSplitOnSendHandler } from "../utils/split-message-parts.js";
 
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
@@ -161,7 +161,7 @@ export const Editable = {
  * isn't a part type this library defines or validates, it's just a shape this story picked.
  * Reuses `previous` across re-renders rather than always creating a new element, same contract
  * `messageElement`/other custom renderers follow.
- * @param {import("../../types/message.js").ChxMessagePart} part
+ * @param {import("../types/message.js").ChxMessagePart} part
  * @param {HTMLElement} [previous]
  * @returns {HTMLElement}
  */
@@ -187,7 +187,7 @@ function renderCodePart(part, previous) {
  * Rule for `paste` nodes (`schema.js`) — matches the `<span data-paste-lines>` chip
  * `paste-plugin.js` serializes into `getHTML()`, feeding `splitMessageParts` (see
  * `createSplitOnSendHandler` below) the same way `chipPartRule` does for command-picker chips.
- * @type {import("../../types/inline-part-rule.js").InlinePartRule}
+ * @type {import("../types/inline-part-rule.js").InlinePartRule}
  */
 const codePartRule = {
   type: "code",
@@ -276,7 +276,7 @@ export const MockedMessages = {
  * depends on or knows about. Real apps should sanitize (DOMPurify or similar) before trusting
  * `innerHTML` with model/user-authored markdown; skipped here since this story's input is the
  * developer's own.
- * @param {import("../../types/message.js").ChxMessagePart} part
+ * @param {import("../types/message.js").ChxMessagePart} part
  * @returns {HTMLElement}
  */
 function renderMarkdownText(part) {

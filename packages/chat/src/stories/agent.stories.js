@@ -8,19 +8,19 @@ import "@symblight/wc-material/icon-button";
 
 import attachFileIcon from "@material-design-icons/svg/outlined/add.svg?raw";
 
-import "../../index.js";
-import "../streaming-indicator/streaming-indicator.js";
-import "../scroll-to-bottom-affordance/scroll-to-bottom-affordance.js";
+import "../index.js";
+import "../components/streaming-indicator/streaming-indicator.js";
+import "../components/scroll-to-bottom-affordance/scroll-to-bottom-affordance.js";
 // The composer kit used by AgenticComposerKit at the bottom — each is standalone and registers
 // itself on import, exactly like the agentic elements do.
-import "../code-block/code-block.js";
-import "../command-picker/command-picker.js";
-import "../attachments/attachments.js";
-import "../attachment/attachment.js";
-import "../paste-long-text/paste-long-text.js";
+import "../components/code-block/code-block.js";
+import "../components/command-picker/command-picker.js";
+import "../components/attachments/attachments.js";
+import "../components/attachment/attachment.js";
+import "../components/paste-long-text/paste-long-text.js";
 
-import { buildChipElement, chipPartRule, createSplitOnSendHandler } from "../../index.js";
-import { createBannerPermissionPrompt } from "../../agent.js";
+import { buildChipElement, chipPartRule, createSplitOnSendHandler } from "../index.js";
+import { createBannerPermissionPrompt } from "../agent.js";
 
 const messageStyleOverrides = html`
   <style>
@@ -51,7 +51,7 @@ const messageStyleOverrides = html`
  * `partElements` renderer for a `type: "code"` part. Reuse `previous` instead of building a new
  * element per chunk — a fresh element each flush looks like a brand-new, never-measured row to the
  * virtualized list, and that is the one rule every renderer here follows.
- * @param {import("../../types/message.js").ChxMessagePart} part
+ * @param {import("../types/message.js").ChxMessagePart} part
  * @param {HTMLElement} [previous]
  * @returns {HTMLElement}
  */
@@ -288,7 +288,7 @@ function planAt(upTo) {
  *  chx-thought-step rows in the default slot (AgenticComposerKit). `data.duration` turns the
  *  settled summary into "Thought for N seconds" — without it chx-thought self-times the streaming
  *  window, which is right until a reload.
- *  @param {import("../../types/message.js").ChxMessagePart} part @param {HTMLElement} [previous] */
+ *  @param {import("../types/message.js").ChxMessagePart} part @param {HTMLElement} [previous] */
 function renderThoughtPart(part, previous) {
   const el = /** @type {any} */ (previous ?? document.createElement("chx-thought"));
   const data = /** @type {any} */ (part).data ?? {};
@@ -314,7 +314,7 @@ function renderThoughtPart(part, previous) {
   return el;
 }
 
-/** @param {import("../../types/message.js").ChxMessagePart} part @param {HTMLElement} [previous] */
+/** @param {import("../types/message.js").ChxMessagePart} part @param {HTMLElement} [previous] */
 function renderPlanPart(part, previous) {
   const el = /** @type {any} */ (previous ?? document.createElement("chx-plan"));
   el.entries = /** @type {any} */ (part).entries ?? [];
@@ -325,7 +325,7 @@ function renderPlanPart(part, previous) {
  * The card's content is a plain default-slot child — chx-tool-call renders header and status and
  * never interprets ACP content blocks itself. Here a `data.diff` becomes a chx-tool-call-diff and
  * streamed `text` a terminal chx-code-block; swap either for your own element freely.
- * @param {import("../../types/message.js").ChxMessagePart} part @param {HTMLElement} [previous]
+ * @param {import("../types/message.js").ChxMessagePart} part @param {HTMLElement} [previous]
  */
 function renderToolCallPart(part, previous) {
   const el = /** @type {any} */ (previous ?? document.createElement("chx-tool-call"));
@@ -359,7 +359,7 @@ function renderToolCallPart(part, previous) {
 
 /** A sent attachment arrives as a `type: "attachment"` part carrying the File — `chx-attachments`
  *  only owns the composer row, the message side is a renderer like any other.
- *  @param {import("../../types/message.js").ChxMessagePart} part @param {HTMLElement} [previous] */
+ *  @param {import("../types/message.js").ChxMessagePart} part @param {HTMLElement} [previous] */
 function renderAttachmentPart(part, previous) {
   const card = /** @type {any} */ (
     previous?.localName === "chx-attachment" ? previous : document.createElement("chx-attachment")
@@ -643,7 +643,7 @@ function handleAgentFileQuery(event) {
 
 /** Rule for the `paste` node chx-paste-long-text collapses a detected code paste into, so it stays
  *  a `type: "code"` part after send instead of flattening back to text.
- *  @type {import("../../types/inline-part-rule.js").InlinePartRule} */
+ *  @type {import("../types/inline-part-rule.js").InlinePartRule} */
 const pasteCodePartRule = {
   type: "code",
   selector: "span[data-paste-lines]",

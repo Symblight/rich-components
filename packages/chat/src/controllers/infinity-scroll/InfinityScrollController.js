@@ -1,6 +1,6 @@
 import { VirtualListController } from "./VirtualListController.js";
-import { RowMeasurer } from "./RowMeasurer.js";
-import { StickToBottom } from "./StickToBottom.js";
+import { RowMeasurer } from "../../components/infinity-scroll/RowMeasurer.js";
+import { StickToBottom } from "../../components/infinity-scroll/StickToBottom.js";
 import { LoadMoreController } from "./LoadMoreController.js";
 import { VisibilityController } from "./VisibilityController.js";
 import { PlainListController } from "./PlainListController.js";

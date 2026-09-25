@@ -1,7 +1,7 @@
 import { nothing } from "lit";
 
 /** @import { ChxMessage } from "../../types/message.js" */
-/** @import { ChxDivider } from "../divider/divider.js" */
+/** @import { ChxDivider } from "../../components/divider/divider.js" */
 
 /** Rough px a date divider adds to a row's pre-measurement estimate — the divider folds into the row. */
 const DIVIDER_ESTIMATE = 40;

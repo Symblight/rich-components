@@ -1,4 +1,4 @@
-/** @import { ChxMessageList } from "../components/message-list/message-list.js" */
+/** @import { ChxMessageList } from "../../components/message-list/message-list.js" */
 
 /**
  * Remembers where the reader was in each conversation, so switching away and back lands on the same

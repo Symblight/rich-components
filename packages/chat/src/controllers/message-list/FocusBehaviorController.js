@@ -19,7 +19,7 @@
 export class FocusBehaviorController {
   static #INTERIOR_FOCUSABLE_SELECTOR = "button, a[href], input, select, textarea, [tabindex]";
 
-  /** @type {() => import("../types/message.js").ChxMessage[]} */
+  /** @type {() => import("../../types/message.js").ChxMessage[]} */
   #getMessages;
   /** @type {() => DocumentFragment | Element | undefined} */
   #getRenderRoot;
@@ -37,13 +37,13 @@ export class FocusBehaviorController {
   // Arrow/Home/End keypress is O(n) per keystroke; rebuilding only when the reference actually
   // changes (a new `messages` array, not just repeated navigation over the same one) keeps rapid
   // keyboard navigation O(1) per keystroke instead.
-  /** @type {{messages: import("../types/message.js").ChxMessage[], index: Map<string, number>} | undefined} */
+  /** @type {{messages: import("../../types/message.js").ChxMessage[], index: Map<string, number>} | undefined} */
   #indexCache;
 
   /**
    * @param {ReactiveControllerHost & import("lit").LitElement} host
    * @param {{
-   *   getMessages: () => import("../types/message.js").ChxMessage[],
+   *   getMessages: () => import("../../types/message.js").ChxMessage[],
    *   getRenderRoot: () => DocumentFragment | Element | undefined,
    *   scrollToIndex: (index: number) => void,
    *   requestRerender: () => void,

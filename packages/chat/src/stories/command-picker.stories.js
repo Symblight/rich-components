@@ -17,11 +17,11 @@ import "@symblight/wc-material/button";
 import "@symblight/wc-material/icon";
 import "@symblight/wc-material/menu";
 
-import "../command-picker/command-picker.js";
-import "../chip/chip.js";
+import "../components/command-picker/command-picker.js";
+import "../components/chip/chip.js";
 
-import { buildChipElement } from "../../editor/command-chip.js";
-import { chipPartRule, createSplitOnSendHandler } from "../../utils/split-message-parts.js";
+import { buildChipElement } from "../editor/command-chip.js";
+import { chipPartRule, createSplitOnSendHandler } from "../utils/split-message-parts.js";
 
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
@@ -166,7 +166,7 @@ function createFilePickedHandler(templateId) {
  * Historical counterpart to `createFilePickedHandler` — same icon-from-name derivation, reading
  * `part.data.path` (the `data-path` attribute `readChipAttrs`/`chipPartRule` already captured)
  * instead of a live `chx-command-picked` event.
- * @param {import("../../types/message.js").ChxMessagePart} part
+ * @param {import("../types/message.js").ChxMessagePart} part
  * @returns {HTMLElement}
  */
 function renderDynamicSearchChip(part) {
@@ -316,7 +316,7 @@ function createPickedHandler(templateId, iconMap) {
  * handler used as its `iconMap` key (it's what got `clone.append`ed as the chip's only text), so no
  * extra `data-*` stash is needed to look the right icon back up.
  * @param {Record<string, string>} iconMap
- * @returns {(part: import("../../types/message.js").ChxMessagePart) => HTMLElement}
+ * @returns {(part: import("../types/message.js").ChxMessagePart) => HTMLElement}
  */
 function createHistoricalPickedRenderer(iconMap) {
   return (part) => {
@@ -446,7 +446,7 @@ export const CustomCommands = {
  * @returns {HTMLElement}
  */
 function buildFilesChip(attrs) {
-  const chip = /** @type {import("../chip/chip.js").ChxChip} */ (
+  const chip = /** @type {import("../components/chip/chip.js").ChxChip} */ (
     document.createElement("chx-chip")
   );
   chip.style.setProperty("--chx-chip-container-color", "var(--md-sys-color-primary-container)");
@@ -462,7 +462,7 @@ function buildFilesChip(attrs) {
 
 /** Same idea as buildFilesChip, distinct icon/color. @param {{templateId: string, label: string, icon: string | null, data: Record<string, string>}} attrs @returns {HTMLElement} */
 function buildCommandsChip(attrs) {
-  const chip = /** @type {import("../chip/chip.js").ChxChip} */ (
+  const chip = /** @type {import("../components/chip/chip.js").ChxChip} */ (
     document.createElement("chx-chip")
   );
   chip.style.setProperty("--chx-chip-container-color", "var(--md-sys-color-tertiary-container)");
@@ -479,7 +479,7 @@ function buildCommandsChip(attrs) {
  * Routes a `type: "chip"` part to whichever picker's own chip look owns it, via
  * `part.data.chipOwnerId` — the same id `#stampOwner` tags the live-inserted node with, now purely
  * informational data on the part rather than a dispatch key the library resolves for you.
- * @param {import("../../types/message.js").ChxMessagePart} part
+ * @param {import("../types/message.js").ChxMessagePart} part
  * @returns {HTMLElement}
  */
 function renderMultiPickerChip(part) {

@@ -1,4 +1,4 @@
-import { RowMeasurer } from "./RowMeasurer.js";
+import { RowMeasurer } from "../../components/infinity-scroll/RowMeasurer.js";
 
 /**
  * Real-DOM counterpart to `VirtualListController` + `StickToBottom`, for `noVirtualization` mode —

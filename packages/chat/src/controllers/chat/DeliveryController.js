@@ -1,5 +1,5 @@
-/** @import { ChxMessage } from "../types/message.js" */
-/** @import { ChxChatStatus } from "../types/adapter.js" */
+/** @import { ChxMessage } from "../../types/message.js" */
+/** @import { ChxChatStatus } from "../../types/adapter.js" */
 
 /**
  * @typedef {import("lit").ReactiveController} ReactiveController

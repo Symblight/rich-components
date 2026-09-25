@@ -1,5 +1,5 @@
-/** @import { ChxRealtimeEvent } from "../types/realtime.js" */
-/** @import { ChxConversation } from "../types/conversation.js" */
+/** @import { ChxRealtimeEvent } from "../../types/realtime.js" */
+/** @import { ChxConversation } from "../../types/conversation.js" */
 
 /**
  * Maps inbound `ChxRealtimeEvent`s (`adapter.subscribe`'s `onEvent`) to chat-owned state changes —

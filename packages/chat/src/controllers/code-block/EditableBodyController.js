@@ -1,4 +1,4 @@
-import { getCaretOffset, setCaretOffset, isCaretCollapsed } from "./caret.js";
+import { getCaretOffset, setCaretOffset, isCaretCollapsed } from "../../components/code-block/caret.js";
 import { UndoController } from "./UndoController.js";
 
 /** Coalesces re-highlighting while typing — a full Lezer reparse per keystroke on a large file is

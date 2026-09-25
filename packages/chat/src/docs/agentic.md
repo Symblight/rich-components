@@ -46,11 +46,13 @@ nothing in this package needs to know which you picked.
 row to the virtualized list, and the row re-measures on every flush.
 
 `src/components/stories/agent.stories.js` (`AgenticToolCalls`) is a complete working wiring — all
-four part renderers, the card `messageElement`, and the permission round-trip. Copy from it.
+four part renderers, the page-level CSS that strips the bubble down to a full-width document, and
+the permission round-trip. Copy from it.
 
-**`messageElement` takes over part rendering entirely.** For a message it builds, `chx-message-list`
-never consults `partElements`, so a `messageElement` that wants agentic parts has to dispatch to the
-renderers itself (`renderAgentPart` in the story does exactly that).
+**There is no whole-message hook.** `partElements` is the only rendering override; the
+`<chx-message>` wrapper is always the library's, so every row reliably carries the part names and
+roving-focus wiring. Restyling the wrapper is CSS — see "Styling messages" in
+[`messages.md`](./messages.md).
 
 ## Stopping a turn
 

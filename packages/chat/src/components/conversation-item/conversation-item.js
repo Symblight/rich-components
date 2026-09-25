@@ -17,11 +17,15 @@ export class ChxConversationItem extends LitElement {
   static properties = {
     title: { type: String },
     lastMessage: { type: String, attribute: "last-message" },
+    // resolved by chx-conversations from conversation.avatarUrl, falling back to the first
+    // participant's — renders as the `avatar` slot's fallback content, so slotting your own wins
+    avatarUrl: { type: String, attribute: "avatar-url" },
     unreadCount: { type: Number, attribute: "unread-count" },
     active: { type: Boolean, reflect: true },
     unread: { type: Boolean, reflect: true },
-    // gates the `typing` slot — no default content, same "no slot, no render" contract
-    // chx-message-list's typing/streaming slots use; set by chx-conversations off chx-typing-change
+    // gates the `typing` slot — no fallback content here; chx-conversations sets this off
+    // chx-chat's chx-typing-change and fills the slot from its own template, since rows are
+    // authored there and nothing outside can reach the slot
     typing: { type: Boolean, reflect: true },
   };
 
@@ -31,6 +35,8 @@ export class ChxConversationItem extends LitElement {
     this.title = "";
     /** @type {string} */
     this.lastMessage = "";
+    /** @type {string} */
+    this.avatarUrl = "";
     /** @type {number} */
     this.unreadCount = 0;
     /** @type {boolean} */
@@ -78,9 +84,17 @@ export class ChxConversationItem extends LitElement {
   render() {
     return html`
       <md-list-item button aria-current=${this.active ? "true" : nothing}>
-        <slot name="avatar" slot="leading"></slot>
-        <span class="conversation-item__title">${this.title}</span>
-        <div class="conversation-item__preview" slot="supporting-text">
+        <div class="conversation-item__avatar" part="avatar" slot="leading">
+          <slot name="avatar">
+            ${when(
+              this.avatarUrl,
+              () =>
+                html`<img class="conversation-item__avatar-image" src=${this.avatarUrl} alt="" />`,
+            )}
+          </slot>
+        </div>
+        <span class="conversation-item__title" part="title">${this.title}</span>
+        <div class="conversation-item__preview" part="preview" slot="supporting-text">
           ${when(
             this.typing,
             () => html`<slot name="typing"></slot>`,
@@ -91,6 +105,7 @@ export class ChxConversationItem extends LitElement {
           this.unreadCount > 0
             ? html`<md-badge
                 slot="trailing"
+                part="badge"
                 class="conversation-item__badge"
                 .value=${String(this.unreadCount)}
               ></md-badge>`

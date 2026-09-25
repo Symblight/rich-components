@@ -230,35 +230,38 @@ describe("chx-message-list", () => {
       expect(status?.textContent).to.equal("Response complete");
     });
 
-    it("sets alignSelf on the rendered element from own, for both the built-in and a custom messageElement", async () => {
+    it("stamps the closed part vocabulary on each row from its own state", async () => {
       const el = /** @type {ChxMessageList} */ (
         await fixture(html`<chx-message-list style="height: 400px;"></chx-message-list>`)
       );
       el.messages = [
         makeMessage({ id: "own", own: true }),
         makeMessage({ id: "not-own", own: false }),
+        makeMessage({ id: "unread", own: false, readState: "unread" }),
+        makeMessage({
+          id: "streaming",
+          own: false,
+          parts: [{ id: "streaming-t1", type: "text", text: "…", state: "streaming" }],
+        }),
+        makeMessage({
+          id: "system",
+          own: false,
+          parts: [{ id: "system-t1", type: "system", text: "Alex joined" }],
+        }),
       ];
       await el.updateComplete;
 
       const shadow = infinityScrollOf(el).shadowRoot;
-      const own = /** @type {HTMLElement} */ (shadow?.querySelector('[data-message-id="own"]'));
-      const notOwn = /** @type {HTMLElement} */ (
-        shadow?.querySelector('[data-message-id="not-own"]')
-      );
-      expect(own.style.alignSelf).to.equal("flex-end");
-      expect(notOwn.style.alignSelf).to.equal("flex-start");
+      const partsOf = (/** @type {string} */ id) =>
+        /** @type {HTMLElement} */ (shadow?.querySelector(`[data-message-id="${id}"]`))
+          .getAttribute("part")
+          ?.split(" ");
 
-      el.messageElement = (message, previous) => {
-        const div = previous ?? document.createElement("div");
-        div.dataset.messageId = message.id;
-        return div;
-      };
-      el.messages = [makeMessage({ id: "custom-own", own: true })];
-      await el.updateComplete;
-      const custom = /** @type {HTMLElement} */ (
-        shadow?.querySelector('[data-message-id="custom-own"]')
-      );
-      expect(custom.style.alignSelf).to.equal("flex-end");
+      expect(partsOf("own")).to.eql(["message", "message-own"]);
+      expect(partsOf("not-own")).to.eql(["message", "message-incoming"]);
+      expect(partsOf("unread")).to.eql(["message", "message-incoming", "message-unread"]);
+      expect(partsOf("streaming")).to.eql(["message", "message-incoming", "message-streaming"]);
+      expect(partsOf("system")).to.eql(["message", "message-incoming", "message-system"]);
     });
   });
 

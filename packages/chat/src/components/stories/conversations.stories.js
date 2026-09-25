@@ -18,7 +18,13 @@ export default meta;
 
 /** @param {string} name @param {"system" | "user" | "assistant"} [role] @returns {import("../../types/conversation.js").ChxUser} */
 function makeUser(name, role) {
-  return { id: name, displayName: name, role };
+  return {
+    id: name,
+    displayName: name,
+    role,
+    // chx-conversations falls back to the first participant's avatar when the conversation has none
+    avatarUrl: `https://i.pravatar.cc/72?u=${encodeURIComponent(name)}`,
+  };
 }
 
 /** @type {import("../../types/conversation.js").ChxConversation[]} */
@@ -158,9 +164,13 @@ function createConversationsAdapter() {
  * element, the `initial*` pair must be ignored; if a decoy ever won, "Ignored (initialConversations)"
  * would appear in the sidebar or the wrong row would highlight on mount. Neither happens.
  *
- * `buildItem` is overridden below to add an initials avatar to each row (demonstrating the
- * `chx-conversation-item` `avatar` slot + the reuse-`previousElement` contract); the default row
- * already renders title + `lastMessagePreview` + an unread `md-badge` with no override at all.
+ * There is no row-render override: `chx-conversations` always authors the `<chx-conversation-item>`
+ * itself, so every row reliably carries its part names and keyboard-navigation wiring. The row draws
+ * title + `lastMessagePreview` + an unread `md-badge`, and its avatar comes from the data —
+ * `conversation.avatarUrl`, falling back to the first participant's (`makeUser` above supplies one).
+ * Slotting your own `avatar` into the row still wins over that; restyling is `::part()` on
+ * `chx-conversations` (`item`, `item-active`, `item-unread`, `item-typing`, and the row's interior
+ * `item-avatar`/`item-title`/`item-preview`/`item-badge`).
  *
  * Each conversation keeps its own cached message history and pagination cursor (see
  * `createConversationsAdapter` above) — switching away and back doesn't refetch or lose scroll
@@ -198,7 +208,8 @@ function createConversationsAdapter() {
  *   `setTyping(isTyping, conversationId)` → `<chx-typing-indicator slot="typing">` in
  *   `chx-message-list` for the active conversation) and the sidebar row's own `typing` slot
  *   (`chx-chat` fires `chx-typing-change`, `chx-conversations` toggles the matching row's `typing`
- *   property). Because it's per-conversation, switching away and back mid-typing keeps both in sync —
+ *   property and fills that slot with a `<chx-typing-indicator>` from its own template — the row
+ *   itself has no fallback content, and nothing outside can reach the slot). Because it's per-conversation, switching away and back mid-typing keeps both in sync —
  *   and a `typing` event for a *background* conversation would light only its row, not the chat.
  * - "Simulate unread bump" — the *realtime* path to the same badge (vs. read-tracking above): a
  *   `conversation-updated` event raising a background conversation's `unreadCount` directly; `chx-chat`
@@ -388,41 +399,6 @@ export const ConversationsList = {
       }, FLOOD_INTERVAL_MS);
     };
 
-    // buildItem override — adds an initials avatar (the chx-conversation-item `avatar` slot) on top
-    // of the default title + lastMessagePreview + unread badge, reusing the previous element.
-    const buildItem = (
-      /** @type {import("../../types/conversation.js").ChxConversation} */ conversation,
-      /** @type {HTMLElement | undefined} */ previousElement,
-    ) => {
-      const item = /** @type {any} */ (
-        previousElement instanceof HTMLElement
-          ? previousElement
-          : document.createElement("chx-conversation-item")
-      );
-      item.title = conversation.title ?? "";
-      item.lastMessage = conversation.lastMessagePreview ?? "";
-      item.unreadCount = conversation.unreadCount ?? 0;
-      item.unread = conversation.readState === "unread";
-      let avatar = item.querySelector('[slot="avatar"]');
-      if (!avatar) {
-        avatar = document.createElement("span");
-        avatar.slot = "avatar";
-        avatar.style.cssText =
-          "display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;border-radius:50%;background:var(--md-sys-color-primary-container);color:var(--md-sys-color-on-primary-container);font-size:0.8rem;font-weight:600;";
-        item.append(avatar);
-      }
-      avatar.textContent = (conversation.title ?? "?").slice(0, 1).toUpperCase();
-      // Fill the row's own `typing` slot once — chx-conversations toggles the row's `typing` property
-      // (off chx-chat's chx-typing-change), which gates whether this slot actually renders.
-      if (!item.querySelector('[slot="typing"]')) {
-        const typing = document.createElement("chx-typing-indicator");
-        typing.slot = "typing";
-        typing.setAttribute("value", "typing…");
-        item.append(typing);
-      }
-      return item;
-    };
-
     return html`
       <div style="display: flex; gap: 0.5rem; padding-bottom: 0.75rem; flex-wrap: wrap;">
         <md-button variant="outlined" @click=${handleResetAll}>Reset all chats</md-button>
@@ -442,7 +418,6 @@ export const ConversationsList = {
           for="conversations-demo-chat"
           aria-label="Conversations"
           style="width: 260px; border-right: 1px solid var(--md-sys-color-outline-variant);"
-          .buildItem=${buildItem}
         ></chx-conversations>
         <div style="display: flex; flex-direction: column; flex: 1; min-width: 0;">
           <div

@@ -1,13 +1,34 @@
 import { html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
+import { repeat } from "lit/directives/repeat.js";
 
 import "@symblight/wc-material/list";
 import "../conversation-item/conversation-item.js";
+// this component fills each row's `typing` slot itself — the row has no fallback content, and a
+// consumer can't reach it: rows are authored here, not slotted in
+import "../typing-indicator/typing-indicator.js";
 
 import styles from "./conversations.css?inline";
 
 /** @import { ChxConversation } from "../../types/conversation.js" */
-/** @typedef {HTMLElement & {active?: boolean, typing?: boolean, setTabIndex?: (v: number) => void, focusInteractive?: () => void, getTabIndex?: () => number, updateComplete?: Promise<unknown>}} ConversationItemElement */
+/** @typedef {import("../conversation-item/conversation-item.js").ChxConversationItem} ConversationItemElement */
+
+// Rows live one shadow level down (directly in this component's shadow tree), so the host-level
+// names below need no hop, while the row's own interior parts need exactly one `exportparts`.
+const ITEM_PARTS = ["avatar", "title", "preview", "badge"];
+const ITEM_EXPORTPARTS = ITEM_PARTS.map((part) => `${part}: item-${part}`).join(", ");
+/** The row's part names: `item`, plus `item-active`/`item-unread`/`item-typing` where they apply.
+ * Unlike chx-message-list's equivalent, the state names need no literal list of their own — nothing
+ * has to enumerate them in an `exportparts` string, since the rows sit in this component's own
+ * shadow tree rather than two levels down.
+ * @param {ChxConversation} conversation @param {boolean} active @param {boolean} typing */
+function itemPartNames(conversation, active, typing) {
+  const names = ["item"];
+  if (active) names.push("item-active");
+  if (conversation.readState === "unread") names.push("item-unread");
+  if (typing) names.push("item-typing");
+  return names.join(" ");
+}
 
 /**
  * @tag chx-conversations
@@ -19,7 +40,6 @@ export class ChxConversations extends LitElement {
   static properties = {
     for: { type: String, reflect: true },
     activeConversationId: { type: String, attribute: "active-conversation-id" },
-    buildItem: { attribute: false },
     getItemKey: { attribute: false },
   };
 
@@ -27,10 +47,6 @@ export class ChxConversations extends LitElement {
   #chat = null;
   /** @type {ChxConversation[]} */
   #privateConversations = [];
-  /** @type {Map<string, {builderKey: unknown, element: ConversationItemElement}>} */
-  #itemCache = new Map();
-  /** @type {ConversationItemElement[]} */
-  #renderedItems = [];
   /** conversationIds the other side is currently typing in — driven by the chat's chx-typing-change. @type {Set<string>} */
   #typingConversationIds = new Set();
 
@@ -40,8 +56,6 @@ export class ChxConversations extends LitElement {
     this.for = "";
     /** @type {string | undefined} */
     this.activeConversationId = undefined;
-    /** @type {((c: ChxConversation, previousElement?: HTMLElement) => HTMLElement) | undefined} */
-    this.buildItem = undefined;
     /** @type {(c: ChxConversation) => string} */
     this.getItemKey = (c) => c.id;
   }
@@ -171,9 +185,10 @@ export class ChxConversations extends LitElement {
 
   /** @param {MouseEvent} event */
   #onClick = (event) => {
-    const path = event.composedPath();
-    const item = this.#renderedItems.find((el) => path.includes(el));
-    const conversationId = item?.dataset.conversationId;
+    // the event retargets to the row as it crosses out of chx-conversation-item's shadow root, so
+    // this listener (inside *our* shadow tree) sees the row itself, not whatever was clicked in it
+    const item = /** @type {HTMLElement} */ (event.target).closest("chx-conversation-item");
+    const conversationId = /** @type {HTMLElement | null} */ (item)?.dataset.conversationId;
     if (conversationId != null) this.#activate(conversationId);
   };
 
@@ -191,17 +206,17 @@ export class ChxConversations extends LitElement {
     else if (event.key === "End") next = items.length - 1;
     else return;
     event.preventDefault();
-    items.forEach((el, n) => el.setTabIndex?.(n === next ? 0 : -1));
-    items[next].focusInteractive?.();
+    items.forEach((el, n) => el.setTabIndex(n === next ? 0 : -1));
+    items[next].focusInteractive();
   };
 
-  /** @returns {(ConversationItemElement & {setTabIndex: (v: number) => void, focusInteractive: () => void})[]} */
+  /** The rendered rows, read live from the shadow tree — every one is a chx-conversation-item now
+   *  that rows are authored here, so no duck-typing filter is needed.
+   *  @returns {ConversationItemElement[]} */
   get #items() {
-    return /** @type {any} */ (
-      this.#renderedItems.filter(
-        (el) => typeof el.setTabIndex === "function" && typeof el.focusInteractive === "function",
-      )
-    );
+    return /** @type {ConversationItemElement[]} */ ([
+      ...(this.renderRoot?.querySelectorAll("chx-conversation-item") ?? []),
+    ]);
   }
 
   async #syncTabindices() {
@@ -217,51 +232,31 @@ export class ChxConversations extends LitElement {
     items.forEach((el, n) => el.setTabIndex(n === index ? 0 : -1));
   }
 
-  /** @returns {ConversationItemElement[]} */
   #renderItems() {
-    const conversations = this.conversations;
-    const seen = new Set();
-    const items = conversations.map((conversation) => {
-      const key = this.getItemKey(conversation);
-      seen.add(key);
-      const element = this.#buildOrReuse(conversation, key);
-      element.dataset.conversationId = conversation.id;
-      if ("active" in element) element.active = conversation.id === this.activeConversationId;
-      if ("typing" in element) element.typing = this.#typingConversationIds.has(conversation.id);
-      return element;
-    });
-    for (const key of [...this.#itemCache.keys()]) if (!seen.has(key)) this.#itemCache.delete(key);
-    this.#renderedItems = items;
-    return items;
-  }
-
-  /**
-   * @param {ChxConversation} conversation
-   * @param {string} key
-   * @returns {ConversationItemElement}
-   */
-  #buildOrReuse(conversation, key) {
-    const cached = this.#itemCache.get(key);
-    if (this.buildItem) {
-      const previous = cached?.builderKey === this.buildItem ? cached.element : undefined;
-      const element = /** @type {ConversationItemElement} */ (
-        this.buildItem(conversation, previous)
-      );
-      this.#itemCache.set(key, { builderKey: this.buildItem, element });
-      return element;
-    }
-    const element =
-      /** @type {ConversationItemElement & {title: string, lastMessage: string, unreadCount: number, unread: boolean}} */ (
-        cached && cached.builderKey === undefined
-          ? cached.element
-          : document.createElement("chx-conversation-item")
-      );
-    element.title = conversation.title ?? "";
-    element.lastMessage = conversation.lastMessagePreview ?? "";
-    element.unreadCount = conversation.unreadCount ?? 0;
-    element.unread = conversation.readState === "unread";
-    this.#itemCache.set(key, { builderKey: undefined, element });
-    return element;
+    return repeat(
+      this.conversations,
+      (conversation) => this.getItemKey(conversation),
+      (conversation) => {
+        const active = conversation.id === this.activeConversationId;
+        const typing = this.#typingConversationIds.has(conversation.id);
+        return html`
+          <chx-conversation-item
+            part=${itemPartNames(conversation, active, typing)}
+            exportparts=${ITEM_EXPORTPARTS}
+            data-conversation-id=${conversation.id}
+            .title=${conversation.title ?? ""}
+            .lastMessage=${conversation.lastMessagePreview ?? ""}
+            .avatarUrl=${conversation.avatarUrl ?? conversation.participants?.[0]?.avatarUrl ?? ""}
+            .unreadCount=${conversation.unreadCount ?? 0}
+            .unread=${conversation.readState === "unread"}
+            .active=${active}
+            .typing=${typing}
+          >
+            <chx-typing-indicator slot="typing"></chx-typing-indicator>
+          </chx-conversation-item>
+        `;
+      },
+    );
   }
 
   render() {

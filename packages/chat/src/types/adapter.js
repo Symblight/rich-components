@@ -65,9 +65,9 @@
  * }) => () => void} [subscribe] - one long-lived, conversation-spanning subscription — never re-invoked
  *   on an `activeConversationId` switch, see chx-chat's `activeConversationId`; a `ChxMessage`/`ChxMessageChunk`
  *   for any conversation (including a currently-backgrounded one) can arrive on it at any time. `onEvent`
- *   covers typing/presence/read/conversation-collection sync — see `src/types/realtime.js` and
- *   `.claude/plans/messages/realtime-sync.md`; deliberately separate from `onMessage`/`onTyping`
- *   above, which keep covering the two event kinds they already handled before `onEvent` existed
+ *   covers typing/presence/read/conversation-collection sync (see `src/types/realtime.js`), deliberately
+ *   separate from `onMessage`/`onTyping` above, which keep covering the two event kinds they already
+ *   handled before `onEvent` existed
  * @property {(message: ChxMessage, options: {signal: AbortSignal}) => Promise<ReadableStream<ChxMessageChunk | ChxMessageEnvelope> | void>} [sendMessage] - `message.conversationId` carries which
  *   conversation this send belongs to, same field as everywhere else — no separate parameter.
  *   **`signal` is yours to honor.** Aborting only stops chx-chat reading the stream; nothing is sent

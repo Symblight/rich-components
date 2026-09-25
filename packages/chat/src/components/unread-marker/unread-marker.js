@@ -5,11 +5,10 @@ import styles from "./unread-marker.css?inline";
 
 /**
  * @tag chx-unread-marker
- * @summary "This message is unread" marker — `chx-message` imports it and uses it as its
- * `unread-marker` slot's fallback content, so `unread` alone renders one; slot your own
- * (`slot="unread-marker"`) to replace it. Structural, not decorative — `role="separator"`, no `aria-hidden`/`aria-live`,
- * a landmark a screen reader user can navigate to, same posture MUI X's own real read-receipts
- * `<ChatUnreadMarker>` uses.
+ * @summary "This message is unread" marker — `chx-message`'s default `unread-marker` slot content,
+ * so `unread` alone renders one; slot your own (`slot="unread-marker"`) to replace it. Structural,
+ * not decorative — `role="separator"`, no `aria-hidden`/`aria-live`, a landmark a screen reader user
+ * can navigate to.
  */
 @customElement("chx-unread-marker")
 export class ChxUnreadMarker extends LitElement {

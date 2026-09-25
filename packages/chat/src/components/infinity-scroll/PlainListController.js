@@ -20,8 +20,8 @@ import { RowMeasurer } from "./RowMeasurer.js";
  * anchor's captured offset and produces a visibly wrong restore once the row actually renders. So a
  * mutation doesn't reconcile immediately; it hands off to {@link RowMeasurer} (the same readiness
  * engine the virtualized path uses, generalized to serve both) and only reconciles once the affected
- * rows are confirmed ready — see `.claude/plans/messages/no-virtualization.md`. A `ResizeObserver`
- * firing needs no such gate: by definition, whatever it reports has already rendered for real.
+ * rows are confirmed ready. A `ResizeObserver` firing needs no such gate: by definition, whatever it
+ * reports has already rendered for real.
  *
  * Unlike the virtualized quartet, nothing here needs a per-render `sync()` — the observers already
  * react to every DOM change on their own. `observe()` only needs calling once elements exist (safe to

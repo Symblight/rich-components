@@ -272,10 +272,10 @@ export const MockedMessages = {
 /**
  * `partElements.text` — the same generic extension point `partElements.code`/`.chip` use, checked
  * for *every* part type including `"text"` before any built-in fallback. This package ships no
- * markdown parser (see `commands.md`'s "Same mechanism, for markdown/HTML text rendering") —
- * `marked` here is an ordinary consumer-level choice, not something this library depends on or
- * knows about. Real apps should sanitize (DOMPurify or similar) before trusting `innerHTML` with
- * model/user-authored markdown; skipped here since this story's input is the developer's own.
+ * markdown parser — `marked` here is an ordinary consumer-level choice, not something this library
+ * depends on or knows about. Real apps should sanitize (DOMPurify or similar) before trusting
+ * `innerHTML` with model/user-authored markdown; skipped here since this story's input is the
+ * developer's own.
  * @param {import("../../types/message.js").ChxMessagePart} part
  * @returns {HTMLElement}
  */

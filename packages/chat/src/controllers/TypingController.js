@@ -7,10 +7,9 @@
  * (`undefined`, the single-conversation flavor, is normalized to `""`). Per-conversation, so switching
  * the active conversation just reads that conversation's own state instead of needing a reset, and a
  * background conversation's typing can drive its own sidebar row. Still not per-*user* — multiple
- * simultaneous typers in one conversation collapse to a single boolean per conversation (the remaining
- * TODO, see realtime-sync.md). Latched per conversation so a value already in effect is never
- * re-applied or re-announced. Not a real `ReactiveController` — just a small stateful helper that
- * calls back into `host` on change.
+ * simultaneous typers in one conversation collapse to a single boolean per conversation (a remaining
+ * TODO). Latched per conversation so a value already in effect is never re-applied or re-announced.
+ * Not a real `ReactiveController` — just a small stateful helper that calls back into `host` on change.
  */
 export class TypingController {
   /** @type {ReactiveControllerHost & EventTarget} */

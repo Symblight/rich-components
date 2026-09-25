@@ -90,8 +90,7 @@ export class ChxInfinityScroll extends LitElement {
     /** `"start"` rests a short list at the top, `"end"` at the bottom. @type {"start" | "end"} */
     this.contentAlign = "end";
 
-    /** Real-DOM mode — every row renders in full, in normal document flow, no windowing/measurement.
-     *  See `.claude/plans/messages/no-virtualization.md`. @type {boolean} */
+    /** Real-DOM mode — every row renders in full, in normal document flow, no windowing/measurement. @type {boolean} */
     this.noVirtualization = false;
 
     /** px from the bottom still counting as "at the bottom". @type {number} */

@@ -7,7 +7,7 @@ import styles from "./chip.css?inline";
 
 /**
  * @tag chx-chip
- * @summary Chip.
+ * @summary Small suggestion-chip wrapper — icon + label slots over `md-suggestion-chip`.
  */
 @customElement("chx-chip")
 export class ChxChip extends LitElement {

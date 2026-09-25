@@ -201,9 +201,9 @@ export class ChxMessageComposer extends LitElement {
 
   /**
    * chx-suggestion-list never decides its own visibility — this is the one place `alwaysVisible`
-   * (declared by the consumer) and `messagesEmpty` (pushed down by chx-chat) actually combine, see
-   * .claude/plans/suggestions.spec.md's "Visibility ownership". Called from `updated()` and from the
-   * suggestions slot's own `slotchange`, same dual-trigger reasoning chx-chat uses one level up —
+   * (declared by the consumer) and `messagesEmpty` (pushed down by chx-chat) actually combine. Called
+   * from `updated()` and from the suggestions slot's own `slotchange`, same dual-trigger reasoning
+   * chx-chat uses one level up —
    * needed here since either a consumer toggling `always-visible` after the list is already slotted,
    * or the list being (re)assigned after `messagesEmpty` was already pushed, must re-run this check.
    */

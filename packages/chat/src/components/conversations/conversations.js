@@ -124,7 +124,7 @@ export class ChxConversations extends LitElement {
         /** @type {EventListener} */ (this.#onChatTypingChange),
       );
       // Mark the chat conversation-driven, so a removed/empty selection shows its empty state instead
-      // of the single-conversation default. See empty-state.md.
+      // of the single-conversation default.
       /** @type {any} */ (next).conversationsPresent = true;
       if (this.#chat?.activeConversationId !== undefined) {
         this.activeConversationId = this.#chat.activeConversationId;

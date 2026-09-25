@@ -131,9 +131,9 @@ export class FocusBehaviorController {
   /**
    * Delegated on the host's own scroller element (one listener for the whole list, not one pair
    * per rendered message) — bind this in the host's template, e.g. `@keydown=${controller.handleKeyDown}`.
-   * `role="article"` is what `closest()` queries for, so this assumes whatever renders a message
-   * (the built-in element or a custom `messageElement`) keeps that role and a `data-message-id`
-   * attribute — one that omits either silently drops out of roving focus, no error.
+   * `role="article"` is what `closest()` queries for, so this assumes the rendered message keeps
+   * that role and a `data-message-id` attribute — omitting either silently drops it out of roving
+   * focus, no error.
    * @param {KeyboardEvent} event
    */
   handleKeyDown = (event) => {

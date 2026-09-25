@@ -18,8 +18,7 @@
  * Owns pagination state (cursor/hasMore/in-flight) and the prepend-merge for older history, scoped
  * per conversation (`conversationId`, `undefined` for a single-conversation chx-chat — behaves exactly
  * as a single global state in that case). A real `ReactiveController` so `hostDisconnected()` can abort
- * every in-flight fetch. See `PaginationSentinelController.js` for the sentinel-watching half that
- * triggers `loadMore()`.
+ * every in-flight fetch.
  * @implements {ReactiveController}
  */
 export class PaginationController {

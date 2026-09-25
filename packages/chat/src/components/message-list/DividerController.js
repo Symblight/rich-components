@@ -11,7 +11,7 @@ const DIVIDER_ESTIMATE = 40;
  * per-message-id element cache (so a divider isn't re-created on every scroll re-render), and the
  * predicate/build/estimate the list calls per row. Constructed with one narrow callback, no host
  * reference — same shape `ReadTrackingController` uses, testable in isolation. Action dividers are not
- * this controller's concern (they ride the ordinary `partElements` path — see `dividers.md`).
+ * this controller's concern — they ride the ordinary `partElements` path instead.
  */
 export class DividerController {
   /** @type {() => ChxMessage[]} */

@@ -99,19 +99,16 @@ function makeConversationMessage(conversationId, index) {
 
 /**
  * One adapter instance shared across every conversation — `input.conversationId` picks which
- * conversation's own history to page through. This is the shape this package's multi-conversation
- * support expects (checked against MUI X Chat's real `ChatAdapter`): a single, long-lived adapter,
- * `conversationId` threaded through each call, not a separate adapter per conversation. Each
- * conversation has its own independent `cursor`/`hasMore` — paged out to `HISTORY_SIZE` messages,
- * `PAGE_SIZE` at a time — tracked internally by `chx-chat`'s own `PaginationController`, not here.
+ * conversation's own history to page through: a single, long-lived adapter, `conversationId`
+ * threaded through each call, not a separate adapter per conversation. Each conversation has its own
+ * independent `cursor`/`hasMore` — paged out to `HISTORY_SIZE` messages, `PAGE_SIZE` at a time —
+ * tracked internally by `chx-chat`'s own `PaginationController`, not here.
  *
- * Also implements `subscribe` purely so this story can simulate an inbound realtime channel (see
- * `.claude/plans/messages/realtime-sync.md`) — `emit`/`emitRealtimeEvent` are test-only hooks this
- * demo calls from its own buttons/timers, mirroring MUI X Chat's own demo `emit(event)` pattern; a
- * real adapter would call the captured `onMessage`/`onEvent` itself from whatever socket/channel
- * handler it owns, never exposing methods like these. Kept as two separate hooks, not one combined
- * `emit`, because this package keeps `onMessage`/`onEvent` as two separate `subscribe` handlers
- * (Decision 1 in the spec doc) rather than MUI's single `onEvent` covering `message-added` too.
+ * Also implements `subscribe` purely so this story can simulate an inbound realtime channel —
+ * `emit`/`emitRealtimeEvent` are test-only hooks this demo calls from its own buttons/timers; a real
+ * adapter would call the captured `onMessage`/`onEvent` itself from whatever socket/channel handler
+ * it owns, never exposing methods like these. Kept as two separate hooks, not one combined `emit`,
+ * because this package keeps `onMessage`/`onEvent` as two separate `subscribe` handlers.
  */
 function createConversationsAdapter() {
   /** @type {((message: import("../../types/message.js").ChxMessage) => void) | undefined} */
@@ -192,8 +189,8 @@ function createConversationsAdapter() {
  * the active conversation's `unreadCount` (writing it back onto `chx-chat.conversations`) — so opening a
  * conversation and reading it clears its badge. The reverse direction: a not-own flood message landing
  * in a *backgrounded* conversation bumps that conversation's badge by one. `chx-chat` itself never
- * touches `ChxConversation.unreadCount` (per read-tracking.md / realtime-sync.md, that stays app/
- * `<chx-conversations>` territory) — this wiring is the app closing that loop.
+ * touches `ChxConversation.unreadCount` (that stays app/`<chx-conversations>` territory) — this
+ * wiring is the app closing that loop.
  *
  * "Reset all chats" clears every conversation's message cache (`cache.clear()`, no argument) and
  * their previews, then `refresh()` re-fetches the visible one. "Start flood chats" pushes a bounded

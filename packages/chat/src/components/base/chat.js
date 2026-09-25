@@ -57,28 +57,31 @@ export class ChxChat extends LitElement {
   // the constructor alone isn't enough, unlike a plain `this._foo = ...` convention
   #internalMessages;
   #lastAnnounced;
-  #stream; // StreamController, assigned in the constructor
+  /** @type {StreamController} */
+  #stream; // assigned in the constructor
   /** @type {DeliveryController} */
   #delivery; // in-flight turns + derived status/busy — assigned in the constructor
   /** @type {(() => void) | undefined} */
   #unsubscribe; // adapter.subscribe's returned unsubscribe fn, assigned in connectedCallback
   /** @type {ChxChatAdapter | undefined} */
   #subscribedAdapter; // whichever adapter #unsubscribe actually belongs to — see updated()'s re-subscribe guard
-  /** @type {Map<string, number | undefined>} */
   /** @type {ScrollMemoryController} */
   #scrollMemory; // per-conversation scroll offsets — assigned in the constructor
   // Latched: true once any conversation signal appears (a bound <chx-conversations>, conversations
   // data, or an activeConversationId). Never flips back, so removing every conversation lands in the
-  // empty state rather than silently reverting to the single-conversation default. See empty-state.md.
+  // empty state rather than silently reverting to the single-conversation default.
   /** @type {ConversationModeController} */
   #conversationMode; // single- vs multi-conversation latches + empty state — assigned in the constructor
   /** @type {{source: ChxMessage[], id: string | symbol | null, visible: ChxMessage[]} | undefined} */
   #visibleCache; // memo for #visibleMessages, invalidated by reference on every #internalMessages write
   /** @type {string | undefined} */
   #unkeyedTypingId; // conversation the last conversation-less setTyping/onTyping was attributed to
-  #pagination; // PaginationController, assigned in the constructor
-  #typing; // TypingController, assigned in the constructor
-  #realtimeSync; // RealtimeSyncController, assigned in the constructor
+  /** @type {PaginationController} */
+  #pagination; // assigned in the constructor
+  /** @type {TypingController} */
+  #typing; // assigned in the constructor
+  /** @type {RealtimeSyncController} */
+  #realtimeSync; // assigned in the constructor
   /** @type {DropTargetController} */
   #dropTarget;
   /** @type {ContextProvider<typeof attachmentsContext>} */
@@ -141,11 +144,10 @@ export class ChxChat extends LitElement {
     this.connectionState = undefined;
 
     /**
-     * Opt-in master switch for read tracking (`.claude/plans/messages/read-tracking.md`) — `false` by
-     * default. Pushed straight through to `chx-message-list.readTracking` (see
-     * `pushMessageListProperties`); `chx-message-list` itself is what actually gates the
-     * `IntersectionObserver` observation and, through that, whether `chx-message-read`/
-     * `adapter.markRead` ever fire.
+     * Opt-in master switch for read tracking — `false` by default. Pushed straight through to
+     * `chx-message-list.readTracking` (see `pushMessageListProperties`); `chx-message-list` itself is
+     * what actually gates the `IntersectionObserver` observation and, through that, whether
+     * `chx-message-read`/`adapter.markRead` ever fire.
      * @type {boolean}
      */
     this.readTracking = false;
@@ -153,8 +155,7 @@ export class ChxChat extends LitElement {
     /**
      * Opt-in real-DOM mode for `chx-message-list`'s `chx-infinity-scroll` — every message renders in
      * full, in normal document flow, no windowing/measurement. Pushed straight through to
-     * `chx-message-list.noVirtualization` (see `pushMessageListProperties`). See
-     * `.claude/plans/messages/no-virtualization.md`.
+     * `chx-message-list.noVirtualization` (see `pushMessageListProperties`).
      * @type {boolean}
      */
     this.noVirtualization = false;
@@ -323,7 +324,7 @@ export class ChxChat extends LitElement {
    * up, chx-chat listens on itself" shape `chx-send-message`/`chx-attachments-change` already use.
    * Was in-only; `RealtimeSyncController`'s `clearActiveConversation` now also dispatches this same
    * event outward (`conversationId: undefined`) when a realtime `conversation-removed` clears the
-   * active conversation — see `.claude/plans/messages/realtime-sync.md`.
+   * active conversation.
    * @param {CustomEvent<{conversationId: string | undefined}>} event
    */
   handleActiveConversationChange(event) {
@@ -459,8 +460,7 @@ export class ChxChat extends LitElement {
    * transport can redeliver it; toggling would flip an already-read message back to `"unread"` on
    * redelivery, and would turn an own/never-opted-in message's `undefined` `readState` into
    * `"unread"` on first delivery. Per-message only — does not touch `ChxConversation.readState`/
-   * `unreadCount`, which stay parked on `<chx-conversations>` per `realtime-sync.md`; see
-   * `.claude/plans/messages/read-tracking.md`.
+   * `unreadCount`, which stay owned by `<chx-conversations>` instead.
    * @param {string} messageId
    */
   #markMessageRead(messageId) {
@@ -620,8 +620,7 @@ export class ChxChat extends LitElement {
    * The one choke point for conversation-collection mutation — realtime add/update/remove/presence
    * funnel through here (see RealtimeSyncController), the direct mirror of `#applyMessages`. Assigns
    * a new array reference so Lit's identity check fires; `updated()` then dispatches
-   * `chx-conversations-change`, which `<chx-conversations>` re-reads off. See
-   * `.claude/plans/messages/conversations.md`.
+   * `chx-conversations-change`, which `<chx-conversations>` re-reads off.
    * @param {ChxConversation[]} nextConversations
    */
   #applyConversations(nextConversations) {
@@ -831,9 +830,8 @@ export class ChxChat extends LitElement {
   };
 
   /**
-   * Fire-and-forget, per Decision 5 of `.claude/plans/messages/read-tracking.md` — no
-   * `chx-messages-change`/status update depends on this call's outcome, and a rejected promise is
-   * left uncaught, same as every other fire-and-forget adapter call in this file.
+   * Fire-and-forget — no `chx-messages-change`/status update depends on this call's outcome, and a
+   * rejected promise is left uncaught, same as every other fire-and-forget adapter call in this file.
    * @param {CustomEvent<{messageId: string}>} event
    */
   #handleMessageRead = (event) => {

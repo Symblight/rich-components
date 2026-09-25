@@ -5,8 +5,7 @@ import styles from "./command-field.css?inline";
 
 /**
  * @tag chx-command-field
- * @summary Trigger for a command search — declares which character opens
- * it. Renders nothing itself.
+ * @summary Trigger for a command search — declares which character opens it. Renders nothing itself.
  */
 @customElement("chx-command-field")
 export class ChxCommandField extends LitElement {
@@ -18,7 +17,7 @@ export class ChxCommandField extends LitElement {
 
   constructor() {
     super();
-    /** @type {String} */
+    /** @type {string} */
     this.commandCharacter = "@";
 
     /** Whitespace characters the query may contain before the search ends — see

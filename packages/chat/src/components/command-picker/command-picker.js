@@ -18,7 +18,7 @@ import styles from "./command-picker.css?inline";
 
 /**
  * @tag chx-command-picker
- * @summary Command picker.
+ * @summary Menu-driven autocomplete for `@`-style commands, wired to the composer's command plugin.
  */
 @customElement("chx-command-picker")
 export class ChxCommandPicker extends LitElement {

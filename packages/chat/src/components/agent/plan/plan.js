@@ -67,7 +67,7 @@ export class ChxPlan extends LitElement {
     >`;
   }
 
-  /** @param {ChxPlanEntry} entry */
+  /** @param {ChxPlanEntry} entry @returns {import("lit").TemplateResult} */
   #renderEntry(entry) {
     const status = ENTRY_STATUSES[entry.status ?? "pending"] ?? ENTRY_STATUSES.pending;
     return html`

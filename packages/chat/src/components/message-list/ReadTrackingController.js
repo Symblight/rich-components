@@ -5,9 +5,8 @@
  * `readState === "unread"` gate, an id → {message, index} lookup rebuilt only when `getMessages()`
  * returns a different array reference than last time, and the coverage sweep: a visible unread
  * message covers every still-unread message positioned before it, not just itself, so reading the
- * latest message doesn't require having scrolled past every one before it individually
- * (`.claude/plans/messages/read-tracking.md`, Decision 10, third revision — grounded in telegram-tt's
- * real `maxId` watermark). Constructed with narrow, named callbacks, no host reference at all — same
+ * latest message doesn't require having scrolled past every one before it individually (the same
+ * `maxId`-watermark shape telegram-tt uses). Constructed with narrow, named callbacks, no host reference at all — same
  * shape `RealtimeSyncController` already uses. Testable in isolation, no `chx-message-list` instance
  * needed.
  */
@@ -109,9 +108,8 @@ export class ReadTrackingController {
     this.#previousReadStates = currentReadStates;
   }
 
-  /** Un-defers one message, so a later visibility event can report it again. Public for the same
-   *  reason `read-tracking.md` specs it that way — it's the seam the deferral is asserted through.
-   *  @param {string} messageId */
+  /** Un-defers one message, so a later visibility event can report it again — the seam the deferral
+   *  is asserted through in tests. @param {string} messageId */
   clearFired(messageId) {
     this.#readMessageIds.delete(messageId);
   }

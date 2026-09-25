@@ -1,42 +1,32 @@
 import { LANGUAGES } from "../code-block/highlight.js";
 
 /**
- * Candidate lang ids tried by default, most-specific/strict grammar first — on a tie (two
- * languages both parsing error-free) the first in this list wins, so e.g. valid JSON is reported
- * as "json" rather than the more permissive "javascript" superset. `html` is deliberately absent:
- * its grammar accepts arbitrary untagged text as a valid document, so plain prose always parses
- * with a 0 error ratio — there's no error-based signal to discriminate it from real markup. Any id
- * in code-block/highlight.js's LANGUAGES with a `.language` (html included) can still be passed
- * explicitly via the `languages` option, that risk understood.
+ * Tried most-specific first — on a tie (e.g. valid JSON) the stricter grammar wins over a looser
+ * superset like javascript. `html` is deliberately excluded: it parses arbitrary text as a valid
+ * document with zero errors, so it can't discriminate code from prose; any id in
+ * code-block/highlight.js's LANGUAGES can still be passed explicitly via `languages`.
  */
 const DEFAULT_LANGUAGES = ["json", "javascript", "typescript", "python", "css"];
 
 /**
- * Highest tolerated share of the input covered by Lezer's own error-recovery nodes. Kept tight
- * (not e.g. 5-10%): several grammars (Python's included) recover well enough from ordinary prose
- * — attribute-access-shaped phrases, bare-name "statements" — to land a percent or two of error
- * coverage on plain English, so a loose threshold reads sentences as code. A false negative (real
- * code, not detected) just stays plain text, same as before this feature existed; a false positive
- * visibly mangles a prose paste into a code chip — the two failure modes aren't equally costly.
+ * Highest tolerated share of parse-error nodes. Kept tight because some grammars (Python included)
+ * recover well enough from ordinary prose to still score a percent or two "valid" — a loose
+ * threshold reads sentences as code, which is the more visible failure mode of the two.
  */
 const DEFAULT_MAX_ERROR_RATIO = 0.01;
 
 /**
- * These languages parse a leading `{...}` as a block statement, not an object literal, which
- * misclassifies the common "paste an object" case. Wrapping in parens forces expression parsing —
- * matching how the same text reads in the wild (a value being logged/returned), not as a program.
+ * These grammars parse a leading `{...}` as a block statement, not an object literal — wrapping in
+ * parens forces expression parsing, matching how such a paste is actually used (a logged/returned
+ * value, not a program).
  */
 const EXPRESSION_AMBIGUOUS = new Set(["javascript", "typescript", "jsx", "tsx"]);
 
 /**
- * A grammar's error recovery can read an ordinary sentence as valid code with zero recovery
- * errors — JS/TS's ASI and labeled-statement rules read "Let me know if the deploy: succeeds..."
- * as a label followed by expression statements; Python's string literal tokenizes a contraction's
- * apostrophe ("That's") as an opening quote and lenently swallows the rest of the line as its body,
- * no error node either time. An error-ratio threshold alone can't catch either case, so this is a
- * blanket sanity gate: `text` must contain at least one character plain English essentially never
- * does but real code in any of these languages almost always does, checked once regardless of which
- * language ends up matching.
+ * A grammar's error recovery can read plain English as valid code with zero errors (JS/TS's ASI
+ * and labeled-statement rules, Python's lenient string tokenizing) — error ratio alone can't catch
+ * that, so this is a blanket gate requiring at least one character real code almost always has and
+ * prose rarely does.
  */
 const STRUCTURAL_HINT = /[{}()[\]=<>;]/;
 

@@ -4,23 +4,16 @@ import { reconcileChunk } from "./streamHelpers.js";
 /** @import { ChxMessageChunk } from "../types/adapter.js" */
 
 /**
- * The batching/flush-interval accumulator — coalesces N chunks targeting the same messageId into
- * one `onFlush` call, keyed by messageId so concurrent streams for different messages don't share
- * each other's batching window.
+ * Coalesces N chunks per messageId into one `onFlush` call, keyed by messageId so concurrent
+ * streams for different messages don't share a batching window.
  *
- * Chunks are held, not applied, until their batch flushes; reconciliation then runs against
- * whatever `getMessages()` returns at that moment. Accumulating against a snapshot taken when the
- * batch opened is what let two in-flight messages clobber each other — the later flush committed a
- * full array that predated the earlier one, silently dropping its message. Any number of streams
- * can now interleave freely, which is the ordinary case for a messenger, not just an agent turn.
+ * Reconciliation runs against `getMessages()` at flush time, not a snapshot taken when the batch
+ * opened — an open-time snapshot let two in-flight messages clobber each other's commit. `onFlush`
+ * must apply its array synchronously, or the next flush re-seeds from stale state.
  *
- * `onFlush` must apply its array synchronously before returning, or the next flush re-seeds from
- * state that is already behind.
- *
- * A flush reports the conversation its own message belongs to, so a chunk arriving for a
- * backgrounded conversation updates that conversation's cache without re-rendering the one on
- * screen. An adapter that sends neither an explicit target nor `chunk.conversationId` for an
- * unseen message leaves it unattributed, and the host falls back to the active conversation.
+ * A flush reports the conversation the reconciled message actually belongs to, not the caller's —
+ * `onChunk` can carry any conversation, and an adapter that never attributes a new message falls
+ * back to the active conversation.
  * @param {{
  *   flushInterval?: number,
  *   getMessages: () => ChxMessage[],
@@ -35,9 +28,8 @@ export function createChunkBuffer({ flushInterval = 16, getMessages, getUserId, 
   /**
    * @param {ChxMessageChunk} chunk
    * @param {{replyToId?: string, conversationId?: string}} [options] - stamped once, at batch
-   *   creation — only the first chunk for a given messageId can create a shell, see
-   *   getOrCreateMessage. Which conversation the flush *targets* is derived from the message
-   *   itself, not from this, see flush()
+   *   creation, since only the first chunk for a messageId can create a shell (getOrCreateMessage);
+   *   which conversation the flush *targets* is derived from the message itself, see flush()
    */
   function push(chunk, { replyToId, conversationId } = {}) {
     let batch = batches.get(chunk.messageId);

@@ -20,8 +20,7 @@ import { PlainListController } from "./PlainListController.js";
  *    (the one edge case `anchorTo`/`followOnAppend` don't cover) + the initial-pin latch below.
  *  - `noVirtualization`: {@link PlainListController} — every row is already real DOM at its real
  *    height, so there's nothing to window or measure; it owns anchor-restoration-on-prepend and
- *    stick-to-bottom itself, `MutationObserver`-driven. See `.claude/plans/messages/
- *    no-virtualization.md`.
+ *    stick-to-bottom itself, `MutationObserver`-driven.
  *
  * The idle strategy is switched *off*, not just left unread: virtual-core's controller runs on this
  * host either way, so `VirtualListController.sync()` disables it outright under `noVirtualization`

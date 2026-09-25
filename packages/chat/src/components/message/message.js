@@ -27,8 +27,8 @@ export class ChxMessage extends LitElement {
       },
     },
     // whether this message is currently "drilled into" (its interior controls are tabbable) —
-    // set by chx-message-list's roving-focus handling, a plain presence-based flag (not a real
-    // ARIA state), matching MUI X's own data-actionable attribute
+    // set by chx-message-list's roving-focus handling, a plain presence-based flag, not a real
+    // ARIA state
     actionable: { type: Boolean, reflect: true, attribute: "data-actionable" },
     // gates the unread-marker slot, whose native fallback is a plain <chx-unread-marker> — the
     // opt-in-but-with-a-default shape the initial-loading/loading-history slots use, not

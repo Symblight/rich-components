@@ -17,7 +17,7 @@ const CLICK_OFFSET = 48;
  * Owns the floating "stuck section date" label above `chx-message-list`'s virtualized rows: attaching/
  * detaching the scroll listener on `chx-infinity-scroll`'s scroller as `chx-divider`'s `sticky` toggles,
  * the scroll-idle show/hide timing, and the per-frame stuck/push-out/occlusion math (`position: sticky`
- * can't work inside the virtualizer's absolutely-positioned/transformed rows — see `dividers.md`). Reads
+ * can't work inside the virtualizer's absolutely-positioned/transformed rows, so this emulates it by hand). Reads
  * section boundaries through the host's own `DividerController` instance rather than owning any divider
  * state itself. Same host-bound `ReactiveController` shape `FocusBehaviorController` uses.
  * @implements {ReactiveController}
@@ -192,7 +192,7 @@ export class StickyController {
 
   /**
    * One scroll-position-driven pass emulating a native sticky section header (position:sticky can't work
-   * inside the virtualizer's absolutely-positioned/transformed rows — see `dividers.md`):
+   * inside the virtualizer's absolutely-positioned/transformed rows):
    * - the label is *shown* purely by scroll activity (`#active`), so the opacity fade fires only on
    *   scroll-start / idle — never at a section boundary (that would blink);
    * - the next section's divider, approaching the pin from below, physically pushes the label up

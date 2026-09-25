@@ -184,7 +184,7 @@ export class ChxMessageList extends LitElement {
     this.contentAlign = "end";
 
     /** Forwarded straight through to chx-infinity-scroll — real-DOM mode, no windowing/measurement.
-     *  See `.claude/plans/messages/no-virtualization.md`. @type {boolean} */
+     *  @type {boolean} */
     this.noVirtualization = false;
 
     /** Forwarded straight through to chx-infinity-scroll — "at the bottom" threshold, in px. @type {number} */
@@ -212,12 +212,11 @@ export class ChxMessageList extends LitElement {
     this.readThreshold = 0;
 
     /**
-     * Opt-in master switch for the whole read-tracking mechanism (`.claude/plans/messages/
-     * read-tracking.md`) — `false` by default. When `false`, no message is ever `observe()`d by
-     * `chx-infinity-scroll`'s `IntersectionObserver` (`#shouldObserveItem` always returns `false`), so
-     * `chx-message-read` never fires and `adapter.markRead` is never called. Does **not** affect
-     * `chx-message.unread`/the `unread-marker` slot — that half is purely `readState`-driven and stays
-     * usable independently, per this doc's own "either half usable without the other" scope note.
+     * Opt-in master switch for the whole read-tracking mechanism — `false` by default. When `false`,
+     * no message is ever `observe()`d by `chx-infinity-scroll`'s `IntersectionObserver`
+     * (`#shouldObserveItem` always returns `false`), so `chx-message-read` never fires and
+     * `adapter.markRead` is never called. Does **not** affect `chx-message.unread`/the `unread-marker`
+     * slot — that half is purely `readState`-driven and stays usable independently.
      * @type {boolean}
      */
     this.readTracking = false;

@@ -50,7 +50,7 @@ export const Basic = {
  * removed, or none is selected yet). Forced here by marking the chat conversation-driven
  * (`.conversationsPresent=${true}`) while leaving `activeConversationId` unset — the same condition
  * `chx-chat` derives after a realtime `conversation-removed` clears the active conversation, or after
- * every conversation is removed. See `.claude/plans/messages/empty-state.md`.
+ * every conversation is removed.
  *
  * Two things happen automatically: `chx-message-list` renders its `empty` slot (default text
  * "No conversation selected"), and the composer's send is disabled with the editor made read-only
@@ -308,8 +308,8 @@ export const Streaming = {
 };
 
 /**
- * `readState`-driven read tracking, per `.claude/plans/messages/read-tracking.md`. `read-tracking` is
- * an opt-in master switch (default `false`) — set here on `<chx-chat>`, pushed straight through to
+ * `readState`-driven read tracking. `read-tracking` is an opt-in master switch (default `false`) —
+ * set here on `<chx-chat>`, pushed straight through to
  * `chx-message-list.readTracking`; without it, no message is ever `observe()`d and `chx-message-read`
  * never fires at all. Every non-own message starts `readState: "unread"` (`makeUnreadMessages` below)
  * — `chx-message`'s `unread-marker` slot has `<chx-unread-marker>` as its own native fallback
@@ -670,8 +670,7 @@ export const Pagination = {
 };
 
 /**
- * Same as `Pagination` above, with `no-virtualization` set on `chx-chat` — see
- * `.claude/plans/messages/no-virtualization.md` for the design doc this attribute is specced in.
+ * Same as `Pagination` above, with `no-virtualization` set on `chx-chat`.
  */
 /** @type {Story} */
 export const PaginationNoVirtualization = {
@@ -933,11 +932,10 @@ export const PasteChip = {
 };
 
 /**
- * `chx-chat.partElements` is this library's equivalent of MUI X Chat's `partRenderers`
- * (https://mui.com/x/react-chat/display/message-parts/custom-parts/) — a `Record<partType,
- * renderer>` keyed by `part.type`, consumed by `chx-message-list` (`#renderPart`) ahead of the
- * built-in `text`/`html` fallback. `part.type` accepts any string (see `ChxMessagePart`), so a
- * custom type needs no library-side registration — just a `partElements` entry.
+ * `chx-chat.partElements` is a `Record<partType, renderer>` keyed by `part.type`, consumed by
+ * `chx-message-list` (`#renderPart`) ahead of the built-in `text`/`html` fallback. `part.type`
+ * accepts any string (see `ChxMessagePart`), so a custom type needs no library-side registration —
+ * just a `partElements` entry.
  *
  * Unlike a chip/paste chip, a custom part isn't typed live in the composer — it arrives already
  * structured, straight from the adapter/model (a tool-call result, typically), so there's no
@@ -1100,7 +1098,7 @@ const actionDividerStyles = html`
  * `type: "system"` messages, stripped of their bubble by the `message-system` part name
  * `chx-message-list` stamps on them automatically (`actionDividerStyles` above). Remove the
  * `<chx-divider slot="divider">` and the date dividers vanish while the action dividers stay — the
- * date feature is inert unless the carrier is slotted. See `.claude/plans/messages/dividers.md`.
+ * date feature is inert unless the carrier is slotted.
  */
 /** @type {Story} */
 export const Dividers = {

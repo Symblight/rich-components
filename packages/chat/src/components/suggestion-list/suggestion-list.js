@@ -11,9 +11,8 @@ const NAV_KEYS = new Set([...NEXT_KEYS, ...PREV_KEYS, "Home", "End"]);
 
 /**
  * @tag chx-suggestion-list
- * @summary A row of clickable chx-suggestion chips — see .claude/plans/suggestions.spec.md.
- * Visibility (empty-thread vs alwaysVisible) is decided by chx-message-composer via the standard
- * `hidden` attribute, not by this component — see the spec's "Visibility ownership" section.
+ * @summary A row of clickable chx-suggestion chips. Visibility (empty-thread vs alwaysVisible) is
+ * decided by chx-message-composer via the standard `hidden` attribute, not by this component.
  */
 @customElement("chx-suggestion-list")
 export class ChxSuggestionList extends LitElement {
@@ -61,7 +60,7 @@ export class ChxSuggestionList extends LitElement {
    * md-suggestion-chip's real button fires a native, composed `click` on activation (mouse, or
    * Enter/Space once focused — ordinary button semantics, no extra handling needed for those keys)
    * — it retargets across both shadow boundaries and arrives here looking like a plain bubbling
-   * click from a slotted chx-suggestion. See the spec's "Click handling" section.
+   * click from a slotted chx-suggestion.
    * @param {Event} event
    */
   #handleClick = (event) => {

@@ -111,8 +111,8 @@ export class RealtimeSyncController {
         // Idempotently sets ChxMessage.readState to "read" for event.messageId — a per-message
         // effect. ChxConversation.readState/unreadCount patching is deliberately not done here: a
         // single ChxReadEvent (one messageId) doesn't unambiguously mean the whole conversation is
-        // read, so conversation-level read state stays a TODO — see conversations.md. Not a toggle:
-        // a ChxReadEvent is a one-way signal the transport can redeliver.
+        // read, so conversation-level read state stays a TODO. Not a toggle: a ChxReadEvent is a
+        // one-way signal the transport can redeliver.
         this.#markMessageRead(event.messageId);
         break;
     }

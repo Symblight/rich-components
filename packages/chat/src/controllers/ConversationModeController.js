@@ -11,7 +11,6 @@ import { DEFAULT_CONVERSATION_ID } from "../constants.js";
  * Reads are pulled through callbacks rather than pushed in, deliberately: `effectiveConversationId`
  * is read from `#applyMessages`, which a streamed chunk can reach outside the update cycle, and a
  * pushed snapshot taken in `willUpdate` would be stale there.
- * See `.claude/plans/messages/empty-state.md`.
  */
 export class ConversationModeController {
   /** @type {() => boolean} */

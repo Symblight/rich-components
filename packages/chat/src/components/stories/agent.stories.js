@@ -190,8 +190,8 @@ function createStreamingCodeAgentAdapter() {
             controller.enqueue({ kind: "part-end", messageId: replyId, partId: outroId });
           } finally {
             // One terminator for every exit. Returning from `start()` on abort without closing would
-            // leave chx-chat's read pending forever — the contract in src/docs/agentic.md: an aborted
-            // turn still has to be ended, and an explicit `abort` chunk is the clean way to do it.
+            // leave chx-chat's read pending forever — an aborted turn still has to be ended, and an
+            // explicit `abort` chunk is the clean way to do it.
             controller.enqueue({
               kind: signal.aborted ? "abort" : "finish",
               messageId: replyId,
@@ -208,8 +208,8 @@ function createStreamingCodeAgentAdapter() {
  * Send any message — the fake agent always replies with the same three-part stream (text, code,
  * text), landing one word/line at a time via real `sendMessage` streaming, not a mocked historical
  * message. Exercises `chx-code-block` growing while genuinely pinned to the bottom of a live,
- * virtualized, auto-following list — the exact condition the eager-language-loading fix in
- * `highlight.js` targets (see `.claude/plans/code-block.spec.md`).
+ * virtualized, auto-following list — the exact condition `highlight.js`'s eager-language-loading
+ * fix targets.
  */
 /** @type {Story} */
 export const StreamingCodeReply = {
@@ -231,7 +231,7 @@ export const StreamingCodeReply = {
 };
 
 /* ------------------------------------------------------------------------------------------------
- * Agentic tool calls — see `.claude/plans/agentic-tools.spec.md` and `src/docs/agentic.md`.
+ * Agentic tool calls.
  * ---------------------------------------------------------------------------------------------- */
 
 const THOUGHT_TEXT =
@@ -255,7 +255,7 @@ const DIFF_TEXT = `--- a/src/components/message-list/message-list.js
 `;
 
 /** The same reasoning as THOUGHT_TEXT, as the discrete rows chx-thought-step renders. ACP has no
- *  step structure — an adapter that wants rows synthesizes them itself, see `src/docs/agentic.md`. */
+ *  step structure — an adapter that wants rows synthesizes them itself. */
 const THOUGHT_STEPS = [
   { content: "Traced the channel switch handler" },
   { content: "Checked the list keys", meta: "3 components" },
@@ -386,8 +386,9 @@ const AGENT_PART_ELEMENTS = {
  * command, streams that command's output, then edits a file. Everything it emits goes through the
  * ordinary delta pipeline — `partId` is the tool call's id, `status` patches in place, arrays
  * replace wholesale, and the streamed terminal output rides in `text` because that is the only
- * append-capable field (see `src/docs/agentic.md`).
+ * append-capable field.
  */
+/** @param {{requestPermission: Function, thoughtSteps?: boolean}} options */
 function createAgenticAdapter({ requestPermission, thoughtSteps = false }) {
   let replyCount = 0;
 
@@ -404,7 +405,12 @@ function createAgenticAdapter({ requestPermission, thoughtSteps = false }) {
       const editId = `${replyId}-edit`;
       const outroId = `${replyId}-outro`;
 
-      /** @param {string} partId @param {string} partType @param {Record<string, unknown>} delta */
+      /**
+       * @param {ReadableStreamDefaultController} controller
+       * @param {string} partId
+       * @param {string} partType
+       * @param {Record<string, unknown>} delta
+       */
       const enqueue = (controller, partId, partType, delta) =>
         controller.enqueue({ messageId: replyId, authorId: "assistant", partId, partType, delta });
 
@@ -537,8 +543,8 @@ function createAgenticAdapter({ requestPermission, thoughtSteps = false }) {
             controller.enqueue({ kind: "part-end", messageId: replyId, partId: outroId });
           } finally {
             // One terminator for every exit. Returning from `start()` on abort without closing would
-            // leave chx-chat's read pending forever — the contract in src/docs/agentic.md: an aborted
-            // turn still has to be ended, and an explicit `abort` chunk is the clean way to do it.
+            // leave chx-chat's read pending forever — an aborted turn still has to be ended, and an
+            // explicit `abort` chunk is the clean way to do it.
             controller.enqueue({
               kind: signal.aborted ? "abort" : "finish",
               messageId: replyId,

@@ -1,12 +1,13 @@
 const BLOCK_TAGS = new Set(["DIV", "P"]);
 
+/** Serializes a contenteditable DOM subtree back to plain text, one block/`<br>` per line. */
 export class ContentTextoFormatter {
   /** @param {HTMLElement} root */
   constructor(root) {
     this.root = root;
   }
 
-  /** returns {string */
+  /** @returns {string} */
   toPlainText() {
     const raw = this.#serialize(this.root);
     return this.#normalize(raw);
@@ -75,7 +76,6 @@ export class ContentTextoFormatter {
   }
 
   /**
-   *
    * @param {string} text
    * @returns {string}
    */

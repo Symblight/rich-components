@@ -3,7 +3,7 @@
  * shared by both list strategies for two different purposes: `VirtualListController` feeds a ready
  * row to the virtualizer's own `measureElement` (see `InfinityScrollController`); `PlainListController`
  * uses the exact same readiness signal to know when it's safe to read a freshly-prepended row's
- * `getBoundingClientRect()` for anchor restoration (see `.claude/plans/messages/no-virtualization.md`).
+ * `getBoundingClientRect()` for anchor restoration.
  *
  * A row is checked on insert, and — for the virtualized path only — again whenever a prepend shifted
  * its index, since the virtualizer caches measurements *by index*. Rows already accounted for are

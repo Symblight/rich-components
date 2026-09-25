@@ -74,9 +74,9 @@ function makeMessages(count) {
 
 /**
  * Default behavior: suggestions show while the thread is empty, disappear the moment the first
- * message lands (`chx-chat` pushes `messagesEmpty` down live — see
- * .claude/plans/suggestions.spec.md). Clicking a suggestion pre-fills the composer and focuses it
- * (no `auto-submit` here) — the user still has to hit send themselves, same as typing.
+ * message lands (`chx-chat` pushes `messagesEmpty` down live). Clicking a suggestion pre-fills the
+ * composer and focuses it (no `auto-submit` here) — the user still has to hit send themselves, same
+ * as typing.
  */
 /** @type {Story} */
 export const Basic = {
@@ -199,7 +199,7 @@ const SUGGESTION_PACKS = {
 function renderSuggestionPack(list, pack) {
   list.replaceChildren(
     ...pack.map((s) => {
-      const el = document.createElement("chx-suggestion");
+      const el = /** @type {any} */ (document.createElement("chx-suggestion"));
       el.value = s.value;
       el.textContent = s.label;
       return el;

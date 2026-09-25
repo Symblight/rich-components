@@ -1,6 +1,10 @@
 :host {
   display: flex;
   align-items: flex-start;
+  /* the row wrapper is a column flex container, so this is what keeps a short message hugging its
+     own content instead of stretching — chx-message-list used to set it inline, which no page-level
+     ::part(message) rule could ever beat */
+  align-self: flex-start;
   --chx-message-max-width: 480px;
   --chx-message-padding: 0.5rem 0.75rem;
   --chx-message-border-radius: 1rem;

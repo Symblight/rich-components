@@ -3,6 +3,21 @@
   --chx-conversation-item-active-background-color: var(--md-sys-color-secondary-container);
   --chx-conversation-item-unread-title-weight: 600;
   --chx-conversation-item-badge-color: var(--md-sys-color-primary);
+  --chx-conversation-item-avatar-size: 36px;
+}
+
+/* costs nothing when neither avatarUrl nor a slotted avatar is there — an empty box with no
+   intrinsic size, same posture chx-message's avatar column has */
+.conversation-item__avatar {
+  display: flex;
+  align-items: center;
+}
+
+.conversation-item__avatar-image {
+  inline-size: var(--chx-conversation-item-avatar-size);
+  block-size: var(--chx-conversation-item-avatar-size);
+  border-radius: 50%;
+  object-fit: cover;
 }
 
 :host([active]) md-list-item {

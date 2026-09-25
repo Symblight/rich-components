@@ -1,6 +1,8 @@
 import { html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
+import { directive, Directive, PartType } from "lit/directive.js";
 import { when } from "lit/directives/when.js";
+import { choose } from "lit/directives/choose.js";
 import { ref } from "lit/directives/ref.js";
 import { classMap } from "lit/directives/class-map.js";
 
@@ -10,14 +12,90 @@ import "../infinity-scroll/infinity-scroll.js";
 import "../loading-history/loading-history.js";
 import "../divider/divider.js";
 import { FocusBehaviorController } from "../../controllers/FocusBehaviorController.js";
+import { BottomAnchorController } from "./BottomAnchorController.js";
 import { ReadTrackingController } from "./ReadTrackingController.js";
 import { DividerController } from "./DividerController.js";
+import { PartRenderer } from "./PartRenderer.js";
+import { StatusController } from "./StatusController.js";
 import { StickyController } from "./StickyController.js";
 import styles from "./message-list.css?inline";
 
-/** @import { ChxMessage, ChxMessagePart } from "../../types/message.js" */
-/** @import { ChxMessageRenderer, ChxPartRenderer } from "../../types/adapter.js" */
+/** @import { ChxMessage } from "../../types/message.js" */
+/** @import { ChxPartRenderer } from "../../types/adapter.js" */
 /** @import { ChxInfinityScroll } from "../infinity-scroll/infinity-scroll.js" */
+
+// chx-message sits two shadow roots deep (message-list → infinity-scroll → message), so a page-level
+// ::part() only reaches it with an exportparts hop at *every* host in between — see CLAUDE.md's
+// "::part() only forwards one shadow level". Prefixed on the way out so they can't collide with
+// chx-infinity-scroll's own parts.
+const MESSAGE_PARTS = [
+  "unread-marker",
+  "avatar",
+  "body",
+  "meta",
+  "attachments",
+  "content",
+  "actions",
+];
+const MESSAGE_EXPORTPARTS = MESSAGE_PARTS.map((part) => `${part}: message-${part}`).join(", ");
+// Per-row state names on the chx-message host itself, a deliberately closed vocabulary: exportparts
+// has no wildcard, so every name a page can ever target has to be listed literally here.
+const MESSAGE_STATE_PARTS = [
+  "message-own",
+  "message-incoming", // own's complement: part selectors can't be negated, so "not own" needs a name
+  "message-unread",
+  "message-streaming",
+  "message-system",
+];
+const INFINITY_SCROLL_EXPORTPARTS = [
+  "scroller",
+  "sticky",
+  "viewport",
+  "item",
+  "message",
+  ...MESSAGE_STATE_PARTS,
+  ...MESSAGE_PARTS.map((part) => `message-${part}`),
+].join(", ");
+
+/** The row's part names, drawn from MESSAGE_STATE_PARTS. Custom properties set in a matching
+ * `::part()` rule inherit into chx-message's shadow tree, which is how a page restyles a row's
+ * interior (e.g. a chrome-free system row) without a nested part selector — those don't exist.
+ * @param {ChxMessage} message @param {boolean} streaming */
+function messagePartNames(message, streaming) {
+  const names = ["message"];
+  names.push(message.own ? "message-own" : "message-incoming");
+  if (message.readState === "unread") names.push("message-unread");
+  if (streaming) names.push("message-streaming");
+  if (message.parts?.[0]?.type === "system") names.push("message-system");
+  return names.join(" ");
+}
+
+/**
+ * Element directive that re-runs `FocusBehaviorController.syncInteriorTabbing` on every render pass.
+ * `ref()` can't stand in for it — that only fires when the element itself changes, and the tab order
+ * has to be re-applied whenever a message's children change too.
+ */
+class InteriorTabbingDirective extends Directive {
+  /** @param {import("lit/directive.js").PartInfo} partInfo */
+  constructor(partInfo) {
+    super(partInfo);
+    if (partInfo.type !== PartType.ELEMENT) throw new Error("interiorTabbing(): element directive");
+  }
+
+  /** Never called — an element directive commits nothing. Declared with the real signature anyway,
+   *  since that's what types the `interiorTabbing(...)` call site.
+   *  @param {FocusBehaviorController} _focusBehavior @param {string} _id */
+  render(_focusBehavior, _id) {}
+
+  /**
+   * @param {import("lit/directive.js").ElementPart} part
+   * @param {[FocusBehaviorController, string]} args
+   */
+  update(part, [focusBehavior, id]) {
+    focusBehavior.syncInteriorTabbing(id, /** @type {HTMLElement} */ (part.element));
+  }
+}
+const interiorTabbing = directive(InteriorTabbingDirective);
 
 /**
  * @tag chx-message-list
@@ -30,7 +108,6 @@ export class ChxMessageList extends LitElement {
     dragging: { type: Boolean, reflect: true, attribute: true },
     dropHint: { type: String, attribute: "drop-hint" },
     messages: { attribute: false },
-    messageElement: { attribute: false },
     partElements: { attribute: false },
     messagesLabel: { type: String, attribute: "messages-label" },
     scrollBehavior: { type: String, attribute: "scroll-behavior" },
@@ -53,35 +130,34 @@ export class ChxMessageList extends LitElement {
     onLoadMore: { attribute: false },
   };
 
-  #messageElementCache = new Map();
-  #partElementCache = new Map();
   /** @type {Set<string> | undefined} */
   #pendingRenderedMessageIds;
-  /** @type {Set<string> | undefined} */
-  #pendingRenderedPartIds;
+  /** @type {PartRenderer} */
+  #partRenderer; // per-part element rendering + cache — assigned in the constructor, below
   /** @type {DividerController} */
   #dividerController; // date dividers — assigned in the constructor, below
   /** @type {StickyController} */
   #stickyController; // floating stuck-section date label — assigned in the constructor, below
-  #previousPartStates = new Map();
-  #statusText = "";
+  /** @type {StatusController} */
+  #status; // phase + role="status" text — assigned in the constructor, below
   /** @type {ChxInfinityScroll | undefined} */
   #infinityScrollElement; // set via a ref() directive in render()
   /** @type {FocusBehaviorController} */
   #focusBehavior; // roving tabindex — assigned in the constructor, below
   /** @type {ReadTrackingController} */
   #readTracking; // fire-once chx-message-read dedup + readState gate — assigned in the constructor, below
-  /** @type {Map<string, ChxMessage["readState"]>} */
-  #previousReadStates = new Map();
-  #awayFromBottom = false;
+  /** @type {BottomAnchorController} */
+  #bottomAnchor; // away-from-bottom state + scrollToBottom — assigned in the constructor, below
+  /** Re-renders this host *and* chx-infinity-scroll. The second call is not redundant: none of the
+   *  properties passed down change by reference on a plain host re-render, so Lit's `PropertyPart`
+   *  skips re-setting them and the rows never re-run `#renderItem`. Anything that changes what a row
+   *  should look like without changing `messages` has to go through here. */
+  #requestRerender = () => {
+    this.requestUpdate();
+    this.#infinityScrollElement?.requestUpdate();
+  };
   #itemKey = (/** @type {ChxMessage} */ message, /** @type {number} */ index) =>
     message?.id ?? index;
-  #shouldObserveItem = (/** @type {ChxMessage} */ message) =>
-    this.readTracking && message?.readState === "unread";
-  #handleItemVisible = (/** @type {string} */ key) => {
-    if (!this.readTracking) return; // toggled off mid-session — see `readTracking`'s own doc
-    this.#readTracking.handleItemVisible(key);
-  };
 
   constructor() {
     super();
@@ -94,9 +170,6 @@ export class ChxMessageList extends LitElement {
 
     /** @type {ChxMessage[]} */
     this.messages = [];
-
-    /** @type {ChxMessageRenderer | undefined} */
-    this.messageElement = undefined;
 
     /** @type {Record<string, ChxPartRenderer> | undefined} */
     this.partElements = undefined;
@@ -171,25 +244,37 @@ export class ChxMessageList extends LitElement {
       getMessages: () => this.messages,
       getRenderRoot: () => this.#infinityScrollElement?.renderRoot,
       scrollToIndex: (index) => this.#infinityScrollElement?.scrollToIndex(index),
-      requestRerender: () => {
-        this.requestUpdate();
-        this.#infinityScrollElement?.requestUpdate();
-      },
+      requestRerender: this.#requestRerender,
     });
 
     this.#readTracking = new ReadTrackingController({
       getMessages: () => this.messages,
+      getEnabled: () => this.readTracking,
       emit: (type, detail) =>
         this.dispatchEvent(new CustomEvent(type, { detail, bubbles: true, composed: true })),
     });
 
     this.#dividerController = new DividerController({ getMessages: () => this.messages });
 
+    this.#partRenderer = new PartRenderer({ getPartElements: () => this.partElements });
+
+    this.#status = new StatusController(this, {
+      getMessages: () => this.messages,
+      getEmptyState: () => this.emptyState,
+      getLoading: () => this.loading,
+    });
+
     this.#stickyController = new StickyController(this, {
       dividerController: this.#dividerController,
       getMessages: () => this.messages,
       getInfinityScrollElement: () => this.#infinityScrollElement,
-      getAwayFromBottom: () => this.#awayFromBottom,
+      getAwayFromBottom: () => this.#bottomAnchor.awayFromBottom,
+    });
+
+    // after StickyController — it takes the instance, while StickyController only takes a lazy getter
+    this.#bottomAnchor = new BottomAnchorController(this, {
+      getInfinityScrollElement: () => this.#infinityScrollElement,
+      stickyController: this.#stickyController,
     });
   }
 
@@ -202,33 +287,7 @@ export class ChxMessageList extends LitElement {
     super.connectedCallback();
     // reconnect-must-reset, same posture VisibilityController/RowMeasurer already have
     this.#readTracking.reset();
-    this.#previousReadStates = new Map();
-    // slotted light-DOM child, so caught via addEventListener, not a template event binding
-    this.addEventListener(
-      "chx-scroll-to-bottom-click",
-      /** @type {EventListener} */ (this.#handleScrollToBottomClick),
-    );
   }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    this.removeEventListener(
-      "chx-scroll-to-bottom-click",
-      /** @type {EventListener} */ (this.#handleScrollToBottomClick),
-    );
-  }
-
-  /** @param {CustomEvent<{behavior: "auto" | "smooth" | "instant"}>} event */
-  #handleScrollToBottomClick = (event) => {
-    this.scrollToBottom(event.detail.behavior);
-  };
-
-  /** @param {boolean} away */
-  #handleAwayFromBottomChange = (away) => {
-    this.#awayFromBottom = away;
-    this.#stickyController.handleAwayFromBottomChange(away); // back at bottom — drop the label, cancel the idle timer
-    this.requestUpdate();
-  };
 
   /** Discovers the slotted `<chx-divider slot="divider">` config carrier; renders nothing itself.
    * @param {Event} event */
@@ -240,10 +299,7 @@ export class ChxMessageList extends LitElement {
     this.#dividerController.setElement(
       /** @type {import("../divider/divider.js").ChxDivider | undefined} */ (element),
     );
-    this.requestUpdate();
-    // infinity-scroll's own reactive props don't change by reference here, so force its rows to re-run
-    // #renderItem — same cross-component update-cascade gotcha FocusBehaviorController documents.
-    this.#infinityScrollElement?.requestUpdate();
+    this.#requestRerender(); // a divider appearing/disappearing changes every row
   };
 
   /** Rough pre-measurement height — text length → line count → px, cheap and approximate on purpose.
@@ -260,16 +316,13 @@ export class ChxMessageList extends LitElement {
 
   /** Passed to chx-infinity-scroll as `.renderItem`. @param {ChxMessage} message @param {number} index */
   #renderItem = (message, index) => {
+    // one sweep per render pass, once every row has had its turn
     if (!this.#pendingRenderedMessageIds) {
       this.#pendingRenderedMessageIds = new Set();
-      this.#pendingRenderedPartIds = new Set();
       queueMicrotask(() => {
-        this.#sweepCaches(
-          /** @type {Set<string>} */ (this.#pendingRenderedMessageIds),
-          /** @type {Set<string>} */ (this.#pendingRenderedPartIds),
-        );
+        this.#partRenderer.sweep();
+        this.#dividerController.sweep(/** @type {Set<string>} */ (this.#pendingRenderedMessageIds));
         this.#pendingRenderedMessageIds = undefined;
-        this.#pendingRenderedPartIds = undefined;
       });
     }
     return this.#renderMessage(message, index);
@@ -278,146 +331,31 @@ export class ChxMessageList extends LitElement {
   /** @param {ChxMessage} message @param {number} index */
   #renderMessage(message, index) {
     /** @type {Set<string>} */ (this.#pendingRenderedMessageIds).add(message.id);
-    const cached = this.#messageElementCache.get(message.id);
+    const streaming = message.parts.some((part) => part.state === "streaming");
+    // before the html below — every ${} evaluates eagerly, at tag-call time, so the tabindex binding
+    // would otherwise read an unseeded focus state on the very first row
+    this.#focusBehavior.ensureSeeded(message.id);
 
-    if (!this.messageElement) {
-      /** @type {HTMLElement & {own: boolean, busy: boolean, unread: boolean, actionable: boolean, ariaLabel: string | null}} */
-      const el =
-        cached && cached.key === undefined
-          ? /** @type {any} */ (cached.element)
-          : /** @type {any} */ (document.createElement("chx-message"));
-      el.own = message.own;
-      el.busy = message.parts.some((part) => part.state === "streaming");
-      el.unread = message.readState === "unread";
-      el.ariaLabel = message.own ? "Your message" : "Message"; // no author display-name metadata yet
-      el.style.alignSelf = message.own ? "flex-end" : "flex-start"; // infinity-scroll has no own/not-own concept
-      this.#focusBehavior.ensureSeeded(message.id); // seed a tab stop before applyToElement reads it
-      this.#focusBehavior.applyToElement(message.id, el);
-      // a part missing `id` was already console.error'd by validateMessages — excluded here too
-      el.replaceChildren(
-        ...message.parts
+    // a part missing `id` was already console.error'd by validateMessages — excluded here too
+    const row = html`
+      <chx-message
+        part=${messagePartNames(message, streaming)}
+        exportparts=${MESSAGE_EXPORTPARTS}
+        data-message-id=${message.id}
+        tabindex=${this.#focusBehavior.isFocused(message.id) ? 0 : -1}
+        aria-label=${message.own ? "Your message" : "Message"}
+        .own=${message.own}
+        .busy=${streaming}
+        .unread=${message.readState === "unread"}
+        .actionable=${this.#focusBehavior.isActionable(message.id)}
+        ${interiorTabbing(this.#focusBehavior, message.id)}
+      >
+        ${message.parts
           .filter((part) => part.id)
-          .map((part, index) => this.#renderPart(part, message, index)),
-      );
-      this.#messageElementCache.set(message.id, { key: undefined, element: el });
-      return this.#dividerController.wrap(el, message, index);
-    }
-
-    const previous = cached?.key === this.messageElement ? cached.element : undefined;
-    const element = this.messageElement(message, previous);
-    element.style.alignSelf = message.own ? "flex-end" : "flex-start";
-    this.#messageElementCache.set(message.id, { key: this.messageElement, element });
-    return this.#dividerController.wrap(element, message, index);
-  }
-
-  /**
-   * @param {ChxMessagePart} part
-   * @param {ChxMessage} message
-   * @param {number} index
-   * @returns {string | HTMLElement}
-   */
-  #renderPart(part, message, index) {
-    /** @type {Set<string>} */ (this.#pendingRenderedPartIds).add(part.id);
-    const renderer = this.partElements?.[part.type];
-    if (renderer) {
-      const cached = this.#partElementCache.get(part.id);
-      const previous = cached?.key === part.type ? cached.element : undefined;
-      const element = renderer(part, previous, message, index);
-      if (part.type === "attachment" && element instanceof HTMLElement)
-        element.slot = "attachments";
-      this.#partElementCache.set(part.id, { key: part.type, part, element });
-      return element;
-    }
-    if (part.html) return this.#renderHtmlPart(part);
-    if (part.text) return part.text;
-    return this.#renderUnknownPart(part);
-  }
-
-  /** No renderer, no text/html — an inert marker so a missing `partElements` entry is at least visible.
-   * @param {ChxMessagePart} part @returns {HTMLElement} */
-  #renderUnknownPart(part) {
-    const cached = this.#getCachedElement(part);
-    if (cached !== undefined) return /** @type {HTMLElement} */ (cached);
-
-    const span = document.createElement("span");
-    span.dataset.partType = part.type;
-    this.#partElementCache.set(part.id, { key: part.type, part, element: span });
-    return span;
-  }
-
-  /** Strict cache hit for the default rendering path — same type AND same part reference.
-   * @param {ChxMessagePart} part @returns {string | HTMLElement | undefined} */
-  #getCachedElement(part) {
-    const cached = this.#partElementCache.get(part.id);
-    return cached?.key === part.type && cached.part === part ? cached.element : undefined;
-  }
-
-  /** Plain HTML formatting (bold/italic/etc.) — rendered as-is, no rich hydration.
-   * @param {ChxMessagePart} part @returns {HTMLElement} */
-  #renderHtmlPart(part) {
-    const cached = this.#getCachedElement(part);
-    if (cached !== undefined) return /** @type {HTMLElement} */ (cached);
-
-    // native DOM, not a Lit template — unsafeHTML() has no meaning here
-    const span = document.createElement("span");
-    span.innerHTML = /** @type {string} */ (part.html);
-    this.#partElementCache.set(part.id, { key: part.type, part, element: span });
-    return span;
-  }
-
-  /**
-   * @param {Set<string>} renderedMessageIds
-   * @param {Set<string>} renderedPartIds
-   */
-  #sweepCaches(renderedMessageIds, renderedPartIds) {
-    for (const id of this.#messageElementCache.keys()) {
-      if (!renderedMessageIds.has(id)) this.#messageElementCache.delete(id);
-    }
-    for (const id of this.#partElementCache.keys()) {
-      if (!renderedPartIds.has(id)) this.#partElementCache.delete(id);
-    }
-    this.#dividerController.sweep(renderedMessageIds);
-  }
-
-  /** Diffs part states against the previous render's snapshot to detect a streaming start/complete edge. */
-  #updateStatusText() {
-    // no edge-tracking needed — role="status" only re-announces on an actual text change
-    if (this.emptyState) {
-      this.#statusText = "No conversation selected";
-    } else if (this.#isInitialLoading()) {
-      this.#statusText = "Loading messages";
-    } else if (this.#isLoadingHistory()) {
-      this.#statusText = "Loading older messages";
-    }
-
-    /** @type {Map<string, ChxMessagePart["state"]>} */
-    const currentPartStates = new Map();
-    for (const message of this.messages) {
-      for (const part of message.parts ?? []) {
-        if (!part.id) continue;
-        currentPartStates.set(part.id, part.state);
-      }
-    }
-
-    for (const [partId, state] of currentPartStates) {
-      const previous = this.#previousPartStates.get(partId);
-      if (previous !== "streaming" && state === "streaming") {
-        this.#statusText = "Assistant is responding";
-      } else if (previous === "streaming" && state !== "streaming") {
-        this.#statusText = "Response complete";
-      }
-    }
-    this.#previousPartStates = currentPartStates;
-  }
-
-  /** True while fetching with no messages rendered yet — gates the `initial-loading` slot. */
-  #isInitialLoading() {
-    return this.loading && this.messages.length === 0;
-  }
-
-  /** The complement of `#isInitialLoading()` — gates the `loading-history` slot. */
-  #isLoadingHistory() {
-    return this.loading && this.messages.length > 0;
+          .map((part, partIndex) => this.#partRenderer.render(part, message, partIndex))}
+      </chx-message>
+    `;
+    return this.#dividerController.wrap(row, message, index);
   }
 
   /** The chx-infinity-scroll instance rendering this list. @returns {ChxInfinityScroll | undefined} */
@@ -427,29 +365,12 @@ export class ChxMessageList extends LitElement {
 
   /** Forwards to chx-infinity-scroll.scrollToBottom. @param {"auto" | "smooth" | "instant"} [behavior] */
   scrollToBottom(behavior) {
-    this.#infinityScrollElement?.scrollToBottom(behavior);
+    this.#bottomAnchor.scrollToBottom(behavior);
   }
 
-  /**
-   * Diffs `readState` against the previous render so a message that just became `"read"` un-defers
-   * in `ReadTrackingController` — see its own `clearFired`.
-   * @param {import("lit").PropertyValues} changedProperties
-   */
+  /** @param {import("lit").PropertyValues} changedProperties */
   willUpdate(changedProperties) {
-    if (changedProperties.has("messages")) this.#syncReadTracking();
-  }
-
-  #syncReadTracking() {
-    /** @type {Map<string, ChxMessage["readState"]>} */
-    const currentReadStates = new Map();
-    for (const message of this.messages) {
-      currentReadStates.set(message.id, message.readState);
-      const previous = this.#previousReadStates.get(message.id);
-      if (previous === "unread" && message.readState === "read") {
-        this.#readTracking.clearFired(message.id);
-      }
-    }
-    this.#previousReadStates = currentReadStates;
+    if (changedProperties.has("messages")) this.#readTracking.syncReadStates();
   }
 
   /**
@@ -463,103 +384,104 @@ export class ChxMessageList extends LitElement {
   updated(changedProperties) {
     if (
       (changedProperties.has("typing") || changedProperties.has("streaming")) &&
-      !this.#awayFromBottom
+      !this.#bottomAnchor.awayFromBottom
     ) {
-      this.#infinityScrollElement?.scrollToBottom(this.scrollBehavior);
+      this.#bottomAnchor.scrollToBottom(this.scrollBehavior);
     }
     this.#stickyController.sync();
     if (changedProperties.has("messages")) this.#stickyController.notifyMessagesChanged();
   }
 
   render() {
-    this.#updateStatusText();
-
     // a message missing `id` was already console.error'd by validateMessages — excluded here too
     return html`
       ${when(
         this.dragging,
         () => html`<div class="message-list__drop-hint" part="drop-hint">${this.dropHint}</div>`,
       )}
-      <div class="message-list__status" role="status">${this.#statusText}</div>
-      ${when(
-        this.emptyState,
-        () => html`
-          <slot name="empty" class="message-list__empty">
-            <div class="message-list__empty-default">No conversation selected</div>
-          </slot>
-        `,
-        () =>
-          when(
-            this.#isInitialLoading(),
+      <div class="message-list__status" role="status">${this.#status.text}</div>
+      ${choose(
+        this.#status.phase,
+        [
+          [
+            "empty",
+            () => html`
+              <slot name="empty" class="message-list__empty">
+                <div class="message-list__empty-default">No conversation selected</div>
+              </slot>
+            `,
+          ],
+          [
+            "initial-loading",
             () => html`
               <slot name="initial-loading" class="message-list__initial-loading">
                 <md-progress-circular></md-progress-circular>
               </slot>
             `,
-            () => html`
-              <chx-infinity-scroll
-                class="message-list__infinity-scroll"
-                role="log"
-                aria-live="polite"
-                aria-label=${this.messagesLabel}
-                .data=${this.messages}
-                .itemKey=${this.#itemKey}
-                .renderItem=${this.#renderItem}
-                .estimateItemSize=${this.estimateItemSize}
-                .overscan=${this.overscan}
-                .paddingStart=${this.paddingStart}
-                .paddingEnd=${this.paddingEnd}
-                .scrollMargin=${this.scrollMargin}
-                .useScrollendEvent=${this.useScrollendEvent}
-                .shouldObserveItem=${this.#shouldObserveItem}
-                .visibilityThreshold=${this.readThreshold}
-                .onItemVisible=${this.#handleItemVisible}
-                .scrollBehavior=${this.scrollBehavior}
-                .contentAlign=${this.contentAlign}
-                .noVirtualization=${this.noVirtualization}
-                .buffer=${this.buffer}
-                .hasMore=${this.hasMore}
-                .loading=${this.loading}
-                .onLoadMore=${this.onLoadMore}
-                .onScrollerKeydown=${this.#focusBehavior.handleKeyDown}
-                .onScrollerFocusin=${this.#focusBehavior.handleFocusIn}
-                .onAwayFromBottomChange=${this.#handleAwayFromBottomChange}
-                ${ref((el) => (this.#infinityScrollElement = /** @type {ChxInfinityScroll | undefined} */ (el)))}
-              >
-                ${when(this.streaming, () => html`<slot name="streaming" slot="footer"></slot>`)}
-                ${when(this.typing, () => html`<slot name="typing" slot="footer"></slot>`)}
-                ${when(
-                  this.#stickyController.labelText,
-                  () =>
-                    html`<button
-                      slot="sticky"
-                      class=${classMap({
-                        "message-list__sticky-date": true,
-                        "message-list__sticky-date_visible": this.#stickyController.visible,
-                      })}
-                      type="button"
-                      aria-label=${`Jump to ${this.#stickyController.labelText}`}
-                      ?inert=${!this.#stickyController.visible}
-                      @click=${this.#stickyController.handleClick}
-                      ${ref((el) =>
-                        this.#stickyController.setButton(
-                          /** @type {HTMLElement | undefined} */ (el),
-                        ),
-                      )}
-                    >
-                      <chx-divider
-                        part="sticky-date"
-                        label=${this.#stickyController.labelText}
-                        aria-hidden="true"
-                      ></chx-divider>
-                    </button>`,
-                )}
-              </chx-infinity-scroll>
-            `,
-          ),
+          ],
+        ],
+        () => html`
+          <chx-infinity-scroll
+            class="message-list__infinity-scroll"
+            exportparts=${INFINITY_SCROLL_EXPORTPARTS}
+            role="log"
+            aria-live="polite"
+            aria-label=${this.messagesLabel}
+            .data=${this.messages}
+            .itemKey=${this.#itemKey}
+            .renderItem=${this.#renderItem}
+            .estimateItemSize=${this.estimateItemSize}
+            .overscan=${this.overscan}
+            .paddingStart=${this.paddingStart}
+            .paddingEnd=${this.paddingEnd}
+            .scrollMargin=${this.scrollMargin}
+            .useScrollendEvent=${this.useScrollendEvent}
+            .shouldObserveItem=${this.#readTracking.shouldObserve}
+            .visibilityThreshold=${this.readThreshold}
+            .onItemVisible=${this.#readTracking.handleItemVisible}
+            .scrollBehavior=${this.scrollBehavior}
+            .contentAlign=${this.contentAlign}
+            .noVirtualization=${this.noVirtualization}
+            .buffer=${this.buffer}
+            .hasMore=${this.hasMore}
+            .loading=${this.loading}
+            .onLoadMore=${this.onLoadMore}
+            .onScrollerKeydown=${this.#focusBehavior.handleKeyDown}
+            .onScrollerFocusin=${this.#focusBehavior.handleFocusIn}
+            .onAwayFromBottomChange=${this.#bottomAnchor.handleAwayFromBottomChange}
+            ${ref((el) => (this.#infinityScrollElement = /** @type {ChxInfinityScroll | undefined} */ (el)))}
+          >
+            ${when(this.streaming, () => html`<slot name="streaming" slot="footer"></slot>`)}
+            ${when(this.typing, () => html`<slot name="typing" slot="footer"></slot>`)}
+            ${when(
+              this.#stickyController.labelText,
+              () =>
+                html`<button
+                  slot="sticky"
+                  class=${classMap({
+                    "message-list__sticky-date": true,
+                    "message-list__sticky-date_visible": this.#stickyController.visible,
+                  })}
+                  type="button"
+                  aria-label=${`Jump to ${this.#stickyController.labelText}`}
+                  ?inert=${!this.#stickyController.visible}
+                  @click=${this.#stickyController.handleClick}
+                  ${ref((el) =>
+                    this.#stickyController.setButton(/** @type {HTMLElement | undefined} */ (el)),
+                  )}
+                >
+                  <chx-divider
+                    part="sticky-date"
+                    label=${this.#stickyController.labelText}
+                    aria-hidden="true"
+                  ></chx-divider>
+                </button>`,
+            )}
+          </chx-infinity-scroll>
+        `,
       )}
-      ${when(this.#isLoadingHistory(), () => html`<slot name="loading-history"></slot>`)}
-      ${when(this.#awayFromBottom, () => html`<slot name="scroll-to-bottom"></slot>`)}
+      ${when(this.#status.loadingHistory, () => html`<slot name="loading-history"></slot>`)}
+      ${when(this.#bottomAnchor.awayFromBottom, () => html`<slot name="scroll-to-bottom"></slot>`)}
       <slot name="divider" hidden @slotchange=${this.#handleDividerSlotchange}></slot>
     `;
   }

@@ -201,12 +201,11 @@ chatEl.adapter = {
 `chatEl.connectionState` reflects the latest report; `chx-connection-change` fires on every
 transition, if you'd rather listen than poll.
 
-## Custom rendering — `messageElement` / `partElements`
+## Custom rendering — `partElements`
 
-Unset, every message renders as a plain `<chx-message>` and every part falls back to
-`part.html ?? part.text`. Override either, per `part.type` or for the whole message — both are
-always a function, `(data, previousElement?) => HTMLElement`, so a real custom element can reuse
-`previousElement` instead of rebuilding on every update:
+Unset, every part falls back to `part.html ?? part.text`. Override per `part.type` with a function,
+`(part, previousElement?) => HTMLElement`, so a real custom element can reuse `previousElement`
+instead of rebuilding on every update:
 
 ```js
 chatEl.partElements = {
@@ -223,8 +222,57 @@ chatEl.partElements = {
 };
 ```
 
-`chatEl.messageElement` replaces the whole `<chx-message>` wrapper the same way — set it and
-`chx-chat` stops building per-part children itself, leaving that entirely to your function.
+There is no equivalent hook for the whole message: the `<chx-message>` wrapper is always the
+library's, so every row reliably carries its part names, roving-focus wiring and `aria-busy`.
+Change how it *looks* in CSS instead.
+
+## Styling messages — `::part()` and `--chx-message-*`
+
+`chx-message` sits two shadow roots deep (`chx-message-list` → `chx-infinity-scroll` →
+`chx-message`), and `::part()` only travels one level at a time — `chx-message-list` maintains the
+`exportparts` chain that carries the names out to the page. Each row gets a closed vocabulary,
+applied from its own state:
+
+| Part                  | On                                                    |
+| --------------------- | ------------------------------------------------------ |
+| `message`             | Every row (the `<chx-message>` host itself)            |
+| `message-own`         | `message.own`                                          |
+| `message-incoming`    | `!message.own` — own's complement, since part selectors can't be negated |
+| `message-unread`      | `readState === "unread"`                               |
+| `message-streaming`   | any part still `state: "streaming"`                    |
+| `message-system`      | `parts[0].type === "system"`                           |
+| `message-avatar` / `-body` / `-meta` / `-attachments` / `-content` / `-actions` / `-unread-marker` | chx-message's interior boxes |
+
+Part selectors **don't nest** — there's no `::part(message-own)::part(message-content)`. To reach a
+particular row's *interior*, set `--chx-message-*` in a rule matching the host part: custom
+properties inherit into chx-message's shadow tree, where its own stylesheet consumes them. Inherited
+CSS properties (`color`, `font-size`, `text-align`) cross the same way.
+
+```css
+/* an agent turn as a full-width document rather than a bubble */
+chx-message-list::part(message) {
+  width: 100%;
+  max-width: 100%;
+  --chx-message-padding: 0;
+  --chx-message-background-color: transparent;
+}
+/* ...and only on incoming rows, leaving your own messages as bubbles */
+chx-message-list::part(message-incoming) {
+  width: 100%;
+  --chx-message-background-color: transparent;
+}
+/* a system row, stripped of chrome */
+chx-message-list::part(message-system) {
+  --chx-message-background-color: transparent;
+  text-align: center;
+}
+```
+
+The themeable properties are `--chx-message-` + `max-width`, `padding`, `border-radius`,
+`background-color`, `own-background-color`, `avatar-gap`, `unread-marker-gap`, `meta-gap`,
+`attachments-gap`, `actions-gap`. Note that a plain `chx-message { … }` rule on the page reaches
+nothing — a selector only matches within the tree it's written in, and these elements live inside a
+shadow root. `::part()` is the whole mechanism.
 
 ## Keyboard navigation & accessibility
 
@@ -258,7 +306,6 @@ messageListEl.addEventListener("chx-scroll-to-bottom", () => hideJumpToLatestBut
 | ---------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
 | `userId`               | `string`                                                               | Identifies the local user — required for `own`/`adapter.subscribe`/`addMessage` to classify correctly.                                    |
 | `messages`             | `ChxMessage[]`                                                         | Optional controlled override — see Quick start. Default `[]`.                                                                             |
-| `messageElement`       | `(message, previousElement?) => HTMLElement \| undefined`              | Whole-message render override — see Custom rendering.                                                                                     |
 | `partElements`         | `Record<string, (part, previousElement?) => HTMLElement> \| undefined` | Per-`part.type` render overrides — see Custom rendering.                                                                                  |
 | `adapter`              | `ChxChatAdapter \| undefined`                                          | `{ getMessages?, subscribe?, sendMessage?, regenerate? }` — see Streaming/Live updates.                                                   |
 | `connectionState`      | `"connecting" \| "connected" \| "error" \| undefined`                  | Reflected attribute `connection-state`. Read-only in practice.                                                                            |
@@ -293,7 +340,7 @@ messageListEl.addEventListener("chx-scroll-to-bottom", () => hideJumpToLatestBut
 
 | Property                                       | Type     | Notes                                                                                            |
 | ---------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------ |
-| `messages` / `messageElement` / `partElements` | —        | Normally pushed down from `chx-chat` — set directly only if using `chx-message-list` standalone. |
+| `messages` / `partElements`                    | —        | Normally pushed down from `chx-chat` — set directly only if using `chx-message-list` standalone. |
 | `messagesLabel`                                | `string` | `aria-label` for the `role="log"` region. Default `"Messages"`.                                  |
 | `dropHint`                                     | `string` | Attachment drag-over hint text. Default `"Release to attach"`.                                   |
 

@@ -14,8 +14,13 @@
 export class ReadTrackingController {
   /** @type {() => ChxMessage[]} */
   #getMessages;
+  /** @type {() => boolean} */
+  #getEnabled;
   /** @type {(type: string, detail?: unknown) => void} */
   #emit;
+  /** Previous render's readState per message id — the diff that un-defers a message that just
+   *  became `"read"` elsewhere. @type {Map<string, ChxMessage["readState"]>} */
+  #previousReadStates = new Map();
   /** @type {Set<string>} */
   #readMessageIds = new Set();
   /** @type {Map<string, {message: ChxMessage, index: number}>} */
@@ -27,14 +32,26 @@ export class ReadTrackingController {
    *  @type {string | undefined} */
   #maxCoveredMessageId;
 
-  /** @param {{getMessages: () => ChxMessage[], emit: (type: string, detail?: unknown) => void}} config */
+  /**
+   * @param {{
+   *   getMessages: () => ChxMessage[],
+   *   getEnabled: () => boolean,
+   *   emit: (type: string, detail?: unknown) => void,
+   * }} config
+   */
   constructor(config) {
     this.#getMessages = config.getMessages;
+    this.#getEnabled = config.getEnabled;
     this.#emit = config.emit;
   }
 
-  /** Wired to `chx-infinity-scroll.onItemVisible`. @param {string} key */
-  handleItemVisible(key) {
+  /** Wired straight to `chx-infinity-scroll.shouldObserveItem` — the master switch is checked here,
+   *  so a message is never `observe()`d at all while read-tracking is off. @param {ChxMessage} message */
+  shouldObserve = (message) => this.#getEnabled() && message?.readState === "unread";
+
+  /** Wired straight to `chx-infinity-scroll.onItemVisible`. @param {string} key */
+  handleItemVisible = (key) => {
+    if (!this.#getEnabled()) return; // toggled off mid-session, with observers already attached
     this.#syncMessagesById();
     const entry = this.#messagesById.get(key);
     if (!entry || entry.message.readState !== "unread" || this.#readMessageIds.has(key)) return;
@@ -68,16 +85,33 @@ export class ReadTrackingController {
       messageId: /** @type {string} */ (coveredIds.at(-1)),
       messageIds: coveredIds,
     });
-  }
+  };
 
   /**
-   * Un-defers a message whose `readState` newly became `"read"` — the durable half of "closing the
-   * loop", called from `chx-message-list`'s own `willUpdate` diff. Deliberately does not touch
-   * `#maxCoveredMessageId` — a message re-armed to `"unread"` after being covered, then seen again,
-   * fires standalone (its own index is at or behind the existing high-water mark) rather than
-   * retroactively re-covering anything past it.
-   * @param {string} messageId
+   * Diffs `readState` against the previous pass and un-defers every message that just became
+   * `"read"` — the durable half of "closing the loop". Called from the host's `willUpdate` on a
+   * `messages` change, not lazily from `handleItemVisible`: an unread → read → unread round trip
+   * between two visibility events would compare its endpoints, see "unread" both times, and leave
+   * the message stuck in the fire-once set. Deliberately does not touch `#maxCoveredMessageId` — a
+   * message re-armed to `"unread"` after being covered, then seen again, fires standalone (its own
+   * index is at or behind the existing high-water mark) rather than retroactively re-covering
+   * anything past it.
    */
+  syncReadStates() {
+    /** @type {Map<string, ChxMessage["readState"]>} */
+    const currentReadStates = new Map();
+    for (const message of this.#getMessages()) {
+      currentReadStates.set(message.id, message.readState);
+      if (this.#previousReadStates.get(message.id) === "unread" && message.readState === "read") {
+        this.clearFired(message.id);
+      }
+    }
+    this.#previousReadStates = currentReadStates;
+  }
+
+  /** Un-defers one message, so a later visibility event can report it again. Public for the same
+   *  reason `read-tracking.md` specs it that way — it's the seam the deferral is asserted through.
+   *  @param {string} messageId */
   clearFired(messageId) {
     this.#readMessageIds.delete(messageId);
   }
@@ -86,6 +120,7 @@ export class ReadTrackingController {
   reset() {
     this.#readMessageIds.clear();
     this.#messagesById.clear();
+    this.#previousReadStates = new Map();
     this.#lastMessages = undefined;
     this.#maxCoveredMessageId = undefined;
   }

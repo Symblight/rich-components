@@ -86,16 +86,17 @@ export class FocusBehaviorController {
   }
 
   /**
-   * Wires tabIndex/actionable/interior-tabbing onto a freshly rendered message element — called
-   * once per message from the host's own render path, right after `ensureSeeded`.
+   * The one piece of a rendered message that a template binding can't express: `tabIndex`,
+   * `actionable` and `data-message-id` all ride bindings now, but this walks the *light-DOM
+   * children* a consumer's `partElements` renderer produced, which Lit doesn't own. Re-run on every
+   * render pass (see `interiorTabbing()` in message-list.js), so a message that grows a new
+   * focusable mid-stream still gets it suppressed. Both halves are idempotent, which is why
+   * `#drillInto`/`#exitDrillIn` can keep calling them directly without waiting for a re-render.
    * @param {string} id
-   * @param {HTMLElement & {tabIndex: number, actionable: boolean}} el
+   * @param {HTMLElement} el
    */
-  applyToElement(id, el) {
-    el.tabIndex = this.isFocused(id) ? 0 : -1;
-    el.actionable = this.isActionable(id);
-    el.dataset.messageId = id;
-    if (el.actionable) this.#restoreInteriorTabbing(el);
+  syncInteriorTabbing(id, el) {
+    if (this.isActionable(id)) this.#restoreInteriorTabbing(el);
     else this.#suppressInteriorTabbing(el);
   }
 

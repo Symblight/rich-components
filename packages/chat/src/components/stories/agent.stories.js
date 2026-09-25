@@ -20,10 +20,32 @@ import "../attachment/attachment.js";
 import "../paste-long-text/paste-long-text.js";
 
 import { buildChipElement, chipPartRule, createSplitOnSendHandler } from "../../index.js";
-// Importing the `@symblight/chat/agent` entry registers chx-thought/chx-plan/chx-tool-call/
-// chx-tool-call-diff/chx-input-mode-banner. The package ships those elements and nothing else —
-// every renderer below is this story's own, which is exactly what an app writes for itself.
 import { createBannerPermissionPrompt } from "../../agent.js";
+
+const messageStyleOverrides = html`
+  <style>
+    /* An agent turn is a full-width document, not a bubble — but the user's own messages keep the
+       default bubble, so this targets message-incoming rather than message. That complement name
+       exists precisely because part selectors can't be negated: there is no
+       ::part(message):not(own). The interior (.message__content) is two shadow roots down, reached
+       through the exportparts chain chx-message-list maintains; --chx-message-* set here inherits
+       into it as well. */
+    chx-message-list::part(message-incoming) {
+      max-width: 100%;
+      width: 100%;
+      --chx-message-padding: 0;
+      --chx-message-background-color: transparent;
+    }
+    /* The one rule that can't be scoped to incoming rows: part selectors don't nest, so there's no
+       way to say "the content box of an incoming message". Harmless on own rows — they carry a
+       single text part, and a one-item flex column lays out exactly like the default block. */
+    chx-message-list::part(message-content) {
+      display: flex;
+      flex-direction: column;
+      gap: 0.4rem;
+    }
+  </style>
+`;
 
 /**
  * `partElements` renderer for a `type: "code"` part. Reuse `previous` instead of building a new
@@ -192,6 +214,7 @@ function createStreamingCodeAgentAdapter() {
 /** @type {Story} */
 export const StreamingCodeReply = {
   render: () => html`
+    ${messageStyleOverrides}
     <chx-chat
       .userId=${"me"}
       .partElements=${{ code: renderCodePart }}
@@ -231,6 +254,22 @@ const DIFF_TEXT = `--- a/src/components/message-list/message-list.js
      this.#messageElementCache.set(message.id, { key: undefined, element: el });
 `;
 
+/** The same reasoning as THOUGHT_TEXT, as the discrete rows chx-thought-step renders. ACP has no
+ *  step structure — an adapter that wants rows synthesizes them itself, see `src/docs/agentic.md`. */
+const THOUGHT_STEPS = [
+  { content: "Traced the channel switch handler" },
+  { content: "Checked the list keys", meta: "3 components" },
+  { content: "Compared against the reconciler", meta: "2 files" },
+];
+
+/** @param {number} upTo */
+function thoughtStepsAt(upTo) {
+  return THOUGHT_STEPS.map((step, index) => ({
+    ...step,
+    status: index < upTo ? "completed" : index === upTo ? "in_progress" : "pending",
+  }));
+}
+
 const PLAN_STEPS = [
   { content: "Read the message list component", priority: "high" },
   { content: "Run the test suite", priority: "high" },
@@ -245,14 +284,33 @@ function planAt(upTo) {
   }));
 }
 
-/** Part types that render as a full-width card rather than prose — see `renderAgentMessage`. */
-const CARD_PART_TYPES = new Set(["tool_call", "plan"]);
-
-/** @param {import("../../types/message.js").ChxMessagePart} part @param {HTMLElement} [previous] */
+/** Two shapes off the same element: prose in `text` (AgenticToolCalls), or `data.steps` as
+ *  chx-thought-step rows in the default slot (AgenticComposerKit). `data.duration` turns the
+ *  settled summary into "Thought for N seconds" — without it chx-thought self-times the streaming
+ *  window, which is right until a reload.
+ *  @param {import("../../types/message.js").ChxMessagePart} part @param {HTMLElement} [previous] */
 function renderThoughtPart(part, previous) {
   const el = /** @type {any} */ (previous ?? document.createElement("chx-thought"));
-  el.text = part.text ?? "";
+  const data = /** @type {any} */ (part).data ?? {};
   el.streaming = part.state === "streaming";
+  el.duration = data.duration ?? 0;
+
+  const steps = /** @type {any[]} */ (data.steps ?? []);
+  if (steps.length === 0) {
+    el.text = part.text ?? "";
+    return el;
+  }
+  // reuse the rows for the same reason the list reuses part elements — a fresh set every chunk
+  // re-measures the row it sits in
+  const rows = el.querySelectorAll("chx-thought-step");
+  steps.forEach((step, index) => {
+    const row = /** @type {any} */ (
+      rows[index] ?? el.appendChild(document.createElement("chx-thought-step"))
+    );
+    row.status = step.status ?? "pending";
+    row.meta = step.meta ?? "";
+    if (row.textContent !== step.content) row.textContent = step.content;
+  });
   return el;
 }
 
@@ -323,64 +381,6 @@ const AGENT_PART_ELEMENTS = {
   attachment: renderAttachmentPart,
 };
 
-/** @param {import("../../types/message.js").ChxMessagePart} part @param {HTMLElement} [previous] */
-function renderAgentPart(part, previous) {
-  const renderer = AGENT_PART_ELEMENTS[part.type];
-  if (renderer) return renderer(part, previous);
-  const span = /** @type {HTMLElement} */ (
-    previous?.localName === "span" ? previous : document.createElement("span")
-  );
-  span.textContent = part.text ?? "";
-  return span;
-}
-
-/**
- * A `messageElement` for agent turns. Tool cards, plans and diffs are full-width card content, so a
- * message carrying one drops chx-message's bubble chrome — set on the element itself, since a
- * page-level custom-property rule can't reach a chx-message two shadow roots deep (CLAUDE.md,
- * "::part() only forwards one shadow level").
- *
- * Note `messageElement` takes over part rendering entirely: chx-message-list never consults
- * `partElements` for a message it builds, so the dispatch below is this renderer's own job.
- * @param {import("../../types/message.js").ChxMessage} message
- * @param {HTMLElement} [previousElement]
- */
-function renderAgentMessage(message, previousElement) {
-  const el = /** @type {any} */ (previousElement ?? document.createElement("chx-message"));
-  el.own = message.own;
-  el.busy = message.parts.some((part) => part.state === "streaming");
-  el.ariaLabel = message.own ? "Your message" : "Message";
-
-  const hasCard = message.parts.some((part) => CARD_PART_TYPES.has(part.type));
-  for (const [property, value] of Object.entries({
-    "--chx-message-background-color": "transparent",
-    "--chx-message-padding": "0",
-    "--chx-message-max-width": "100%",
-  })) {
-    if (hasCard) el.style.setProperty(property, value);
-    else el.style.removeProperty(property);
-  }
-
-  const previousParts = new Map(
-    [...el.children].map((child) => [/** @type {HTMLElement} */ (child).dataset.partId, child]),
-  );
-  el.replaceChildren(
-    ...message.parts
-      .filter((part) => part.id)
-      .map((part) => {
-        const child = renderAgentPart(
-          part,
-          /** @type {HTMLElement | undefined} */ (previousParts.get(part.id)),
-        );
-        child.dataset.partId = part.id;
-        child.style.display = "block";
-        child.style.marginBlockStart = "0.5rem";
-        return child;
-      }),
-  );
-  return el;
-}
-
 /**
  * A fake ACP-shaped agent: thinks, publishes a plan, reads a file, asks permission before running a
  * command, streams that command's output, then edits a file. Everything it emits goes through the
@@ -388,7 +388,7 @@ function renderAgentMessage(message, previousElement) {
  * replace wholesale, and the streamed terminal output rides in `text` because that is the only
  * append-capable field (see `src/docs/agentic.md`).
  */
-function createAgenticAdapter({ requestPermission }) {
+function createAgenticAdapter({ requestPermission, thoughtSteps = false }) {
   let replyCount = 0;
 
   return {
@@ -414,14 +414,34 @@ function createAgenticAdapter({ requestPermission }) {
             await sleep(500);
             if (signal.aborted) return;
 
-            await streamWords(controller, {
-              messageId: replyId,
-              partId: thoughtId,
-              partType: "thought",
-              text: THOUGHT_TEXT,
-              delayMs: 25,
-              signal,
-            });
+            if (thoughtSteps) {
+              // Rows instead of prose. Whole array every time — `data` replaces outright, like
+              // every field but `text`. The part is `streaming` from its first delta until
+              // `part-end`, which is what drives chx-thought's shimmer.
+              const startedAt = performance.now();
+              for (let step = 0; step < THOUGHT_STEPS.length; step += 1) {
+                enqueue(controller, thoughtId, "thought", {
+                  data: { steps: thoughtStepsAt(step) },
+                });
+                await sleep(650);
+                if (signal.aborted) return;
+              }
+              enqueue(controller, thoughtId, "thought", {
+                data: {
+                  steps: thoughtStepsAt(THOUGHT_STEPS.length),
+                  duration: performance.now() - startedAt,
+                },
+              });
+            } else {
+              await streamWords(controller, {
+                messageId: replyId,
+                partId: thoughtId,
+                partType: "thought",
+                text: THOUGHT_TEXT,
+                delayMs: 25,
+                signal,
+              });
+            }
             controller.enqueue({ kind: "part-end", messageId: replyId, partId: thoughtId });
 
             enqueue(controller, planId, "plan", { entries: planAt(0) });
@@ -467,9 +487,10 @@ function createAgenticAdapter({ requestPermission }) {
             if (signal.aborted) return;
 
             // `null` is a cancelled request — ACP wants an answer either way
+            // `rejected`, not `failed` — the user said no, the tool didn't break
             if (optionId === null || optionId === "reject") {
               enqueue(controller, runId, "tool_call", {
-                status: "failed",
+                status: "rejected",
                 error: "Permission denied — the command was not run.",
               });
               controller.enqueue({ kind: "part-end", messageId: replyId, partId: runId });
@@ -547,12 +568,8 @@ export const AgenticToolCalls = {
       requestPermission: createBannerPermissionPrompt({ getBanner: () => banner }),
     });
     return html`
-      <chx-chat
-        .userId=${"me"}
-        .messageElement=${renderAgentMessage}
-        .partElements=${AGENT_PART_ELEMENTS}
-        .adapter=${adapter}
-      >
+      ${messageStyleOverrides}
+      <chx-chat .userId=${"me"} .partElements=${AGENT_PART_ELEMENTS} .adapter=${adapter}>
         <chx-message-list slot="message-list" scroll-behavior="smooth" content-align="start">
           <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
           <chx-scroll-to-bottom-affordance
@@ -673,10 +690,9 @@ export const AgenticComposerKit = {
       requestPermission: createBannerPermissionPrompt({ getBanner: () => banner }),
     });
     return html`
-      ${attachTriggerStyles}
+      ${attachTriggerStyles} ${messageStyleOverrides}
       <chx-chat
         .userId=${"me"}
-        .messageElement=${renderAgentMessage}
         .partElements=${AGENT_PART_ELEMENTS}
         .adapter=${adapter}
         @chx-messages-change=${handleComposerKitMessagesChange}

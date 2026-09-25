@@ -6,7 +6,7 @@
  * A participant in a conversation — separate from `ChxMessage.authorId` (a bare id, this package's
  * existing author-display stance everywhere else) because a conversation list genuinely needs
  * display metadata (name/avatar/presence) to render participant chips/avatars, unlike a single
- * message, which still defers all of that to the app via `messageElement`.
+ * message, which has no author-display concept at all.
  * @typedef {Object} ChxUser
  * @property {string} id
  * @property {string} [displayName]

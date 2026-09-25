@@ -4,7 +4,6 @@ import { ref } from "lit/directives/ref.js";
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 
 import plus from "@material-design-icons/svg/outlined/add.svg?raw";
-import contentCopyIcon from "@material-design-icons/svg/outlined/content_copy.svg?raw";
 import "@symblight/wc-material/button";
 import "@symblight/wc-material/icon";
 import "@symblight/wc-material/icon-button";
@@ -173,98 +172,60 @@ export const WithMessages = {
 };
 
 /**
- * `chx-message-list`'s `messageElement` override, building a `<chx-message>` with its `avatar`/
- * `meta`/`actions` slots populated — an app-level renderer, chx-message itself has no avatar/meta
- * concept, just the slots. Own messages get no avatar slotted at all — chx-message's avatar column
- * costs zero width automatically when nothing's assigned, no per-message conditional needed here
- * either.
+ * Restyling messages is CSS-only — there is no whole-message render hook. `chx-message-list` always
+ * builds the `<chx-message>` itself and stamps a closed vocabulary of part names on it (`message`,
+ * plus `message-own`/`message-unread`/`message-streaming`/`message-system` where they apply),
+ * forwarding those plus its interior parts (`message-content`, `message-body`, `message-meta`, …)
+ * out through an `exportparts` chain at every intermediate host — `::part()` only travels one shadow
+ * level at a time, and chx-message sits two deep (chx-message-list → chx-infinity-scroll →
+ * chx-message).
  *
- * The hover/focus reveal on the action button is wired here in plain JS, not CSS: `chx-message`
- * ends up several shadow levels deep (chx-message-list's own shadow → chx-infinity-scroll's own
- * shadow → chx-message itself), and `::part()` only forwards one shadow level at a time without an
- * `exportparts` chain at every intermediate host — confirmed live, a page-level `chx-message::part
- * (actions)` rule silently never matches anything at this nesting depth. `mouseenter`/`mouseleave`/
- * `focusin`/`focusout` on the host element itself don't have that limitation (they're just DOM
- * events, composed and bubbling normally), so this toggles the action button's own inline style
- * directly instead. `previousElement` is reused across re-renders (streaming, edits), so the
- * listeners are wired exactly once per host (`dataset.hoverWired` guard) and always look up the
- * *current* action button via `querySelector` rather than closing over one — the button itself is
- * rebuilt fresh every call below, so a captured reference would go stale after the first re-render.
- * @type {import("../../types/adapter.js").ChxMessageRenderer}
+ * Two mechanics worth copying from this block. Part selectors **don't nest** — there is no
+ * `::part(message-own)::part(message-content)` — so a rule that has to reach a row's *interior*
+ * goes through `--chx-message-*` instead: custom properties set in a matching `::part()` rule
+ * inherit right into chx-message's shadow tree, which is how the own-message bubble below gets its
+ * own color. And a page-level `::part()` rule beats the component's own `:host` rules, so plain
+ * declarations (`max-width`, `align-self`) land directly on the host.
  */
-function renderCustomMessage(message, previousElement) {
-  const el = /** @type {any} */ (previousElement ?? document.createElement("chx-message"));
-  el.own = message.own;
-  el.busy = message.parts.some((/** @type {any} */ part) => part.state === "streaming");
-  el.ariaLabel = message.own ? "Your message" : "Message";
-  el.replaceChildren();
-
-  if (!message.own) {
-    const avatar = document.createElement("md-avatar");
-    avatar.slot = "avatar";
-    /** @type {any} */ (avatar).src = "https://i.pravatar.cc/64?img=12";
-    avatar.style.setProperty("--md-avatar-size", "16px");
-    el.append(avatar);
-  }
-
-  const meta = document.createElement("span");
-  meta.slot = "meta";
-  meta.style.fontSize = "0.75rem";
-  meta.style.fontWeight = "600";
-  meta.style.color = "var(--md-sys-color-on-surface-variant)";
-  meta.textContent = message.own ? "You" : "Alex";
-  el.append(meta);
-
-  for (const part of message.parts) {
-    if (part.html) {
-      const span = document.createElement("span");
-      span.innerHTML = part.html;
-      el.append(span);
-    } else {
-      el.append(document.createTextNode(part.text ?? ""));
+const customizedMessageStyles = html`
+  <style>
+    .customized-messages::part(message) {
+      --chx-message-border-radius: 0.375rem 1rem 1rem 1rem;
+      --chx-message-background-color: var(--md-sys-color-surface-container-highest);
+      max-width: 520px;
     }
-  }
-
-  const actionButton = document.createElement("md-icon-button");
-  actionButton.slot = "actions";
-  actionButton.setAttribute("variant", "standard");
-  actionButton.style.setProperty("--md-icon-button-font-size", "1.125rem");
-  actionButton.style.opacity = "0";
-  actionButton.style.transition = "opacity 0.15s";
-  actionButton.innerHTML = `<md-icon>${contentCopyIcon}</md-icon>`;
-  el.append(actionButton);
-
-  if (!el.dataset.hoverWired) {
-    el.dataset.hoverWired = "true";
-    const setVisible = (/** @type {boolean} */ visible) => {
-      const button = el.querySelector('[slot="actions"]');
-      if (button) button.style.opacity = visible ? "1" : "0";
-    };
-    el.addEventListener("mouseenter", () => setVisible(true));
-    el.addEventListener("mouseleave", () => setVisible(false));
-    el.addEventListener("focusin", () => setVisible(true));
-    el.addEventListener("focusout", () => setVisible(false));
-  }
-
-  return el;
-}
+    .customized-messages::part(message-own) {
+      --chx-message-border-radius: 1rem 0.375rem 1rem 1rem;
+      --chx-message-background-color: var(--md-sys-color-primary);
+      --chx-message-padding: 0.5rem 1rem;
+    }
+    .customized-messages::part(message-content) {
+      font-size: 0.9375rem;
+      line-height: 1.5;
+    }
+    /* :hover after ::part() is allowed — it matches the part element's own state */
+    .customized-messages::part(message):hover {
+      --chx-message-background-color: var(--md-sys-color-surface-container-high);
+    }
+  </style>
+`;
 
 /**
- * Same `chx-chat`/`chx-message-list`/`chx-message-composer` shape as `WithMessages` above, with a
- * custom `messageElement` (`renderCustomMessage`) instead of the built-in `<chx-message>` look:
- * an `md-avatar` (not-own messages only), an author label above the bubble, and a small
- * `md-icon-button` action that only appears on hover/focus.
+ * Same `chx-chat`/`chx-message-list`/`chx-message-composer` shape as `WithMessages` above, restyled
+ * entirely from the page with `::part()` + `--chx-message-*` (see `customizedMessageStyles` above):
+ * asymmetric bubble corners that flip for own messages, a filled own-message bubble, and a hover
+ * tint — no JS, no per-message wiring.
  */
 /** @type {Story} */
 export const CustomizedMessages = {
   render: () => html`
-    <chx-chat
-      .userId=${"me"}
-      .messages=${makeMessages(8)}
-      .messageElement=${renderCustomMessage}
-      .adapter=${createSlowReplyAdapter()}
-    >
-      <chx-message-list slot="message-list" scroll-behavior="smooth">
+    ${customizedMessageStyles}
+    <chx-chat .userId=${"me"} .messages=${makeMessages(8)} .adapter=${createSlowReplyAdapter()}>
+      <chx-message-list
+        slot="message-list"
+        class="customized-messages"
+        scroll-behavior="smooth"
+      >
         <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
       </chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
@@ -351,9 +312,9 @@ export const Streaming = {
  * an opt-in master switch (default `false`) — set here on `<chx-chat>`, pushed straight through to
  * `chx-message-list.readTracking`; without it, no message is ever `observe()`d and `chx-message-read`
  * never fires at all. Every non-own message starts `readState: "unread"` (`makeUnreadMessages` below)
- * — a custom `messageElement` (`renderReadTrackingMessage`) slots a `<chx-unread-marker>` into
- * `chx-message`'s own `unread-marker` slot for each one, since the built-in `<chx-message>` renderer
- * has no hook to slot one in. Scroll up through the older messages below `chx-chat`'s default
+ * — `chx-message`'s `unread-marker` slot has `<chx-unread-marker>` as its own native fallback
+ * content, so the dot appears with zero wiring here (slot your own in to replace it). Scroll up
+ * through the older messages below `chx-chat`'s default
  * bottom-anchored view: each unread one fires `chx-message-read` the instant it crosses
  * `read-threshold` (`0` here, the default — any pixel visible counts) *and covers every other
  * still-unread message positioned before it* (Decision 10's coverage sweep — reading the newest message
@@ -403,22 +364,6 @@ export const ReadTracking = {
           ],
         };
       });
-    }
-
-    /** @type {import("../../types/adapter.js").ChxMessageRenderer} */
-    function renderReadTrackingMessage(message, previousElement) {
-      const el = /** @type {any} */ (previousElement ?? document.createElement("chx-message"));
-      el.own = message.own;
-      el.unread = message.readState === "unread";
-      el.ariaLabel = message.own ? "Your message" : "Message";
-      el.replaceChildren();
-      if (el.unread) {
-        const marker = document.createElement("chx-unread-marker");
-        marker.slot = "unread-marker";
-        el.append(marker);
-      }
-      for (const part of message.parts) el.append(document.createTextNode(part.text ?? ""));
-      return el;
     }
 
     /** @type {import("../base/chat.js").ChxChat | undefined} */
@@ -490,11 +435,7 @@ export const ReadTracking = {
             );
           }}
         >
-          <chx-message-list
-            slot="message-list"
-            .messageElement=${renderReadTrackingMessage}
-            read-threshold="0"
-          ></chx-message-list>
+          <chx-message-list slot="message-list" read-threshold="0"></chx-message-list>
           <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
             <md-button slot="actions" variant="text">Opus 4.8</md-button>
           </chx-message-composer>
@@ -1103,47 +1044,48 @@ function makeDatedMessages() {
 }
 
 /**
- * Row-level renderer (`messageElement`) that draws an action divider chrome-free. A `type: "system"`
- * message renders as a bare, full-bleed `<chx-divider>` — no `<chx-message>` bubble, centered across the
- * row (`width: 100%` sidesteps the `align-self: flex-start` `chx-message-list` forces on every row, and
- * `chx-divider`'s own line-label-line centers the text). Every other message is built as an ordinary
- * `<chx-message>` here, since `messageElement` replaces the built-in renderer for *all* rows. `partElements`
- * can't do this — a part renders *inside* `chx-message`, so it inherits the bubble; escaping it needs the
- * row-level hook. Date dividers are separate: derived and library-driven via `<chx-divider slot="divider">`.
- * @type {import("../../types/adapter.js").ChxMessageRenderer}
+ * An action divider, drawn chrome-free in pure CSS. A message whose first part is `type: "system"`
+ * gets the `message-system` part name from `chx-message-list` automatically (one of the closed
+ * vocabulary `messagePartNames` stamps on every row), so stripping the bubble is just a rule. The
+ * interior — padding and background live on `.message__content` inside chx-message's shadow — is
+ * reached through `--chx-message-*`, since part selectors don't nest; `width`/`max-width` apply
+ * straight to the host, and a page-level `::part()` rule outranks the component's own `:host` rules.
+ * Date dividers are a separate, library-driven feature: `<chx-divider slot="divider">` below.
  */
-function renderDividerRow(message, previousElement) {
-  if (message.parts[0]?.type === "system") {
-    const divider = /** @type {any} */ (
-      previousElement?.tagName.toLowerCase() === "chx-divider"
-        ? previousElement
-        : document.createElement("chx-divider")
-    );
-    divider.textContent = message.parts[0].text ?? "";
-    divider.style.width = "100%";
-    return divider;
-  }
-
-  const el = /** @type {any} */ (
-    previousElement?.tagName.toLowerCase() === "chx-message"
-      ? previousElement
-      : document.createElement("chx-message")
-  );
-  el.own = message.own;
-  el.busy = message.parts.some((/** @type {any} */ part) => part.state === "streaming");
-  el.ariaLabel = message.own ? "Your message" : "Message";
-  el.replaceChildren();
-  for (const part of message.parts) {
-    if (part.html) {
-      const span = document.createElement("span");
-      span.innerHTML = part.html;
-      el.append(span);
-    } else {
-      el.append(document.createTextNode(part.text ?? ""));
+const actionDividerStyles = html`
+  <style>
+    .dividers-story::part(message-system) {
+      --chx-message-padding: 0;
+      --chx-message-background-color: transparent;
+      --chx-message-max-width: 100%;
+      width: 100%;
     }
-  }
-  return el;
-}
+    /* the line-label-line chx-divider draws, rebuilt as pseudo-elements on the row's own part box —
+       ::part() takes a pseudo-element after it, and they become flex children of chx-message's host.
+       text-align/font-size/color are inherited properties, so they cross into the shadow tree and
+       reach .message__content without a (nonexistent) nested part selector. */
+    .dividers-story::part(message-system) {
+      align-items: center;
+      text-align: center;
+      font-size: 0.75rem;
+      color: var(--md-sys-color-on-surface-variant);
+    }
+    .dividers-story::part(message-system)::before,
+    .dividers-story::part(message-system)::after {
+      content: "";
+      flex: 1 1 0;
+      border-block-start: 1px solid var(--md-sys-color-outline-variant);
+    }
+    /* margins rather than a flex gap: the empty avatar column is still a flex child, so a gap
+       would count twice on the leading side and pull the label off center */
+    .dividers-story::part(message-system)::before {
+      margin-inline-end: 0.75rem;
+    }
+    .dividers-story::part(message-system)::after {
+      margin-inline-start: 0.75rem;
+    }
+  </style>
+`;
 
 /**
  * Date dividers + action dividers across a week of history. `<chx-divider slot="divider">` on
@@ -1154,23 +1096,18 @@ function renderDividerRow(message, previousElement) {
  * day's label at the top like a native sticky section header: it stays stuck while that day is in view,
  * the next day's divider pushes it up and swaps it as you scroll (one label, no overlap — the inline
  * divider under it is occluded), and it's **clickable** — click it to jump to that day's boundary. The
- * "Alex added Max…"/"Sasha renamed…" rows are *not* date dividers — they're
- * ordinary `type: "system"` messages rendered chrome-free as full-bleed `<chx-divider>`s via the
- * row-level `messageElement` hook (`renderDividerRow` above), since a part rendered through
- * `partElements` would inherit `chx-message`'s bubble. Remove the `<chx-divider slot="divider">` and the
- * date dividers vanish while the action dividers stay — the date feature is inert unless the carrier is
- * slotted. See `.claude/plans/messages/dividers.md`.
+ * "Alex added Max…"/"Sasha renamed…" rows are *not* date dividers — they're ordinary
+ * `type: "system"` messages, stripped of their bubble by the `message-system` part name
+ * `chx-message-list` stamps on them automatically (`actionDividerStyles` above). Remove the
+ * `<chx-divider slot="divider">` and the date dividers vanish while the action dividers stay — the
+ * date feature is inert unless the carrier is slotted. See `.claude/plans/messages/dividers.md`.
  */
 /** @type {Story} */
 export const Dividers = {
   render: () => html`
-    <chx-chat
-      .userId=${"me"}
-      .messages=${makeDatedMessages()}
-      .messageElement=${renderDividerRow}
-      style="height: 100%;"
-    >
-      <chx-message-list slot="message-list">
+    ${actionDividerStyles}
+    <chx-chat .userId=${"me"} .messages=${makeDatedMessages()} style="height: 100%;">
+      <chx-message-list slot="message-list" class="dividers-story">
         <chx-divider slot="divider" sticky></chx-divider>
       </chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">

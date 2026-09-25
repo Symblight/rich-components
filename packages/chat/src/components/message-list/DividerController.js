@@ -1,3 +1,5 @@
+import { nothing } from "lit";
+
 /** @import { ChxMessage } from "../../types/message.js" */
 /** @import { ChxDivider } from "../divider/divider.js" */
 
@@ -110,12 +112,16 @@ export class DividerController {
     return this.shouldShow(message, index) ? DIVIDER_ESTIMATE : 0;
   }
 
-  /** The row's content: a `[divider, message]` pair when a divider is due, else the message untouched.
-   * @param {HTMLElement} messageElement @param {ChxMessage} message @param {number} index
-   * @returns {HTMLElement | HTMLElement[]} */
-  wrap(messageElement, message, index) {
-    if (!this.shouldShow(message, index)) return messageElement;
-    return [this.#build(message, index), messageElement];
+  /**
+   * The row's content, always a `[divider, message]` pair — `nothing` in the first slot when no
+   * divider is due. The fixed shape matters: returning a bare value some renders and an array on
+   * others makes Lit tear the ChildPart down and rebuild it, which would throw away the row's
+   * `<chx-message>` every time a date boundary appears or disappears.
+   * @param {unknown} row @param {ChxMessage} message @param {number} index
+   * @returns {unknown[]}
+   */
+  wrap(row, message, index) {
+    return [this.shouldShow(message, index) ? this.#build(message, index) : nothing, row];
   }
 
   /** Evicts cached dividers for message ids that didn't render this pass — same rendered-id set

@@ -1,47 +1,91 @@
 :host {
-  --chx-code-block-background-color: var(--md-sys-color-surface-container-high);
+  --chx-code-block-background-color: var(--md-sys-color-surface-container-low);
+  --chx-code-block-header-background-color: var(--md-sys-color-surface-container);
   --chx-code-block-border-color: var(--md-sys-color-outline-variant);
   --chx-code-block-header-color: var(--md-sys-color-on-surface-variant);
+  --chx-code-block-filename-color: var(--md-sys-color-on-surface);
   --chx-code-block-body-color: var(--md-sys-color-on-surface);
   --chx-code-block-border-radius: 0.75rem;
+  --chx-code-block-header-height: 2.5rem;
   --chx-code-block-font-family:
     "SF Mono", ui-monospace, "Cascadia Code", "Roboto Mono", Consolas, monospace;
   --chx-code-block-font-size: 0.8125rem;
+  --chx-code-block-line-height: 1.7;
+  --chx-code-block-padding-block: 0.75rem;
+  --chx-code-block-padding-inline: 0.875rem;
 
-  /* Default token palette — plain-language names, not CodeMirror's own tag jargon, so a consumer
-     can restyle without knowing @lezer/highlight's tagHighlighter internals. */
-  --chx-code-block-keyword-color: #ab47bc;
-  --chx-code-block-string-color: #2e7d32;
-  --chx-code-block-number-color: #d2691e;
-  --chx-code-block-comment-color: var(--md-sys-color-outline);
-  --chx-code-block-property-color: #1565c0;
-  --chx-code-block-type-color: #00897b;
-  --chx-code-block-tag-color: #c62828;
+  --chx-code-block-highlight-color: var(--md-sys-color-primary);
+  --chx-code-block-highlight-background-color: color-mix(
+    in srgb,
+    var(--md-sys-color-primary) 10%,
+    transparent
+  );
+  --chx-code-block-error-line-color: var(--md-sys-color-error);
+  --chx-code-block-error-line-background-color: color-mix(
+    in srgb,
+    var(--md-sys-color-error) 10%,
+    transparent
+  );
+  --chx-code-block-caret-color: var(--md-sys-color-primary);
+  --chx-code-block-prompt-color: var(--md-sys-color-primary);
+  --chx-code-block-number-gutter-color: var(--md-sys-color-on-surface-variant);
+  --chx-code-block-toggle-color: var(--md-sys-color-primary);
+  --chx-code-block-toast-background-color: var(--md-sys-color-inverse-surface);
+  --chx-code-block-toast-color: var(--md-sys-color-inverse-on-surface);
+
+  /* Extended palette: MD3 roles encode importance, syntax tokens just need to differ from each
+     other — so these are hand-picked hues (≥ 4.5:1 on surface-container-low), not primary/tertiary. */
+  --chx-code-block-keyword-color: #8b1a8b;
+  --chx-code-block-string-color: #0a6b2f;
+  --chx-code-block-number-color: #8a4b00;
+  --chx-code-block-comment-color: #5f6368;
+  --chx-code-block-function-color: #0b57d0;
+  --chx-code-block-type-color: #0f6b73;
+  --chx-code-block-punctuation-color: #5f6368;
+  --chx-code-block-property-color: var(--chx-code-block-body-color);
+  --chx-code-block-tag-color: #a8321f;
   --chx-code-block-invalid-color: var(--md-sys-color-error);
-  --chx-code-block-diff-added-color: #2e7d32;
-  --chx-code-block-diff-removed-color: #c62828;
+
+  --chx-code-block-diff-added-color: #0a5c2c;
+  --chx-code-block-diff-removed-color: #93211a;
+  --chx-code-block-diff-added-background-color: color-mix(in srgb, #1b7a3d 12%, transparent);
+  --chx-code-block-diff-removed-background-color: color-mix(in srgb, #b3261e 10%, transparent);
 
   display: flex;
   flex-direction: column;
 }
 
-/* Distinct hues carry real information here (unlike most of this package's --md-sys-color-*-only
-   theming), so a separate hand-picked dark set beats forcing 7 token colors onto MD3's 3 hue tokens
-   — same reasoning any syntax-highlighting theme ships light/dark variants instead of one palette. */
 @media (prefers-color-scheme: dark) {
   :host {
-    --chx-code-block-keyword-color: #ce93d8;
-    --chx-code-block-string-color: #81c784;
-    --chx-code-block-number-color: #ffb74d;
-    --chx-code-block-property-color: #64b5f6;
-    --chx-code-block-type-color: #4db6ac;
-    --chx-code-block-tag-color: #e57373;
-    --chx-code-block-diff-added-color: #81c784;
-    --chx-code-block-diff-removed-color: #e57373;
+    --chx-code-block-highlight-background-color: color-mix(
+      in srgb,
+      var(--md-sys-color-primary) 16%,
+      transparent
+    );
+    --chx-code-block-error-line-background-color: color-mix(
+      in srgb,
+      var(--md-sys-color-error) 16%,
+      transparent
+    );
+
+    --chx-code-block-keyword-color: #f0a8e8;
+    --chx-code-block-string-color: #81c995;
+    --chx-code-block-number-color: #f3bd77;
+    --chx-code-block-comment-color: #9aa0a6;
+    --chx-code-block-function-color: #a8c7fa;
+    --chx-code-block-type-color: #78d5dd;
+    --chx-code-block-punctuation-color: #9aa0a6;
+    --chx-code-block-tag-color: #f2b8b5;
+
+    --chx-code-block-diff-added-color: #a8dab5;
+    --chx-code-block-diff-removed-color: #f2b8b5;
+    --chx-code-block-diff-added-background-color: color-mix(in srgb, #81c995 14%, transparent);
+    --chx-code-block-diff-removed-background-color: color-mix(in srgb, #f2b8b5 14%, transparent);
   }
 }
 
 .code-block {
+  position: relative;
   display: flex;
   flex-direction: column;
   box-sizing: border-box;
@@ -51,18 +95,38 @@
   border-radius: var(--chx-code-block-border-radius);
 }
 
+:host([error]) .code-block {
+  border-color: color-mix(in srgb, var(--md-sys-color-error) 45%, transparent);
+}
+
 .code-block__header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 0.5rem 0.75rem;
+  gap: 0.5rem;
+  box-sizing: border-box;
+  min-block-size: var(--chx-code-block-header-height);
+  padding-block: 0.25rem;
+  padding-inline: 0.75rem 0.375rem;
+  background-color: var(--chx-code-block-header-background-color);
+  border-block-end: 1px solid var(--chx-code-block-border-color);
   color: var(--chx-code-block-header-color);
   font-size: 0.75rem;
+}
+
+/* Only the header turns red — tinting the whole body would make the output being inspected unreadable. */
+:host([error]) .code-block__header {
+  --chx-code-block-header-color: var(--md-sys-color-on-error-container);
+  --chx-code-block-filename-color: var(--md-sys-color-on-error-container);
+
+  background-color: var(--md-sys-color-error-container);
+  border-block-end-color: color-mix(in srgb, var(--md-sys-color-error) 30%, transparent);
 }
 
 .code-block__label-group {
   display: flex;
   align-items: center;
+  gap: 0.5rem;
   min-width: 0;
 }
 
@@ -72,45 +136,93 @@
   flex: none;
 }
 
-.code-block__label-group ::slotted(*) {
-  margin-inline-start: 0.375rem;
-}
-
 .code-block__actions ::slotted(*) {
   margin-inline-end: 0.25rem;
 }
 
 .code-block__label {
+  flex: none;
+  font-weight: 500;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+}
+
+/* A 1px rule, not "·" or "/" — a glyph would read as part of the path. */
+.code-block__separator {
+  flex: none;
+  inline-size: 1px;
+  block-size: 0.875rem;
+  background-color: var(--chx-code-block-border-color);
+}
+
+.code-block__filename {
   overflow: hidden;
+  color: var(--chx-code-block-filename-color);
+  font-family: var(--chx-code-block-font-family);
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
+.code-block__meta {
+  color: var(--chx-code-block-header-color);
+  font-family: var(--chx-code-block-font-family);
+  font-size: 0.71875rem;
+
+  & ::slotted(*) {
+    margin-inline-end: 0.5rem;
+  }
+}
+
 .code-block__button {
   --md-button-foreground-color: inherit;
-  --md-button-font-size: 0.8rem;
-  --md-button-font-weight: inherit;
+  --md-button-font-size: 0.75rem;
+  --md-button-font-weight: 500;
   --md-button-inline-start-space: 0.25rem;
   --md-button-inline-end-space: 0.25rem;
   --md-button-block-start-space: 0.125rem;
   --md-button-block-end-space: 0.125rem;
 }
 
-.code-block__body {
-  margin: 0;
-  overflow-x: auto;
-  padding: 0 0.75rem 0.75rem;
-  color: var(--chx-code-block-body-color);
-  font-family: var(--chx-code-block-font-family);
-  font-size: var(--chx-code-block-font-size);
-  line-height: 1.5;
+.code-block__icon-button {
+  --md-icon-button-font-size: 1.125rem;
+  --md-icon-button-foreground-color: var(--chx-code-block-header-color);
 
-  & code {
-    white-space: pre;
+  /* 32px target, matching the 40px header. */
+  &::part(button) {
+    padding: 0.4375rem;
+  }
+
+  &[selected] {
+    --md-icon-button-foreground-color: var(--md-sys-color-primary);
   }
 }
 
+.code-block__viewport {
+  position: relative;
+  display: flex;
+}
+
+.code-block__body {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+  box-sizing: border-box;
+  margin: 0;
+  overflow-x: auto;
+  padding-block: var(--chx-code-block-padding-block);
+  color: var(--chx-code-block-body-color);
+  font-family: var(--chx-code-block-font-family);
+  font-size: var(--chx-code-block-font-size);
+  line-height: var(--chx-code-block-line-height);
+  tab-size: 2;
+}
+
+.code-block__body:focus-visible {
+  outline: 2px solid var(--md-sys-color-primary);
+  outline-offset: -2px;
+}
+
 .code-block__body[contenteditable] {
+  padding-inline: var(--chx-code-block-padding-inline);
   white-space: pre;
   outline: none;
   cursor: text;
@@ -118,7 +230,228 @@
 
 .code-block__body[contenteditable]:focus-visible {
   outline: 2px solid var(--md-sys-color-primary);
-  outline-offset: -2px;
+}
+
+:host([wrap]) .code-block__body[contenteditable] {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* max-content, so a highlighted row's background still spans the full scrolled width. */
+.code-block__code {
+  display: block;
+  inline-size: max-content;
+  min-inline-size: 100%;
+}
+
+:host([wrap]) .code-block__code {
+  inline-size: auto;
+}
+
+/* Block rows replace the source newlines, which is why highlightToLines drops them. */
+.code-block__line {
+  display: flex;
+  min-block-size: 1lh;
+  padding-inline: var(--chx-code-block-padding-inline);
+}
+
+.code-block__text {
+  flex: 1;
+  min-inline-size: 0;
+  white-space: pre;
+}
+
+:host([wrap]) .code-block__text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+/* Dimmed and unselectable so a selection copies code, not numbers. */
+.code-block__number {
+  flex: none;
+  box-sizing: content-box;
+  min-inline-size: calc(var(--_gutter-digits) * 1ch);
+  padding-inline-end: 1.25rem;
+  color: var(--chx-code-block-number-gutter-color);
+  opacity: 0.55;
+  text-align: end;
+  user-select: none;
+}
+
+.code-block__line_highlighted {
+  background-color: var(--chx-code-block-highlight-background-color);
+  box-shadow: inset 2px 0 0 var(--chx-code-block-highlight-color);
+}
+
+.code-block__line_error {
+  background-color: var(--chx-code-block-error-line-background-color);
+  box-shadow: inset 2px 0 0 var(--chx-code-block-error-line-color);
+}
+
+/* The +/− sign stays next to the color — a diff must read without color vision too. */
+.code-block__line_added {
+  background-color: var(--chx-code-block-diff-added-background-color);
+}
+
+.code-block__line_removed {
+  background-color: var(--chx-code-block-diff-removed-background-color);
+}
+
+.code-block__line_meta {
+  color: var(--chx-code-block-comment-color);
+}
+
+.code-block__sign {
+  flex: none;
+  inline-size: 2ch;
+  opacity: 0.8;
+  user-select: none;
+  white-space: pre;
+}
+
+.code-block__line_added .code-block__number {
+  color: var(--chx-code-block-diff-added-color);
+  opacity: 0.9;
+}
+
+.code-block__line_removed .code-block__number {
+  color: var(--chx-code-block-diff-removed-color);
+  opacity: 0.9;
+}
+
+.code-block__prompt {
+  flex: none;
+  color: var(--chx-code-block-prompt-color);
+  user-select: none;
+  white-space: pre;
+}
+
+.code-block__line_added .code-block__sign {
+  color: var(--chx-code-block-diff-added-color);
+}
+
+.code-block__line_removed .code-block__sign {
+  color: var(--chx-code-block-diff-removed-color);
+}
+
+.code-block__caret {
+  display: inline-block;
+  inline-size: 0.5em;
+  block-size: 1.15em;
+  margin-inline-start: 2px;
+  vertical-align: -0.2em;
+  background-color: var(--chx-code-block-caret-color);
+  border-radius: 1px;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .code-block__caret {
+    animation: code-block-caret-blink 1s steps(1) infinite;
+  }
+}
+
+@keyframes code-block-caret-blink {
+  50% {
+    opacity: 0;
+  }
+}
+
+.code-block__viewport_collapsed .code-block__body {
+  max-block-size: calc(var(--_collapsed-lines) * 1lh + var(--chx-code-block-padding-block));
+  overflow-y: hidden;
+}
+
+.code-block__fade {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-end: 0;
+  block-size: 3.5rem;
+  pointer-events: none;
+  background: linear-gradient(transparent, var(--chx-code-block-background-color));
+}
+
+.code-block__toggle {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.375rem;
+  inline-size: 100%;
+  block-size: 2.25rem;
+  overflow: hidden;
+  padding: 0;
+  background-color: var(--chx-code-block-header-background-color);
+  border: none;
+  border-block-start: 1px solid var(--chx-code-block-border-color);
+  color: var(--chx-code-block-toggle-color);
+  font: inherit;
+  font-size: 0.78125rem;
+  font-weight: 500;
+  cursor: pointer;
+
+  /* MD3 state layer. */
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-color: currentColor;
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+
+  &:hover::before {
+    opacity: 0.08;
+  }
+
+  &:active::before {
+    opacity: 0.12;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--md-sys-color-primary);
+    outline-offset: -2px;
+  }
+}
+
+.code-block__toggle-icon {
+  display: inline-flex;
+  inline-size: 1rem;
+  block-size: 1rem;
+  fill: currentColor;
+  transition: transform 0.15s;
+
+  & svg {
+    inline-size: 100%;
+    block-size: 100%;
+  }
+}
+
+:host([expanded]) .code-block__toggle-icon {
+  transform: rotate(180deg);
+}
+
+.code-block__toast {
+  position: absolute;
+  z-index: 1;
+  inset-block-start: calc(var(--chx-code-block-header-height) + 0.375rem);
+  inset-inline-end: 0.625rem;
+  padding: 0.375rem 0.625rem;
+  background-color: var(--chx-code-block-toast-background-color);
+  border-radius: 0.5rem;
+  color: var(--chx-code-block-toast-color);
+  font-size: 0.75rem;
+  font-weight: 500;
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-0.25rem);
+  transition:
+    opacity 0.15s,
+    transform 0.15s;
+}
+
+.code-block__toast_visible {
+  opacity: 1;
+  transform: none;
 }
 
 .tok-keyword,
@@ -130,14 +463,14 @@
 
 .tok-string,
 .tok-string2,
-.tok-regexp,
-.tok-atom,
-.tok-bool,
-.tok-null {
+.tok-regexp {
   color: var(--chx-code-block-string-color);
 }
 
-.tok-number {
+.tok-number,
+.tok-bool,
+.tok-atom,
+.tok-null {
   color: var(--chx-code-block-number-color);
 }
 
@@ -149,8 +482,7 @@
 }
 
 .tok-propertyName,
-.tok-attributeName,
-.tok-variableName {
+.tok-attributeName {
   color: var(--chx-code-block-property-color);
 }
 
@@ -158,6 +490,16 @@
 .tok-className,
 .tok-namespace {
   color: var(--chx-code-block-type-color);
+}
+
+/* After property/variable rules on purpose — a call is tagged `tok-variableName tok-function`. */
+.tok-function {
+  color: var(--chx-code-block-function-color);
+}
+
+.tok-punctuation,
+.tok-operator {
+  color: var(--chx-code-block-punctuation-color);
 }
 
 .tok-tagName,
@@ -170,6 +512,7 @@
   color: var(--chx-code-block-invalid-color);
 }
 
+/* Editable-body diff colors only — read-only rows color via `.code-block__line_*` instead. */
 .tok-diffAdded {
   color: var(--chx-code-block-diff-added-color);
 }

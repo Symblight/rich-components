@@ -1,4 +1,4 @@
-import { highlightTree, classHighlighter } from "@lezer/highlight";
+import { highlightTree, classHighlighter, tagHighlighter, tags } from "@lezer/highlight";
 import {
   javascriptLanguage,
   typescriptLanguage,
@@ -66,54 +66,137 @@ function escapeHtml(text) {
   return text.replace(/[&<>]/g, (char) => ESCAPE_MAP[char]);
 }
 
+/** classHighlighter has no class for function names — layered on top so calls get their own color. */
+const functionHighlighter = tagHighlighter([
+  { tag: tags.function(tags.variableName), class: "tok-function" },
+  { tag: tags.function(tags.propertyName), class: "tok-function" },
+]);
+
 /**
- * Colors a unified diff by line prefix — added/removed/meta, nothing finer. Spans stay inline and
- * carry no newline of their own, so a full-line background is deliberately out of scope: it would
- * need `display: block`, which double-spaces against the `<pre>`'s own newlines.
- * @param {string} code
- * @returns {string}
+ * @typedef {{
+ *   html: string,
+ *   kind?: "added" | "removed" | "context" | "meta",
+ *   sign?: string,
+ *   prompt?: string,
+ *   hunk?: { oldStart: number, newStart: number },
+ * }} HighlightedLine
+ * `sign`/`prompt` are the line's prefix, peeled off before highlighting so the grammar only ever
+ * sees real source; `hunk` is set on a `@@ -a,b +c,d @@` meta line.
  */
-function highlightDiff(code) {
-  let html = "";
-  for (const line of code.split(/(?<=\n)/)) {
-    const newline = line.endsWith("\n") ? "\n" : "";
-    const body = newline ? line.slice(0, -1) : line;
-    const escaped = escapeHtml(body);
-    if (/^(diff |index |@@|\+\+\+|---)/.test(body))
-      html += `<span class="tok-diffMeta">${escaped}</span>`;
-    else if (body.startsWith("+")) html += `<span class="tok-diffAdded">${escaped}</span>`;
-    else if (body.startsWith("-")) html += `<span class="tok-diffRemoved">${escaped}</span>`;
-    else html += escaped;
-    html += newline;
-  }
-  return html;
+
+const DIFF_META = /^(diff |index |@@|\+\+\+|---)/;
+const HUNK = /^@@ -(\d+)(?:,\d+)? \+(\d+)/;
+
+/** Highlights plain source into one HTML string per line. A token spanning several lines (block
+ *  comment, template string) is split into one span per line, so every line is self-contained.
+ *  Every text run goes through `escapeHtml` exactly once — `code` is arbitrary user/app content.
+ * @param {string} code @param {string} lang @returns {string[]} */
+function highlightSource(code, lang) {
+  const language = LANGUAGES[lang]?.language;
+  if (!language) return code.split("\n").map(escapeHtml);
+
+  const lines = [""];
+  /** @param {string} text @param {string} [classes] */
+  const append = (text, classes) => {
+    text.split("\n").forEach((piece, index) => {
+      if (index > 0) lines.push("");
+      if (!piece) return;
+      const escaped = escapeHtml(piece);
+      lines[lines.length - 1] += classes ? `<span class="${classes}">${escaped}</span>` : escaped;
+    });
+  };
+
+  let lastPos = 0;
+  highlightTree(
+    language.parser.parse(code),
+    [classHighlighter, functionHighlighter],
+    (from, to, classes) => {
+      if (from > lastPos) append(code.slice(lastPos, from));
+      append(code.slice(from, to), classes);
+      lastPos = to;
+    },
+  );
+  if (lastPos < code.length) append(code.slice(lastPos));
+  return lines;
 }
 
 /**
- * Builds highlighted HTML for `code` — escaped text runs, highlighted ones wrapped in
- * `<span class="tok-...">` (CodeMirror's own `classHighlighter` naming, styled in code-block.css).
- * Unknown `lang`, or a known one with no `language` yet, returns `code` escaped and unwrapped.
- * Every text run goes through `escapeHtml` exactly once, highlighted or not — the one place a bug
- * here would be a real injection risk, since `code` is arbitrary user/app content.
+ * One entry per source line. With `diff` (implied by `lang === "diff"`), `code` is a unified diff:
+ * each line's `+`/`-`/space prefix becomes `sign`, and the rest is highlighted as `lang` — so a
+ * TypeScript diff keeps its syntax colors. With `prompt`, a leading `"<prompt> "` becomes `prompt`.
  * @param {string} code
  * @param {string} lang
- * @returns {string}
+ * @param {{ diff?: boolean, prompt?: string }} [options]
+ * @returns {HighlightedLine[]}
  */
+export function highlightToLines(code, lang, { diff = false, prompt = "" } = {}) {
+  const isDiff = diff || lang === "diff";
+  const promptPrefix = prompt ? `${prompt} ` : "";
+
+  /** @type {HighlightedLine[]} */
+  const lines = [];
+  /** Source text per non-meta line, in order — highlighted as one document so tokens stay intact. */
+  const sources = [];
+  for (const raw of code.split("\n")) {
+    if (isDiff && DIFF_META.test(raw)) {
+      const match = HUNK.exec(raw);
+      lines.push({
+        html: escapeHtml(raw),
+        kind: "meta",
+        hunk: match ? { oldStart: Number(match[1]), newStart: Number(match[2]) } : undefined,
+      });
+      continue;
+    }
+    /** @type {HighlightedLine} */
+    const line = { html: "" };
+    let source = raw;
+    if (isDiff) {
+      line.kind = raw[0] === "+" ? "added" : raw[0] === "-" ? "removed" : "context";
+      // Only a sign actually present in `code` — the editable body's textContent must stay `code`.
+      if (raw[0] === "+" || raw[0] === "-" || raw[0] === " ") {
+        line.sign = raw[0];
+        source = raw.slice(1);
+      }
+    }
+    if (promptPrefix && source.startsWith(promptPrefix)) {
+      line.prompt = promptPrefix;
+      source = source.slice(promptPrefix.length);
+    }
+    lines.push(line);
+    sources.push(source);
+  }
+
+  const highlighted = highlightSource(sources.join("\n"), lang === "diff" ? "" : lang);
+  let index = 0;
+  for (const line of lines) {
+    if (line.kind !== "meta") line.html = highlighted[index++] ?? "";
+  }
+  return lines;
+}
+
+/** @param {HighlightedLine} line @returns {string} */
+export function renderLinePrefix(line) {
+  const sign = line.sign ? `<span class="code-block__sign">${line.sign}</span>` : "";
+  const prompt = line.prompt
+    ? `<span class="code-block__prompt">${escapeHtml(line.prompt)}</span>`
+    : "";
+  return sign + prompt;
+}
+
+/** Inline per-line colors for the editable body, which has no block rows to carry a line class. */
+/** @type {Partial<Record<string, string>>} */
+const DIFF_TOKEN = { added: "tok-diffAdded", removed: "tok-diffRemoved", meta: "tok-diffMeta" };
+
+/** Flat markup for the editable body. Prefixes stay in as real text so its `textContent` is `code`.
+ * @param {string} code
+ * @param {string} lang
+ * @returns {string} */
 export function highlightToHTML(code, lang) {
-  if (lang === "diff") return highlightDiff(code);
-
-  const language = LANGUAGES[lang]?.language;
-  if (!language) return escapeHtml(code);
-
-  const tree = language.parser.parse(code);
-
-  let html = "";
-  let lastPos = 0;
-  highlightTree(tree, classHighlighter, (from, to, classes) => {
-    if (from > lastPos) html += escapeHtml(code.slice(lastPos, from));
-    html += `<span class="${classes}">${escapeHtml(code.slice(from, to))}</span>`;
-    lastPos = to;
-  });
-  if (lastPos < code.length) html += escapeHtml(code.slice(lastPos));
-  return html;
+  return highlightToLines(code, lang)
+    .map((line) => {
+      const markup = renderLinePrefix(line) + line.html;
+      const token = line.kind && DIFF_TOKEN[line.kind];
+      return token ? `<span class="${token}">${markup}</span>` : markup;
+    })
+    .join("\n");
 }

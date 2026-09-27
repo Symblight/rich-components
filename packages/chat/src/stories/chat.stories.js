@@ -20,7 +20,16 @@ import "../components/unread-marker/unread-marker.js";
 import "../components/divider/divider.js";
 import "../components/chip/chip.js";
 import "../components/paste-long-text/paste-long-text.js";
+import "../components/attachments/attachments.js";
+import "../components/attachment/attachment.js";
 import { createSplitOnSendHandler } from "../utils/split-message-parts.js";
+import {
+  createPaginatedAdapter,
+  createRealtimeStub,
+  createReplyAdapter,
+} from "./shared/adapters.js";
+import { createBuiltInSentCards } from "./shared/attachments.js";
+import { ASSISTANT, ME, makeMessage, makeMessages, textPart } from "./shared/fixtures.js";
 
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
@@ -81,73 +90,12 @@ export const EmptyState = {
   `,
 };
 
-/** @param {number} count */
-function makeMessages(count) {
-  return Array.from({ length: count }, (_, i) => {
-    const own = i % 2 === 0;
-    return {
-      id: `msg-${i}`,
-      authorId: own ? "me" : "assistant",
-      own,
-      createdAt: Date.now() + i,
-      status: /** @type {"sent"} */ ("sent"),
-      parts: [
-        {
-          id: `msg-${i}-t1`,
-          type: "text",
-          text: own
-            ? `My message #${i}`
-            : `Assistant reply #${i}, a bit longer to see wrapping happen.`,
-        },
-      ],
-    };
-  });
-}
-
-const FAKE_REPLIES = [
-  "That's a great question — let me think about that for a moment.",
-  "Sure thing, here's what I'd suggest based on what you described.",
-  "Good point. Let's walk through this step by step.",
-  "Here's a quick breakdown of the key points to consider.",
-  "I hear you — that's a common thing to run into, here's how I'd approach it.",
-];
-
 /**
- * A fake `adapter.sendMessage` with a real delay *before* the first chunk arrives — long enough to
- * see `chx-message-list`'s `streaming` property (auto-derived from `chx-chat`'s own
- * `#activeDeliveries` vs. reply-shell state) go true the instant the send starts, then false the
- * instant the reply's first chunk lands. No placeholder message, no word-by-word animation — the
- * whole reply arrives in one chunk once the delay is up; the `streaming` indicator (a slotted
- * `<chx-streaming-indicator>`) is what carries the "thinking" feedback instead.
+ * The whole reply lands in one chunk after 1.8s, long enough to see `chx-message-list`'s
+ * `streaming` go true the instant a send starts and false once the reply arrives.
  */
 function createSlowReplyAdapter() {
-  let replyCount = 0;
-  return {
-    sendMessage: async (
-      /** @type {any} */ message,
-      /** @type {{signal: AbortSignal}} */ { signal },
-    ) => {
-      await new Promise((resolve) => setTimeout(resolve, 1800)); // nothing sent yet — chx-chat's own
-      //   state (a delivery in flight, no reply message) is what drives `streaming`, not this story
-      if (signal.aborted) return;
-      const replyId = `reply-${message.id}`;
-      const partId = `${replyId}-t1`;
-      const text = FAKE_REPLIES[replyCount++ % FAKE_REPLIES.length];
-      return new ReadableStream({
-        start(controller) {
-          controller.enqueue({
-            messageId: replyId,
-            authorId: "assistant",
-            partId,
-            partType: "text",
-            delta: { text },
-          });
-          controller.enqueue({ kind: "finish", messageId: replyId });
-          controller.close();
-        },
-      });
-    },
-  };
+  return createReplyAdapter({ delayMs: 1800 });
 }
 
 /**
@@ -315,36 +263,20 @@ export const ReadTracking = {
     let generation = 0;
 
     /** @param {number} count */
-    function makeUnreadMessages(count) {
-      return Array.from({ length: count }, (_, i) => {
-        const own = i % 3 === 0;
-        return {
-          id: `read-msg-${generation}-${i}`,
-          authorId: own ? "me" : "assistant",
-          own,
-          createdAt: Date.now() + i,
-          status: /** @type {"sent"} */ ("sent"),
-          readState: own ? undefined : /** @type {"unread"} */ ("unread"),
-          parts: [
-            {
-              id: `read-msg-${generation}-${i}-t1`,
-              type: "text",
-              text: own
-                ? `My message #${i}`
-                : `Unread reply #${i} — scroll past me to mark me read.`,
-            },
-          ],
-        };
-      });
-    }
+    const makeUnreadMessages = (count) =>
+      makeMessages(count, {
+        prefix: `read-msg-${generation}`,
+        isOwn: (i) => i % 3 === 0,
+        text: (i, own) =>
+          own ? `My message #${i}` : `Unread reply #${i} — scroll past me to mark me read.`,
+      }).map((message) =>
+        message.own ? message : { ...message, readState: /** @type {const} */ ("unread") },
+      );
 
     /** @type {import("../components/base/chat.js").ChxChat | undefined} */
     let chatEl;
-    // Captured from adapter.subscribe() below — this is the same onEvent chx-chat already passes to
-    // any real adapter's own subscribe(), routed to RealtimeSyncController. Simulating a call to it
-    // here stands in for a server pushing a ChxReadEvent, without a real backend.
-    /** @type {((event: {type: "read", conversationId?: string, messageId: string}) => void) | undefined} */
-    let onReadEvent;
+    // Stands in for a server pushing a ChxReadEvent through the adapter's own subscribe().
+    const realtime = createRealtimeStub();
 
     return html`
       <div
@@ -359,12 +291,12 @@ export const ReadTracking = {
             return;
           }
           if (target.closest(".read-tracking-story__simulate-read-event")) {
-            if (!chatEl || !onReadEvent) return;
+            if (!chatEl) return;
             // Toggles the first still-unread message — same messageId shape a real ChxReadEvent
             // carries, per src/types/realtime.js.
             const message = chatEl.messages.find((m) => m.readState === "unread");
             if (!message) return;
-            onReadEvent({
+            realtime.emitEvent({
               type: "read",
               conversationId: message.conversationId,
               messageId: message.id,
@@ -387,12 +319,7 @@ export const ReadTracking = {
             markRead: async (/** @type {{conversationId?: string, messageId: string}} */ input) => {
               console.log("adapter.markRead", input);
             },
-            subscribe: (/** @type {{onEvent: (event: any) => void}} */ handlers) => {
-              onReadEvent = handlers.onEvent;
-              return () => {
-                onReadEvent = undefined;
-              };
-            },
+            subscribe: realtime.subscribe,
           }}
           read-tracking
           style="flex: 1; min-height: 0;"
@@ -538,14 +465,6 @@ function makeRandomText(index) {
   return Array.from({ length: sentenceCount }, (_, i) => makeSentence(index * 97 + i)).join(" ");
 }
 
-/** Same placeholder photos as conversations.stories.js. @param {string} name */
-function avatarUrl(name) {
-  return `https://i.pravatar.cc/71?u=${encodeURIComponent(name)}`;
-}
-
-const ME = { name: "You", avatarUrl: avatarUrl("you") };
-const ASSISTANT = { name: "Assistant", avatarUrl: avatarUrl("assist") };
-
 const HISTORY_MESSAGES_PER_DAY = 60;
 
 /**
@@ -560,24 +479,49 @@ function historyCreatedAt(index) {
   return Date.now() - days * 86_400_000 - minutes * 60_000;
 }
 
-/** @param {number} index */
-function makeHistoryMessage(index) {
+/** A tiny inline SVG, so the image card has a real preview to show. @param {string} name @param {string} fill */
+function mockImageFile(name, fill) {
+  const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="160" height="120"><rect width="160" height="120" fill="${fill}"/><circle cx="80" cy="60" r="28" fill="#fff" opacity=".7"/></svg>`;
+  return new File([svg], name, { type: "image/svg+xml" });
+}
+
+/** `size` zero bytes — only the card's name/type/size matter. @param {string} name @param {string} type @param {number} size */
+function mockFile(name, type, size) {
+  return new File([new Uint8Array(size)], name, { type });
+}
+
+const MOCK_FILES = [
+  () => mockFile("report.pdf", "application/pdf", 245_760),
+  () => mockImageFile("diagram.svg", "#6750a4"),
+  () => mockFile("notes.txt", "text/plain", 3_120),
+  () => mockImageFile("screenshot.svg", "#386a20"),
+  () => mockFile("dataset.csv", "text/csv", 58_400),
+];
+
+/** Every 7th message carries one or two files, picked deterministically. @param {number} index */
+function mockAttachmentParts(index) {
+  if (index % 7 !== 3) return [];
+  const count = 1 + Math.floor(seededRandom(index * 13) * 2);
+  return Array.from({ length: count }, (_, i) => ({
+    id: `hist-${index}-a${i}`,
+    type: "attachment",
+    attachment: MOCK_FILES[Math.floor(seededRandom(index * 17 + i) * MOCK_FILES.length)](),
+  }));
+}
+
+/** @param {number} index @param {boolean} [withAttachments] */
+function makeHistoryMessage(index, withAttachments = false) {
   const own = index % 3 === 0;
-  return {
+  return makeMessage({
     id: `hist-${index}`,
-    authorId: own ? "me" : "assistant",
-    author: own ? ME : ASSISTANT,
     own,
+    author: own ? ME : ASSISTANT,
     createdAt: historyCreatedAt(index),
-    status: /** @type {"sent"} */ ("sent"),
     parts: [
-      {
-        id: `hist-${index}-t1`,
-        type: "text",
-        text: `#${index}: ${makeRandomText(index)}`,
-      },
+      textPart(`hist-${index}-t1`, `#${index}: ${makeRandomText(index)}`),
+      ...(withAttachments ? mockAttachmentParts(index) : []),
     ],
-  };
+  });
 }
 
 /**
@@ -589,17 +533,15 @@ function makeHistoryMessage(index) {
  * `Pagination` story below uses — the initial-loading stories pass a longer one so the indicator
  * stays comfortably visible while looking at the story, not just for one paint.
  * @param {number} [delayMs]
+ * @param {{withAttachments?: boolean}} [options] - mock files on some messages (needs `partElements.attachment`)
  */
-function createPaginatedAdapter(delayMs = 600) {
-  return {
-    listMessages: async (/** @type {{cursor?: string}} */ { cursor }) => {
-      await new Promise((resolve) => setTimeout(resolve, delayMs)); // simulated network latency
-      const end = cursor ? Number(cursor) : PAGINATION_TOTAL_HISTORY;
-      const start = Math.max(0, end - PAGINATION_PAGE_SIZE);
-      const messages = Array.from({ length: end - start }, (_, i) => makeHistoryMessage(start + i));
-      return { messages, cursor: String(start), hasMore: start > 0 };
-    },
-  };
+function createHistoryAdapter(delayMs = 600, { withAttachments = false } = {}) {
+  return createPaginatedAdapter({
+    total: PAGINATION_TOTAL_HISTORY,
+    pageSize: PAGINATION_PAGE_SIZE,
+    delayMs,
+    makeMessage: (index) => makeHistoryMessage(index, withAttachments),
+  });
 }
 
 /**
@@ -626,6 +568,10 @@ function createPaginatedAdapter(delayMs = 600) {
  * `<chx-divider slot="divider" sticky>` adds date dividers — the history steps back a day every 60
  * messages (see `historyCreatedAt`) — and a sticky day label while scrolling.
  *
+ * `<chx-attachments>` in the composer (the leading `+` opens the picker; drop or paste files too) —
+ * sent files render as cards in the list via `partElements.attachment`, and so do the mocked files
+ * every 7th history message carries (`mockAttachmentParts`).
+ *
  * The Virtualization control switches `no-virtualization` — every message in real DOM instead of a
  * windowed list; the chat is recreated on a switch, starting from the newest page again.
  */
@@ -636,49 +582,57 @@ export const Pagination = {
     compact: { name: "Compact mode", control: "boolean" },
     virtualization: { name: "Virtualization", control: "boolean" },
   },
-  render: (args) => html`
-    <div
-      class="pagination-story"
-      style="height: 100%; display: flex; flex-direction: column; gap: 0.5rem;"
-      @click=${(/** @type {MouseEvent} */ event) => {
-        if (!(/** @type {HTMLElement} */ (event.target).closest(".pagination-story__load-more")))
-          return;
-        const container = /** @type {HTMLElement} */ (event.currentTarget);
-        /** @type {(HTMLElement & {loadMoreHistory: () => Promise<void>}) | null} */ (
-          container.querySelector("chx-chat")
-        )?.loadMoreHistory();
-      }}
-    >
-      <md-button
-        class="pagination-story__load-more"
-        variant="outlined"
-        style="align-self: flex-start;"
+  render: (args) => {
+    const sentCards = createBuiltInSentCards();
+    return html`
+      <div
+        class="pagination-story"
+        style="height: 100%; display: flex; flex-direction: column; gap: 0.5rem;"
+        @click=${(/** @type {MouseEvent} */ event) => {
+          if (!(/** @type {HTMLElement} */ (event.target).closest(".pagination-story__load-more")))
+            return;
+          const container = /** @type {HTMLElement} */ (event.currentTarget);
+          /** @type {(HTMLElement & {loadMoreHistory: () => Promise<void>}) | null} */ (
+            container.querySelector("chx-chat")
+          )?.loadMoreHistory();
+        }}
       >
-        Load older messages
-      </md-button>
-      ${keyed(
-        args.virtualization,
-        html`<chx-chat
-          ?no-virtualization=${!args.virtualization}
-          .userId=${"me"}
-          .adapter=${createPaginatedAdapter()}
-          .compact=${args.compact}
-          style="flex: 1; min-height: 0;"
+        <md-button
+          class="pagination-story__load-more"
+          variant="outlined"
+          style="align-self: flex-start;"
         >
-          <chx-message-list slot="message-list" author-display="all">
-            <chx-divider slot="divider" sticky></chx-divider>
-            <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
-            <chx-scroll-to-bottom-affordance
-              slot="scroll-to-bottom"
-            ></chx-scroll-to-bottom-affordance>
-          </chx-message-list>
-          <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
-            <md-button slot="actions" variant="text">Opus 4.8</md-button>
-          </chx-message-composer>
-        </chx-chat>`,
-      )}
-    </div>
-  `,
+          Load older messages
+        </md-button>
+        ${keyed(
+          args.virtualization,
+          html`<chx-chat
+            ?no-virtualization=${!args.virtualization}
+            .userId=${"me"}
+            .adapter=${createHistoryAdapter(600, { withAttachments: true })}
+            .compact=${args.compact}
+            .partElements=${sentCards.partElements}
+            style="flex: 1; min-height: 0;"
+          >
+            <chx-message-list slot="message-list" author-display="all">
+              <chx-divider slot="divider" sticky></chx-divider>
+              <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
+              <chx-scroll-to-bottom-affordance
+                slot="scroll-to-bottom"
+              ></chx-scroll-to-bottom-affordance>
+            </chx-message-list>
+            <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
+              <md-icon-button slot="leading" @click=${sentCards.open}>
+                ${unsafeSVG(plus)}
+              </md-icon-button>
+              <chx-attachments slot="attachments" ${sentCards.attachmentsRef}></chx-attachments>
+              <md-button slot="actions" variant="text">Opus 4.8</md-button>
+            </chx-message-composer>
+          </chx-chat>`,
+        )}
+      </div>
+    `;
+  },
 };
 
 /**
@@ -687,7 +641,7 @@ export const Pagination = {
  * customizations at once: `delay="800"` (ms to wait, once connected, before actually rendering —
  * skips the flash entirely on a fetch that settles faster than that) and a custom `<md-skeleton
  * variant="circular">` in place of the default `<md-progress-circular>`, via `chx-loading-history`'s
- * own plain `<slot>`. `createPaginatedAdapter`'s delay here (3s) is well past `delay`, so the
+ * own plain `<slot>`. `createHistoryAdapter`'s delay here (3s) is well past `delay`, so the
  * indicator is still visible — try setting `delay` above 3000 instead to see a fetch settle with the
  * indicator never appearing at all.
  */
@@ -715,7 +669,7 @@ export const LoadingHistoryCustomDelay = {
       </md-button>
       <chx-chat
         .userId=${"me"}
-        .adapter=${createPaginatedAdapter(3000)}
+        .adapter=${createHistoryAdapter(3000)}
         style="flex: 1; min-height: 0;"
       >
         <chx-message-list slot="message-list">
@@ -751,7 +705,7 @@ export const LoadingHistoryCustomDelay = {
 /** @type {Story} */
 export const InitialLoadingCustom = {
   render: () => html`
-    <chx-chat .userId=${"me"} .adapter=${createPaginatedAdapter(2500)} style="height: 500px;">
+    <chx-chat .userId=${"me"} .adapter=${createHistoryAdapter(2500)} style="height: 500px;">
       <chx-message-list slot="message-list">
         <div
           slot="initial-loading"
@@ -824,8 +778,12 @@ export const ContentAlignStart = {
 /** chx-message-list is optional — chx-chat lays out just the composer fine without one. */
 /** @type {Story} */
 export const ComposerOnly = {
-  render: () => html`
-    <chx-chat>
+  args: { compact: false },
+  argTypes: {
+    compact: { name: "Compact mode", control: "boolean" },
+  },
+  render: (args) => html`
+    <chx-chat .compact=${args.compact}>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
       </chx-message-composer>
@@ -969,39 +927,34 @@ function makeDatedMessages() {
     1: "Alex added Max to the conversation",
     3: "Sasha renamed the chat “Release planning”",
   };
-  /** @type {any[]} */
+  /** @type {import("../types/message.js").ChxMessage[]} */
   const messages = [];
   let n = 0;
   dayBases.forEach((base, day) => {
     for (let i = 0; i < perDay; i++) {
       const own = n % 2 === 0;
-      messages.push({
-        id: `dm-${n}`,
-        authorId: own ? "me" : "assistant",
-        own,
-        createdAt: base + n * 1000, // ascending overall — day base dominates, n breaks ties
-        status: /** @type {"sent"} */ ("sent"),
-        parts: [
-          {
-            id: `dm-${n}-t1`,
-            type: "text",
-            text: own ? `My message #${n}` : `Assistant reply #${n} (day ${day + 1}).`,
-          },
-        ],
-      });
+      messages.push(
+        makeMessage({
+          id: `dm-${n}`,
+          own,
+          createdAt: base + n * 1000, // ascending overall — day base dominates, n breaks ties
+          text: own ? `My message #${n}` : `Assistant reply #${n} (day ${day + 1}).`,
+        }),
+      );
       n++;
     }
     // an action divider (a system part) after the day's messages, on a couple of days
     const action = /** @type {Record<number, string>} */ (actions)[day];
     if (action) {
-      messages.push({
-        id: `dm-sys-${n}`,
-        authorId: "system",
-        own: false,
-        createdAt: base + n * 1000,
-        status: /** @type {"sent"} */ ("sent"),
-        parts: [{ id: `dm-sys-${n}-t1`, type: "system", text: action }],
-      });
+      messages.push(
+        makeMessage({
+          id: `dm-sys-${n}`,
+          own: false,
+          authorId: "system",
+          createdAt: base + n * 1000,
+          parts: [{ id: `dm-sys-${n}-t1`, type: "system", text: action }],
+        }),
+      );
       n++;
     }
   });
@@ -1089,22 +1042,12 @@ export const CustomParts = {
       .userId=${"me"}
       .partElements=${{ "ticket-summary": renderTicketSummaryPart }}
       .messages=${[
-        {
-          id: "msg-1",
-          authorId: "me",
-          own: true,
-          createdAt: Date.now(),
-          status: "sent",
-          parts: [{ id: "msg-1-t1", type: "text", text: "What's the status on my last ticket?" }],
-        },
-        {
+        makeMessage({ id: "msg-1", own: true, text: "What's the status on my last ticket?" }),
+        makeMessage({
           id: "msg-2",
-          authorId: "assistant",
           own: false,
-          createdAt: Date.now(),
-          status: "sent",
           parts: [
-            { id: "msg-2-t1", type: "text", text: "Here's the latest:" },
+            textPart("msg-2-t1", "Here's the latest:"),
             {
               id: "msg-2-c1",
               type: "ticket-summary",
@@ -1113,7 +1056,7 @@ export const CustomParts = {
               summary: "Waiting on a screen recording from the customer to reproduce the issue.",
             },
           ],
-        },
+        }),
       ]}
     >
       <chx-message-list slot="message-list"></chx-message-list>

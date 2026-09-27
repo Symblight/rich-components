@@ -8,69 +8,22 @@ import "../index.js";
 import "../components/suggestion-list/suggestion-list.js";
 import "../components/suggestion/suggestion.js";
 
+import { createReplyAdapter } from "./shared/adapters.js";
+import { makeMessages } from "./shared/fixtures.js";
+
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
   title: "Suggestions API",
   component: "chx-suggestion-list",
   tags: ["autodocs"],
+  args: { compact: false },
+  argTypes: {
+    compact: { name: "Compact mode", control: "boolean" },
+  },
 };
 export default meta;
 
 /** @typedef {import("@storybook/web-components").StoryObj} Story */
-
-const FAKE_REPLIES = [
-  "Sure — here's a draft to get you started.",
-  "Good question, let's break it down.",
-  "Here's a summary of the key points.",
-];
-
-/**
- * Same shape as chat.stories.js's own createSlowReplyAdapter — kept local since these stories don't
- * import from that file. A short, real delay before the first chunk so a click's fill-then-send (or
- * auto-submit) is visibly followed by a reply, not an instant no-op.
- */
-function createReplyAdapter() {
-  let replyCount = 0;
-  return {
-    sendMessage: async (
-      /** @type {any} */ message,
-      /** @type {{signal: AbortSignal}} */ { signal },
-    ) => {
-      await new Promise((resolve) => setTimeout(resolve, 600));
-      if (signal.aborted) return;
-      const replyId = `reply-${message.id}`;
-      const text = FAKE_REPLIES[replyCount++ % FAKE_REPLIES.length];
-      return new ReadableStream({
-        start(controller) {
-          controller.enqueue({
-            messageId: replyId,
-            authorId: "assistant",
-            partId: `${replyId}-t1`,
-            partType: "text",
-            delta: { text },
-          });
-          controller.enqueue({ kind: "finish", messageId: replyId });
-          controller.close();
-        },
-      });
-    },
-  };
-}
-
-/** @param {number} count */
-function makeMessages(count) {
-  return Array.from({ length: count }, (_, i) => {
-    const own = i % 2 === 0;
-    return {
-      id: `msg-${i}`,
-      authorId: own ? "me" : "assistant",
-      own,
-      createdAt: Date.now() + i,
-      status: /** @type {"sent"} */ ("sent"),
-      parts: [{ id: `msg-${i}-t1`, type: "text", text: own ? `My message #${i}` : `Reply #${i}` }],
-    };
-  });
-}
 
 /**
  * Default behavior: suggestions show while the thread is empty, disappear the moment the first
@@ -80,8 +33,8 @@ function makeMessages(count) {
  */
 /** @type {Story} */
 export const Basic = {
-  render: () => html`
-    <chx-chat .userId=${"me"} .adapter=${createReplyAdapter()}>
+  render: (args) => html`
+    <chx-chat .compact=${args.compact} .userId=${"me"} .adapter=${createReplyAdapter()}>
       <chx-message-list slot="message-list"></chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <chx-suggestion-list slot="suggestions">
@@ -102,8 +55,8 @@ export const Basic = {
  */
 /** @type {Story} */
 export const AutoSubmit = {
-  render: () => html`
-    <chx-chat .userId=${"me"} .adapter=${createReplyAdapter()}>
+  render: (args) => html`
+    <chx-chat .compact=${args.compact} .userId=${"me"} .adapter=${createReplyAdapter()}>
       <chx-message-list slot="message-list"></chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <chx-suggestion-list slot="suggestions" auto-submit>
@@ -125,8 +78,13 @@ export const AutoSubmit = {
  */
 /** @type {Story} */
 export const AlwaysVisible = {
-  render: () => html`
-    <chx-chat .userId=${"me"} .messages=${makeMessages(4)} .adapter=${createReplyAdapter()}>
+  render: (args) => html`
+    <chx-chat
+      .compact=${args.compact}
+      .userId=${"me"}
+      .messages=${makeMessages(4)}
+      .adapter=${createReplyAdapter()}
+    >
       <chx-message-list slot="message-list"></chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <chx-suggestion-list slot="suggestions" always-visible>
@@ -146,8 +104,8 @@ export const AlwaysVisible = {
  */
 /** @type {Story} */
 export const ValueDiffersFromLabel = {
-  render: () => html`
-    <chx-chat .userId=${"me"} .adapter=${createReplyAdapter()}>
+  render: (args) => html`
+    <chx-chat .compact=${args.compact} .userId=${"me"} .adapter=${createReplyAdapter()}>
       <chx-message-list slot="message-list"></chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <chx-suggestion-list slot="suggestions">
@@ -217,7 +175,7 @@ function renderSuggestionPack(list, pack) {
  */
 /** @type {Story} */
 export const Dynamic = {
-  render: () => {
+  render: (args) => {
     const packNames = Object.keys(SUGGESTION_PACKS);
     let packIndex = 0;
 
@@ -238,7 +196,7 @@ export const Dynamic = {
     };
 
     return html`
-      <chx-chat .userId=${"me"} .adapter=${createReplyAdapter()}>
+      <chx-chat .compact=${args.compact} .userId=${"me"} .adapter=${createReplyAdapter()}>
         <chx-message-list slot="message-list"></chx-message-list>
         <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
           <chx-suggestion-list

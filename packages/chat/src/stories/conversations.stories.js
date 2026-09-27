@@ -6,6 +6,9 @@ import "@symblight/wc-material/button";
 import "../index.js";
 import "../components/typing-indicator/typing-indicator.js";
 
+import { createPaginatedAdapter, createRealtimeStub } from "./shared/adapters.js";
+import { makeMessage, makeUser } from "./shared/fixtures.js";
+
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
   title: "Conversations API",
@@ -15,17 +18,6 @@ const meta = {
 export default meta;
 
 /** @typedef {import("@storybook/web-components").StoryObj} Story */
-
-/** @param {string} name @param {"system" | "user" | "assistant"} [role] @returns {import("../types/conversation.js").ChxUser} */
-function makeUser(name, role) {
-  return {
-    id: name,
-    displayName: name,
-    role,
-    // chx-conversations falls back to the first participant's avatar when the conversation has none
-    avatarUrl: `https://i.pravatar.cc/72?u=${encodeURIComponent(name)}`,
-  };
-}
 
 /** @type {import("../types/conversation.js").ChxConversation[]} */
 const CONVERSATIONS = [
@@ -77,24 +69,16 @@ const PAGE_SIZE = 15;
 function makeConversationMessage(conversationId, index) {
   const own = index % 3 === 0;
   const title = CONVERSATIONS.find((c) => c.id === conversationId)?.title ?? conversationId;
-  return {
+  return makeMessage({
     id: `${conversationId}-msg-${index}`,
     conversationId,
-    authorId: own ? "me" : "assistant",
     own,
     createdAt: Date.now() + index,
-    status: /** @type {"sent"} */ ("sent"),
     // incoming (not-own) messages start unread, so the real read-tracking feature (chx-message-read,
     // gated on readState === "unread") actually fires as they scroll into view — see the story doc.
-    readState: /** @type {"unread" | undefined} */ (own ? undefined : "unread"),
-    parts: [
-      {
-        id: `${conversationId}-msg-${index}-t1`,
-        type: "text",
-        text: own ? `Me, #${index} in ${title}` : `Reply #${index} in ${title}.`,
-      },
-    ],
-  };
+    readState: own ? undefined : "unread",
+    text: own ? `Me, #${index} in ${title}` : `Reply #${index} in ${title}.`,
+  });
 }
 
 /**
@@ -104,41 +88,19 @@ function makeConversationMessage(conversationId, index) {
  * independent `cursor`/`hasMore` — paged out to `HISTORY_SIZE` messages, `PAGE_SIZE` at a time —
  * tracked internally by `chx-chat`'s own `PaginationController`, not here.
  *
- * Also implements `subscribe` purely so this story can simulate an inbound realtime channel —
- * `emit`/`emitRealtimeEvent` are test-only hooks this demo calls from its own buttons/timers; a real
- * adapter would call the captured `onMessage`/`onEvent` itself from whatever socket/channel handler
- * it owns, never exposing methods like these. Kept as two separate hooks, not one combined `emit`,
- * because this package keeps `onMessage`/`onEvent` as two separate `subscribe` handlers.
+ * `subscribe` is a realtime stub: the story's own buttons/timers call `emitMessage`/`emitEvent` to
+ * stand in for a backend pushing through `onMessage`/`onEvent`.
  */
 function createConversationsAdapter() {
-  /** @type {((message: import("../types/message.js").ChxMessage) => void) | undefined} */
-  let onMessage;
-  /** @type {((event: import("../types/realtime.js").ChxRealtimeEvent) => void) | undefined} */
-  let onEvent;
   return {
-    listMessages: async (
-      /** @type {{conversationId?: string, cursor?: string}} */ { conversationId, cursor },
-    ) => {
-      await new Promise((resolve) => setTimeout(resolve, 400)); // simulated network latency
-      const end = cursor ? Number(cursor) : HISTORY_SIZE;
-      const start = Math.max(0, end - PAGE_SIZE);
-      const messages = Array.from({ length: end - start }, (_, i) =>
-        makeConversationMessage(/** @type {string} */ (conversationId), start + i),
-      );
-      return { messages, cursor: String(start), hasMore: start > 0 };
-    },
-    subscribe: (/** @type {{onMessage: typeof onMessage, onEvent: typeof onEvent}} */ handlers) => {
-      onMessage = handlers.onMessage;
-      onEvent = handlers.onEvent;
-      return () => {
-        onMessage = undefined;
-        onEvent = undefined;
-      };
-    },
-    /** Fake incoming message push — used by "Start flood chats" instead of calling `chatEl.addMessage()` directly. @param {import("../types/message.js").ChxMessage} message */
-    emit: (message) => onMessage?.(message),
-    /** Fake incoming realtime event — used by the "Simulate…" buttons. @param {import("../types/realtime.js").ChxRealtimeEvent} event */
-    emitRealtimeEvent: (event) => onEvent?.(event),
+    ...createPaginatedAdapter({
+      total: HISTORY_SIZE,
+      pageSize: PAGE_SIZE,
+      delayMs: 400,
+      makeMessage: (index, { conversationId }) =>
+        makeConversationMessage(/** @type {string} */ (conversationId), index),
+    }),
+    ...createRealtimeStub(),
   };
 }
 
@@ -194,11 +156,11 @@ function createConversationsAdapter() {
  *
  * "Reset all chats" clears every conversation's message cache (`cache.clear()`, no argument) and
  * their previews, then `refresh()` re-fetches the visible one. "Start flood chats" pushes a bounded
- * burst of fake inbound messages via `adapter.emit` (the story's stand-in for a backend calling
+ * burst of fake inbound messages via `adapter.emitMessage` (the story's stand-in for a backend calling
  * `subscribe`'s `onMessage`) at random conversations — a backgrounded conversation accumulates them
  * silently in its cache, its unread badge climbing as they arrive.
  *
- * The "Simulate…" buttons drive `adapter.subscribe`'s `onEvent` via `emitRealtimeEvent`:
+ * The "Simulate…" buttons drive `adapter.subscribe`'s `onEvent` via `emitEvent`:
  * - "Simulate typing" — fires a `typing` event for the active conversation. Typing is now
  *   per-conversation in `chx-chat` (`TypingController` keyed by `conversationId`), so this single event
  *   lights up both indicators with no story glue: the chat one (`RealtimeSyncController` →
@@ -306,10 +268,10 @@ export const ConversationsList = {
     const handleSimulateTyping = () => {
       const conversationId = chatEl?.activeConversationId;
       if (!conversationId) return;
-      adapter.emitRealtimeEvent({ type: "typing", conversationId, userId: "them", isTyping: true });
+      adapter.emitEvent({ type: "typing", conversationId, userId: "them", isTyping: true });
       setTimeout(
         () =>
-          adapter.emitRealtimeEvent({
+          adapter.emitEvent({
             type: "typing",
             conversationId,
             userId: "them",
@@ -322,7 +284,7 @@ export const ConversationsList = {
     const handleSimulateUnreadBump = () => {
       const background = chatEl?.conversations?.find((c) => c.id !== chatEl?.activeConversationId);
       if (!background) return;
-      adapter.emitRealtimeEvent({
+      adapter.emitEvent({
         type: "conversation-updated",
         conversation: { id: background.id, unreadCount: (background.unreadCount ?? 0) + 1 },
       });
@@ -330,7 +292,7 @@ export const ConversationsList = {
 
     const handleSimulateConversationRemoved = () => {
       if (!chatEl?.activeConversationId) return;
-      adapter.emitRealtimeEvent({
+      adapter.emitEvent({
         type: "conversation-removed",
         conversationId: chatEl.activeConversationId,
       });
@@ -363,27 +325,20 @@ export const ConversationsList = {
         const conversation = CONVERSATIONS[Math.floor(Math.random() * CONVERSATIONS.length)];
         const own = Math.random() < 0.3;
         const id = `flood-${conversation.id}-${Date.now()}-${count}`;
-        // Pushed through the simulated subscribe channel's `onMessage` (via `adapter.emit`), not
+        // Pushed through the simulated subscribe channel's `onMessage` (via `adapter.emitMessage`), not
         // `chatEl.addMessage()` directly — `onMessage` already just calls `addMessage` internally
         // (see `chat.js`'s `#subscribeAdapter()`), so the observable effect is identical, but this
         // way the flood is a realistic stand-in for "the backend pushed these," same as the
         // "Simulate…" buttons above do for `onEvent`.
-        adapter.emit({
-          id,
-          conversationId: conversation.id,
-          authorId: own ? "me" : "assistant",
-          own,
-          createdAt: Date.now(),
-          status: "sent",
-          readState: own ? undefined : "unread",
-          parts: [
-            {
-              id: `${id}-t1`,
-              type: "text",
-              text: `Flood message #${count} in ${conversation.title}`,
-            },
-          ],
-        });
+        adapter.emitMessage(
+          makeMessage({
+            id,
+            conversationId: conversation.id,
+            own,
+            readState: own ? undefined : "unread",
+            text: `Flood message #${count} in ${conversation.title}`,
+          }),
+        );
         // A not-own message landing in a backgrounded conversation bumps its unread badge — the
         // active conversation's incoming messages are instead cleared by read-tracking as they show.
         if (!own && conversation.id !== chatEl?.activeConversationId) {

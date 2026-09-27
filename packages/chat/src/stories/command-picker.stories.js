@@ -22,12 +22,17 @@ import "../components/chip/chip.js";
 
 import { buildChipElement } from "../editor/command-chip.js";
 import { chipPartRule, createSplitOnSendHandler } from "../utils/split-message-parts.js";
+import { chipPart, makeMessage, textPart } from "./shared/fixtures.js";
 
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
   title: "Command API",
   component: "chx-command-picker",
   tags: ["autodocs"],
+  args: { compact: false },
+  argTypes: {
+    compact: { name: "Compact mode", control: "boolean" },
+  },
 };
 export default meta;
 
@@ -231,8 +236,9 @@ const defaultChipPartElements = { chip: buildChipElement };
 
 /** @type {Story} */
 export const Basic = {
-  render: () => html`
+  render: (args) => html`
     <chx-chat
+      .compact=${args.compact}
       .partElements=${defaultChipPartElements}
       @chx-messages-change=${handleChipMessagesChange}
     >
@@ -263,8 +269,9 @@ export const Basic = {
  */
 /** @type {Story} */
 export const DynamicSearch = {
-  render: () => html`
+  render: (args) => html`
     <chx-chat
+      .compact=${args.compact}
       .partElements=${{ chip: renderDynamicSearchChip }}
       @chx-messages-change=${handleChipMessagesChange}
     >
@@ -334,8 +341,9 @@ function createHistoricalPickedRenderer(iconMap) {
 
 /** @type {Story} */
 export const CustomChipPerOptionIcon = {
-  render: () => html`
+  render: (args) => html`
     <chx-chat
+      .compact=${args.compact}
       .partElements=${{ chip: createHistoricalPickedRenderer(FILE_ICONS) }}
       @chx-messages-change=${handleChipMessagesChange}
     >
@@ -361,8 +369,9 @@ export const CustomChipPerOptionIcon = {
 
 /** @type {Story} */
 export const CustomChip = {
-  render: () => html`
+  render: (args) => html`
     <chx-chat
+      .compact=${args.compact}
       .partElements=${defaultChipPartElements}
       @chx-messages-change=${handleChipMessagesChange}
     >
@@ -393,8 +402,9 @@ export const CustomChip = {
  */
 /** @type {Story} */
 export const ChipHydratesInMessageList = {
-  render: () => html`
+  render: (args) => html`
     <chx-chat
+      .compact=${args.compact}
       .partElements=${defaultChipPartElements}
       @chx-messages-change=${handleChipMessagesChange}
     >
@@ -414,8 +424,9 @@ export const ChipHydratesInMessageList = {
 
 /** @type {Story} */
 export const CustomCommands = {
-  render: () => html`
+  render: (args) => html`
     <chx-chat
+      .compact=${args.compact}
       .partElements=${defaultChipPartElements}
       @chx-messages-change=${handleChipMessagesChange}
     >
@@ -496,70 +507,53 @@ function renderMultiPickerChip(part) {
  */
 /** @type {Story} */
 export const MultiPickerHydration = {
-  render: () => html`
+  render: (args) => html`
     <chx-chat
+      .compact=${args.compact}
       .partElements=${{ chip: renderMultiPickerChip }}
       @chx-messages-change=${handleChipMessagesChange}
       .messages=${[
-        {
+        makeMessage({
           id: "msg-1",
-          authorId: "user-1",
           own: true,
-          createdAt: Date.now(),
-          status: "sent",
           parts: [
-            { id: "msg-1-p1", type: "text", text: "Check " },
-            {
-              id: "msg-1-p2",
-              type: "chip",
+            textPart("msg-1-p1", "Check "),
+            chipPart("msg-1-p2", {
               templateId: "files-chip-template",
               label: "chat.js",
-              icon: null,
               data: { chipOwnerId: "files", path: "src/components/base/chat.js" },
-            },
-            { id: "msg-1-p3", type: "text", text: " and " },
-            {
-              id: "msg-1-p4",
-              type: "chip",
+            }),
+            textPart("msg-1-p3", " and "),
+            chipPart("msg-1-p4", {
               templateId: "commands-chip-template",
               label: "summarize",
-              icon: null,
               data: { chipOwnerId: "commands" },
-            },
-            { id: "msg-1-p5", type: "text", text: " it for me" },
+            }),
+            textPart("msg-1-p5", " it for me"),
           ],
-        },
-        {
+        }),
+        makeMessage({
           id: "msg-2",
-          authorId: "assistant",
           own: false,
-          createdAt: Date.now(),
-          status: "sent",
           parts: [
-            { id: "msg-2-p1", type: "text", text: "On it — " },
-            {
-              id: "msg-2-p2",
-              type: "chip",
+            textPart("msg-2-p1", "On it — "),
+            chipPart("msg-2-p2", {
               templateId: "commands-chip-template",
               label: "explain",
-              icon: null,
               data: { chipOwnerId: "commands" },
-            },
-            { id: "msg-2-p3", type: "text", text: " coming up, referencing " },
-            {
-              id: "msg-2-p4",
-              type: "chip",
+            }),
+            textPart("msg-2-p3", " coming up, referencing "),
+            chipPart("msg-2-p4", {
               templateId: "files-chip-template",
               label: "message-composer.js",
-              icon: null,
               data: {
                 chipOwnerId: "files",
                 path: "src/components/message-composer/message-composer.js",
               },
-            },
-            { id: "msg-2-p5", type: "text", text: " too." },
+            }),
+            textPart("msg-2-p5", " too."),
           ],
-        },
+        }),
       ]}
     >
       <chx-message-list slot="message-list"></chx-message-list>

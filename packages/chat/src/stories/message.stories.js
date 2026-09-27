@@ -3,11 +3,13 @@ import { ContextConsumer } from "@lit/context";
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 
 import plus from "@material-design-icons/svg/outlined/add.svg?raw";
+import refresh from "@material-design-icons/svg/outlined/refresh.svg?raw";
 import "@symblight/wc-material/button";
 import "@symblight/wc-material/icon-button";
 
 import "../index.js";
 import { messageRowContext } from "../context/message-row-context.js";
+import { ASSISTANT, ME, makeMessages } from "./shared/fixtures.js";
 
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
@@ -20,27 +22,8 @@ export default meta;
 /** @typedef {import("@storybook/web-components").StoryObj} Story */
 
 /** Runs of 2 own + 3 incoming, a minute apart, so they group. @param {number} count */
-function makeMessages(count) {
-  const start = Date.now() - count * 60_000;
-  return Array.from({ length: count }, (_, i) => {
-    const own = i % 5 < 2;
-    return {
-      id: `msg-${i}`,
-      authorId: own ? "me" : "assistant",
-      own,
-      createdAt: start + i * 60_000,
-      status: /** @type {"sent"} */ ("sent"),
-      parts: [
-        {
-          id: `msg-${i}-t1`,
-          type: "text",
-          text: own
-            ? `My message #${i}`
-            : `Assistant reply #${i}, a bit longer to see wrapping happen.`,
-        },
-      ],
-    };
-  });
+function makeRunMessages(count) {
+  return makeMessages(count, { isOwn: (i) => i % 5 < 2, spacingMs: 60_000 });
 }
 
 /** Reads its row's state from `messageRowContext` — the pattern itself (no row) renders nothing. */
@@ -98,7 +81,7 @@ export const MessagePattern = {
   render: (args) => html`
     <chx-chat
       .userId=${"me"}
-      .messages=${makeMessages(20)}
+      .messages=${makeRunMessages(20)}
       .compact=${args.compact}
       style="height: 100%;"
     >
@@ -116,14 +99,6 @@ export const MessagePattern = {
     </chx-chat>
   `,
 };
-
-/** Same placeholder photos as conversations.stories.js. @param {string} name */
-function avatarUrl(name) {
-  return `https://i.pravatar.cc/72?u=${encodeURIComponent(name)}`;
-}
-
-const ME = { name: "You", avatarUrl: avatarUrl("you") };
-const ASSISTANT = { name: "Assistant", avatarUrl: avatarUrl("assistant") };
 
 /**
  * The default avatar, author name and time, with no pattern at all — from each message's own
@@ -144,7 +119,7 @@ export const AuthorDisplay = {
   render: (args) => html`
     <chx-chat
       .userId=${"me"}
-      .messages=${makeMessages(20).map((message) => ({
+      .messages=${makeRunMessages(20).map((message) => ({
         ...message,
         author: message.own ? ME : ASSISTANT,
       }))}
@@ -157,4 +132,86 @@ export const AuthorDisplay = {
       </chx-message-composer>
     </chx-chat>
   `,
+};
+
+const statesStyles = html`<style>
+  .states {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    padding: 1rem;
+  }
+  .states__group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+  }
+  .states__label {
+    font: 500 0.75rem/1 sans-serif;
+    color: var(--md-sys-color-on-surface-variant);
+    text-transform: uppercase;
+  }
+  .states__error {
+    display: flex;
+    align-items: center;
+    gap: 0.25rem;
+    font-size: 0.75rem;
+    color: var(--md-sys-color-error);
+  }
+</style>`;
+
+/**
+ * `chx-message` on its own, no `chx-message-list`/`chx-chat`: outside a row it's driven by its own
+ * properties. There is no error property — a failed send is shown through `after-content`.
+ */
+/** @type {Story} */
+export const States = {
+  render: () => {
+    const now = Date.now();
+    return html`
+      ${statesStyles}
+      <div class="states">
+        <div class="states__group">
+          <span class="states__label">Regular</span>
+          <chx-message>Incoming message.</chx-message>
+          <chx-message own>My own message.</chx-message>
+        </div>
+
+        <div class="states__group">
+          <span class="states__label">Avatar</span>
+          <chx-message .author=${ASSISTANT} .createdAt=${now}>
+            Incoming message with the default avatar, author and time.
+          </chx-message>
+          <chx-message own .author=${ME} .createdAt=${now}>Own message with an avatar.</chx-message>
+        </div>
+
+        <div class="states__group">
+          <span class="states__label">Pending</span>
+          <chx-message own loading>Sending this one…</chx-message>
+          <chx-message busy>Streaming a reply…</chx-message>
+        </div>
+
+        <div class="states__group">
+          <span class="states__label">Error</span>
+          <chx-message own>
+            This message failed to send.
+            <div slot="after-content" class="states__error">
+              Not delivered
+              <md-icon-button aria-label="Retry">${unsafeSVG(refresh)}</md-icon-button>
+            </div>
+          </chx-message>
+        </div>
+
+        <div class="states__group">
+          <span class="states__label">Compact</span>
+          <chx-message compact .author=${ASSISTANT} .createdAt=${now}>
+            Compact incoming message.
+          </chx-message>
+          <chx-message compact own .author=${ME} .createdAt=${now}>
+            Compact own message.
+          </chx-message>
+        </div>
+      </div>
+    `;
+  },
 };

@@ -22,6 +22,8 @@ import "../components/paste-long-text/paste-long-text.js";
 import { buildChipElement, chipPartRule, createSplitOnSendHandler } from "../index.js";
 import { createBannerPermissionPrompt } from "../agent.js";
 
+import { endTurn, sleep, streamChunks } from "./shared/adapters.js";
+
 const messageStyleOverrides = html`
   <style>
     /* An agent turn is a full-width document, not a bubble — but the user's own messages keep the
@@ -69,6 +71,10 @@ const meta = {
   title: "Agent",
   component: "chx-chat",
   tags: ["autodocs"],
+  args: { compact: false },
+  argTypes: {
+    compact: { name: "Compact mode", control: "boolean" },
+  },
 };
 export default meta;
 
@@ -84,57 +90,6 @@ const REPLY_CODE = `function scrollSnapshot(scroller, virtualizer) {
   };
 }`;
 const REPLY_OUTRO = "That object is enough to tell whether the view is still pinned to the bottom.";
-
-/** @param {number} ms */
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * Streams `text` into `partId` word by word — each word its own delta chunk, matching how a real
- * token-streaming LLM API arrives (small, frequent chunks rather than one big one).
- * @param {ReadableStreamDefaultController} controller
- * @param {{messageId: string, partId: string, partType: string, text: string, extra?: Record<string, unknown>, delayMs: number, signal: AbortSignal}} options
- */
-async function streamWords(
-  controller,
-  { messageId, partId, partType, text, extra, delayMs, signal },
-) {
-  const words = text.split(/(?<=\s)/);
-  for (const [i, word] of words.entries()) {
-    if (signal.aborted) return;
-    await sleep(delayMs);
-    controller.enqueue({
-      messageId,
-      authorId: "assistant",
-      partId,
-      partType,
-      // `lang` rides the first chunk only — later deltas would just re-set it unchanged.
-      delta: /** @type {any} */ (i === 0 && extra ? { text: word, ...extra } : { text: word }),
-    });
-  }
-}
-
-/**
- * Streams `code` line by line into `partId` — coarser chunks than `streamWords` since a line is
- * the natural unit code arrives in, and it's enough to make `chx-code-block` visibly grow mid-stream.
- * @param {ReadableStreamDefaultController} controller
- * @param {{messageId: string, partId: string, code: string, lang: string, delayMs: number, signal: AbortSignal}} options
- */
-async function streamCodeLines(controller, { messageId, partId, code, lang, delayMs, signal }) {
-  const lines = code.split(/(?<=\n)/);
-  for (const [i, line] of lines.entries()) {
-    if (signal.aborted) return;
-    await sleep(delayMs);
-    controller.enqueue({
-      messageId,
-      authorId: "assistant",
-      partId,
-      partType: "code",
-      delta: /** @type {any} */ (i === 0 ? { text: line, lang } : { text: line }),
-    });
-  }
-}
 
 /**
  * A fake `adapter.sendMessage` streaming one reply message as three parts, in order — intro text,
@@ -161,7 +116,7 @@ function createStreamingCodeAgentAdapter() {
             await sleep(600); // "thinking" — chx-streaming-indicator covers this window
             if (signal.aborted) return;
 
-            await streamWords(controller, {
+            await streamChunks(controller, {
               messageId: replyId,
               partId: introId,
               partType: "text",
@@ -171,17 +126,19 @@ function createStreamingCodeAgentAdapter() {
             });
             controller.enqueue({ kind: "part-end", messageId: replyId, partId: introId });
 
-            await streamCodeLines(controller, {
+            await streamChunks(controller, {
               messageId: replyId,
               partId: codeId,
-              code: REPLY_CODE,
-              lang: "javascript",
+              partType: "code",
+              text: REPLY_CODE,
+              split: /(?<=\n)/, // a line is the natural unit code arrives in
+              first: { lang: "javascript" },
               delayMs: 150,
               signal,
             });
             controller.enqueue({ kind: "part-end", messageId: replyId, partId: codeId });
 
-            await streamWords(controller, {
+            await streamChunks(controller, {
               messageId: replyId,
               partId: outroId,
               partType: "text",
@@ -191,14 +148,7 @@ function createStreamingCodeAgentAdapter() {
             });
             controller.enqueue({ kind: "part-end", messageId: replyId, partId: outroId });
           } finally {
-            // One terminator for every exit. Returning from `start()` on abort without closing would
-            // leave chx-chat's read pending forever — an aborted turn still has to be ended, and an
-            // explicit `abort` chunk is the clean way to do it.
-            controller.enqueue({
-              kind: signal.aborted ? "abort" : "finish",
-              messageId: replyId,
-            });
-            controller.close();
+            endTurn(controller, replyId, signal);
           }
         },
       });
@@ -215,9 +165,10 @@ function createStreamingCodeAgentAdapter() {
  */
 /** @type {Story} */
 export const StreamingCodeReply = {
-  render: () => html`
+  render: (args) => html`
     ${messageStyleOverrides}
     <chx-chat
+      .compact=${args.compact}
       .userId=${"me"}
       .partElements=${{ code: renderCodePart }}
       .adapter=${createStreamingCodeAgentAdapter()}
@@ -444,7 +395,7 @@ function createAgenticAdapter({ requestPermission, thoughtSteps = false }) {
                 },
               });
             } else {
-              await streamWords(controller, {
+              await streamChunks(controller, {
                 messageId: replyId,
                 partId: thoughtId,
                 partType: "thought",
@@ -537,7 +488,7 @@ function createAgenticAdapter({ requestPermission, thoughtSteps = false }) {
             enqueue(controller, planId, "plan", { entries: planAt(3) });
             controller.enqueue({ kind: "part-end", messageId: replyId, partId: planId });
 
-            await streamWords(controller, {
+            await streamChunks(controller, {
               messageId: replyId,
               partId: outroId,
               partType: "text",
@@ -547,14 +498,7 @@ function createAgenticAdapter({ requestPermission, thoughtSteps = false }) {
             });
             controller.enqueue({ kind: "part-end", messageId: replyId, partId: outroId });
           } finally {
-            // One terminator for every exit. Returning from `start()` on abort without closing would
-            // leave chx-chat's read pending forever — an aborted turn still has to be ended, and an
-            // explicit `abort` chunk is the clean way to do it.
-            controller.enqueue({
-              kind: signal.aborted ? "abort" : "finish",
-              messageId: replyId,
-            });
-            controller.close();
+            endTurn(controller, replyId, signal);
           }
         },
       });
@@ -572,7 +516,7 @@ function createAgenticAdapter({ requestPermission, thoughtSteps = false }) {
  */
 /** @type {Story} */
 export const AgenticToolCalls = {
-  render: () => {
+  render: (args) => {
     /** @type {any} */
     let banner;
     const adapter = createAgenticAdapter({
@@ -580,7 +524,12 @@ export const AgenticToolCalls = {
     });
     return html`
       ${messageStyleOverrides}
-      <chx-chat .userId=${"me"} .partElements=${AGENT_PART_ELEMENTS} .adapter=${adapter}>
+      <chx-chat
+        .compact=${args.compact}
+        .userId=${"me"}
+        .partElements=${AGENT_PART_ELEMENTS}
+        .adapter=${adapter}
+      >
         <chx-message-list slot="message-list" scroll-behavior="smooth" content-align="start">
           <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
           <chx-scroll-to-bottom-affordance
@@ -694,7 +643,7 @@ const attachTriggerStyles = html`
  */
 /** @type {Story} */
 export const AgenticComposerKit = {
-  render: () => {
+  render: (args) => {
     /** @type {any} */
     let banner;
     const adapter = createAgenticAdapter({
@@ -703,6 +652,7 @@ export const AgenticComposerKit = {
     return html`
       ${attachTriggerStyles} ${messageStyleOverrides}
       <chx-chat
+        .compact=${args.compact}
         .userId=${"me"}
         .partElements=${AGENT_PART_ELEMENTS}
         .adapter=${adapter}

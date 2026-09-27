@@ -1,5 +1,6 @@
 import { html } from "lit";
 
+import { keyed } from "lit/directives/keyed.js";
 import { ref } from "lit/directives/ref.js";
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 
@@ -537,14 +538,37 @@ function makeRandomText(index) {
   return Array.from({ length: sentenceCount }, (_, i) => makeSentence(index * 97 + i)).join(" ");
 }
 
+/** Same placeholder photos as conversations.stories.js. @param {string} name */
+function avatarUrl(name) {
+  return `https://i.pravatar.cc/71?u=${encodeURIComponent(name)}`;
+}
+
+const ME = { name: "You", avatarUrl: avatarUrl("you") };
+const ASSISTANT = { name: "Assistant", avatarUrl: avatarUrl("assist") };
+
+const HISTORY_MESSAGES_PER_DAY = 60;
+
+/**
+ * Ending now, a minute apart within a day (distinct times in the meta, same-author neighbours group
+ * into runs), stepping back a whole day every 60 messages — a date divider every page and a half.
+ * @param {number} index
+ */
+function historyCreatedAt(index) {
+  const back = PAGINATION_TOTAL_HISTORY - 1 - index;
+  const days = Math.floor(back / HISTORY_MESSAGES_PER_DAY);
+  const minutes = back % HISTORY_MESSAGES_PER_DAY;
+  return Date.now() - days * 86_400_000 - minutes * 60_000;
+}
+
 /** @param {number} index */
 function makeHistoryMessage(index) {
   const own = index % 3 === 0;
   return {
     id: `hist-${index}`,
     authorId: own ? "me" : "assistant",
+    author: own ? ME : ASSISTANT,
     own,
-    createdAt: Date.now() + index,
+    createdAt: historyCreatedAt(index),
     status: /** @type {"sent"} */ ("sent"),
     parts: [
       {
@@ -598,10 +622,21 @@ function createPaginatedAdapter(delayMs = 600) {
  * fallback is a plain `<chx-loading-history>`, so it shows up with zero story-level wiring the
  * instant a scroll-triggered (or button-triggered) `loadMoreHistory()` starts, and disappears the
  * instant it settles. See `LoadingHistoryCustomDelay` below for overriding it explicitly.
+ *
+ * `<chx-divider slot="divider" sticky>` adds date dividers — the history steps back a day every 60
+ * messages (see `historyCreatedAt`) — and a sticky day label while scrolling.
+ *
+ * The Virtualization control switches `no-virtualization` — every message in real DOM instead of a
+ * windowed list; the chat is recreated on a switch, starting from the newest page again.
  */
 /** @type {Story} */
 export const Pagination = {
-  render: () => html`
+  args: { compact: false, virtualization: true },
+  argTypes: {
+    compact: { name: "Compact mode", control: "boolean" },
+    virtualization: { name: "Virtualization", control: "boolean" },
+  },
+  render: (args) => html`
     <div
       class="pagination-story"
       style="height: 100%; display: flex; flex-direction: column; gap: 0.5rem;"
@@ -621,66 +656,27 @@ export const Pagination = {
       >
         Load older messages
       </md-button>
-      <chx-chat
-        .userId=${"me"}
-        .adapter=${createPaginatedAdapter()}
-        style="flex: 1; min-height: 0;"
-      >
-        <chx-message-list slot="message-list">
-          <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
-          <chx-scroll-to-bottom-affordance
-            slot="scroll-to-bottom"
-          ></chx-scroll-to-bottom-affordance>
-        </chx-message-list>
-        <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
-          <md-button slot="actions" variant="text">Opus 4.8</md-button>
-        </chx-message-composer>
-      </chx-chat>
-    </div>
-  `,
-};
-
-/**
- * Same as `Pagination` above, with `no-virtualization` set on `chx-chat`.
- */
-/** @type {Story} */
-export const PaginationNoVirtualization = {
-  render: () => html`
-    <div
-      class="pagination-story"
-      style="height: 100%; display: flex; flex-direction: column; gap: 0.5rem;"
-      @click=${(/** @type {MouseEvent} */ event) => {
-        if (!(/** @type {HTMLElement} */ (event.target).closest(".pagination-story__load-more")))
-          return;
-        const container = /** @type {HTMLElement} */ (event.currentTarget);
-        /** @type {(HTMLElement & {loadMoreHistory: () => Promise<void>}) | null} */ (
-          container.querySelector("chx-chat")
-        )?.loadMoreHistory();
-      }}
-    >
-      <md-button
-        class="pagination-story__load-more"
-        variant="outlined"
-        style="align-self: flex-start;"
-      >
-        Load older messages
-      </md-button>
-      <chx-chat
-        no-virtualization
-        .userId=${"me"}
-        .adapter=${createPaginatedAdapter()}
-        style="flex: 1; min-height: 0;"
-      >
-        <chx-message-list slot="message-list">
-          <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
-          <chx-scroll-to-bottom-affordance
-            slot="scroll-to-bottom"
-          ></chx-scroll-to-bottom-affordance>
-        </chx-message-list>
-        <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
-          <md-button slot="actions" variant="text">Opus 4.8</md-button>
-        </chx-message-composer>
-      </chx-chat>
+      ${keyed(
+        args.virtualization,
+        html`<chx-chat
+          ?no-virtualization=${!args.virtualization}
+          .userId=${"me"}
+          .adapter=${createPaginatedAdapter()}
+          .compact=${args.compact}
+          style="flex: 1; min-height: 0;"
+        >
+          <chx-message-list slot="message-list" author-display="all">
+            <chx-divider slot="divider" sticky></chx-divider>
+            <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
+            <chx-scroll-to-bottom-affordance
+              slot="scroll-to-bottom"
+            ></chx-scroll-to-bottom-affordance>
+          </chx-message-list>
+          <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
+            <md-button slot="actions" variant="text">Opus 4.8</md-button>
+          </chx-message-composer>
+        </chx-chat>`,
+      )}
     </div>
   `,
 };

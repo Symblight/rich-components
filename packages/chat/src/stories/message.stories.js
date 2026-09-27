@@ -116,3 +116,45 @@ export const MessagePattern = {
     </chx-chat>
   `,
 };
+
+/** Same placeholder photos as conversations.stories.js. @param {string} name */
+function avatarUrl(name) {
+  return `https://i.pravatar.cc/72?u=${encodeURIComponent(name)}`;
+}
+
+const ME = { name: "You", avatarUrl: avatarUrl("you") };
+const ASSISTANT = { name: "Assistant", avatarUrl: avatarUrl("assistant") };
+
+/**
+ * The default avatar, author name and time, with no pattern at all — from each message's own
+ * `author: {name, avatarUrl}`, and `author-display` on `chx-message-list` picks which rows show it. Regular own messages never show
+ * theirs: the side already says who wrote them. Compact shows every run's author on its first line.
+ */
+/** @type {Story} */
+export const AuthorDisplay = {
+  args: { authorDisplay: "all", compact: false },
+  argTypes: {
+    authorDisplay: {
+      name: "author-display",
+      control: "inline-radio",
+      options: ["none", "incoming", "all"],
+    },
+    compact: { name: "Compact mode", control: "boolean" },
+  },
+  render: (args) => html`
+    <chx-chat
+      .userId=${"me"}
+      .messages=${makeMessages(20).map((message) => ({
+        ...message,
+        author: message.own ? ME : ASSISTANT,
+      }))}
+      .compact=${args.compact}
+      style="height: 100%;"
+    >
+      <chx-message-list slot="message-list" author-display=${args.authorDisplay}></chx-message-list>
+      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
+        <md-button slot="actions" variant="text">Opus 4.8</md-button>
+      </chx-message-composer>
+    </chx-chat>
+  `,
+};

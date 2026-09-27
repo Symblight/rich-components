@@ -3,10 +3,8 @@
  */
 
 /**
- * A participant in a conversation — separate from `ChxMessage.authorId` (a bare id, this package's
- * existing author-display stance everywhere else) because a conversation list genuinely needs
- * display metadata (name/avatar/presence) to render participant chips/avatars, unlike a single
- * message, which has no author-display concept at all.
+ * A participant in a conversation — conversation-list display metadata (chips, avatars, presence). A
+ * message carries its own `author` for display instead.
  * @typedef {Object} ChxUser
  * @property {string} id
  * @property {string} [displayName]

@@ -19,6 +19,23 @@
 export class FocusBehaviorController {
   static #INTERIOR_FOCUSABLE_SELECTOR = "button, a[href], input, select, textarea, [tabindex]";
 
+  /**
+   * Matches in `root`, descending into open shadow roots — an app's own element slotted into a row
+   * (`<my-actions>`, md-icon-button's inner `<button>`) is invisible to a plain querySelectorAll, and a
+   * host's `tabindex="-1"` doesn't hide its shadow content in WebKit. Closed shadow roots can't be
+   * reached; their elements read `actionable` from the row context instead.
+   * @param {Element | ShadowRoot} root @param {string} selector @returns {Generator<Element>}
+   */
+  static *#deepQuery(root, selector) {
+    for (const el of root.querySelectorAll("*")) {
+      if (el.matches(selector)) yield el;
+      // chx-message's own shadow holds only slots and a decorative avatar
+      if (el.shadowRoot && el.localName !== "chx-message") {
+        yield* FocusBehaviorController.#deepQuery(el.shadowRoot, selector);
+      }
+    }
+  }
+
   /** @type {() => import("../../types/message.js").ChxMessage[]} */
   #getMessages;
   /** @type {() => DocumentFragment | Element | undefined} */
@@ -103,12 +120,12 @@ export class FocusBehaviorController {
   /**
    * Hides a not-currently-drilled-into message's interior controls from the Tab order — only the
    * roving article itself (or, once drilled in, its interior) should ever be reachable by Tab.
-   * Only reaches light-DOM descendants — a part with its own interactive shadow-DOM content is
-   * responsible for suppressing its own tabindex.
+   * Reaches into open shadow roots too, see `#deepQuery`.
    * @param {HTMLElement} messageElement
    */
   #suppressInteriorTabbing(messageElement) {
-    for (const el of messageElement.querySelectorAll(
+    for (const el of FocusBehaviorController.#deepQuery(
+      messageElement,
       FocusBehaviorController.#INTERIOR_FOCUSABLE_SELECTOR,
     )) {
       if (el.hasAttribute("data-roving-hidden-tabindex")) continue; // already suppressed
@@ -120,7 +137,10 @@ export class FocusBehaviorController {
   /** Reverses `#suppressInteriorTabbing`, restoring each element's original tabindex.
    *  @param {HTMLElement} messageElement */
   #restoreInteriorTabbing(messageElement) {
-    for (const el of messageElement.querySelectorAll("[data-roving-hidden-tabindex]")) {
+    for (const el of FocusBehaviorController.#deepQuery(
+      messageElement,
+      "[data-roving-hidden-tabindex]",
+    )) {
       const original = el.getAttribute("data-roving-hidden-tabindex");
       el.removeAttribute("data-roving-hidden-tabindex");
       if (original) el.setAttribute("tabindex", original);
@@ -242,8 +262,11 @@ export class FocusBehaviorController {
     this.#actionableId = id;
     this.#requestRerender();
     this.#restoreInteriorTabbing(messageElement);
-    const first = /** @type {HTMLElement | null} */ (
-      messageElement.querySelector(FocusBehaviorController.#INTERIOR_FOCUSABLE_SELECTOR)
+    const first = /** @type {HTMLElement | undefined} */ (
+      FocusBehaviorController.#deepQuery(
+        messageElement,
+        FocusBehaviorController.#INTERIOR_FOCUSABLE_SELECTOR,
+      ).next().value
     );
     first?.focus();
   }

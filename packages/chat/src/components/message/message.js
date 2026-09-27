@@ -10,8 +10,7 @@ import "../unread-marker/unread-marker.js";
 import { messageRowContext } from "../../context/message-row-context.js";
 import styles from "./message.css?inline";
 
-/** @import { ChxRowState } from "../../types/message.js" */
-/** @import { ChxUser } from "../../types/conversation.js" */
+/** @import { ChxMessageAuthor, ChxRowState } from "../../types/message.js" */
 
 const ROW_TAG = "chx-message-row";
 
@@ -99,7 +98,7 @@ export class ChxMessage extends LitElement {
     /** @type {boolean} */
     this.selected = false;
 
-    /** @type {ChxUser | undefined} */
+    /** @type {ChxMessageAuthor | undefined} */
     this.author = undefined;
 
     /** @type {number | undefined} */
@@ -168,9 +167,24 @@ export class ChxMessage extends LitElement {
     }
   }
 
+  #renderAuthorMeta() {
+    const name = this.author?.name;
+    if (!name || !this.groupStart) return nothing;
+    return html`<span class="message__meta-default">
+      <span class="message__author">${name}</span>
+      ${this.#renderTime()}
+    </span>`;
+  }
+
+  #renderTime() {
+    if (this.createdAt === undefined) return nothing;
+    return html`<time class="message__time" datetime=${new Date(this.createdAt).toISOString()}
+      >${timeFormat.format(this.createdAt)}</time
+    >`;
+  }
+
   render() {
     const avatarUrl = this.author?.avatarUrl;
-    const displayName = this.author?.displayName;
     return html`
       ${when(
         this.unread,
@@ -182,31 +196,20 @@ export class ChxMessage extends LitElement {
       )}
       <div class="message__avatar" part="avatar">
         <slot name="avatar">
-          ${avatarUrl
-            ? html`<md-avatar
-                class="message__avatar-image"
-                src=${avatarUrl}
-                aria-hidden="true"
-              ></md-avatar>`
-            : nothing}
+          ${
+            avatarUrl
+              ? html`<md-avatar
+                  class="message__avatar-image"
+                  src=${avatarUrl}
+                  aria-hidden="true"
+                ></md-avatar>`
+              : nothing
+          }
         </slot>
       </div>
       <div class="message__body" part="body">
         <div class="message__meta" part="meta">
-          <slot name="meta">
-            ${displayName && this.groupStart
-              ? html`<span class="message__meta-default">
-                  <span class="message__author">${displayName}</span>
-                  ${this.createdAt === undefined
-                    ? nothing
-                    : html`<time
-                        class="message__time"
-                        datetime=${new Date(this.createdAt).toISOString()}
-                        >${timeFormat.format(this.createdAt)}</time
-                      >`}
-                </span>`
-              : nothing}
-          </slot>
+          <slot name="meta"> ${this.#renderAuthorMeta()} </slot>
         </div>
         <div class="message__attachments" part="attachments">
           <slot name="attachments"></slot>

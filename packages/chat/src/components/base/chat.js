@@ -910,7 +910,8 @@ export class ChxChat extends LitElement {
     list.compact = this.compact;
     // chx-message-list forwards this to chx-infinity-scroll, whose LoadMoreController awaits it near
     // the top of the scroll — the sole load-more path now.
-    list.onLoadMore = () => (this.#conversationMode.isEmptyState ? Promise.resolve() : this.#pagination.loadMore());
+    list.onLoadMore = () =>
+      this.#conversationMode.isEmptyState ? Promise.resolve() : this.#pagination.loadMore();
   }
 
   /**

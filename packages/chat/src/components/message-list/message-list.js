@@ -77,6 +77,15 @@ const INFINITY_SCROLL_EXPORTPARTS = [
   ...MESSAGE_PARTS.map((part) => `message-${part}`),
 ].join(", ");
 
+// Pre-measurement geometry, mirroring message.css — only an estimate, the virtualizer measures the real row.
+const ESTIMATE = {
+  regular: { charsPerLine: 60, lineHeight: 22, padding: 16, meta: 20 },
+  compact: { charsPerLine: 70, lineHeight: 21, padding: 6, meta: 19, avatar: 25 },
+  rowPadding: 2, // .infinity-scroll__row
+  groupGap: 12, // --chx-message-group-gap
+  attachments: 128, // one wrapped row of attachment cards
+};
+
 /** Own message still being delivered — an incoming reply shell is also "sending" while it streams,
  * but that's `busy`, not a delivery state. @param {ChxMessage} message */
 function isSending(message) {
@@ -155,6 +164,7 @@ export class ChxMessageList extends LitElement {
     streaming: { type: Boolean, reflect: true, attribute: true },
     emptyState: { type: Boolean, reflect: true, attribute: "empty-state" },
     compact: { type: Boolean, reflect: true, attribute: true },
+    authorDisplay: { type: String, attribute: "author-display" },
     selectedId: { type: String, attribute: "selected-id" },
     loading: { type: Boolean },
     hasMore: { type: Boolean },
@@ -282,6 +292,10 @@ export class ChxMessageList extends LitElement {
 
     /** Pushed onto every row's `compact`. @type {boolean} */
     this.compact = false;
+
+    /** Which rows get their author resolved (default avatar + name + time): none, incoming only, or all.
+     *  @type {"none" | "incoming" | "all"} */
+    this.authorDisplay = "none";
 
     /** Id of the highlighted row (jump-to / permalink), persistent until cleared. @type {string | undefined} */
     this.selectedId = undefined;
@@ -415,13 +429,34 @@ export class ChxMessageList extends LitElement {
   /** Rough pre-measurement height — text length → line count → px, cheap and approximate on purpose.
    * @param {ChxMessage} message @param {number} index */
   #estimateMessageSize(message, index) {
-    const chars = (message.parts ?? []).reduce((sum, part) => {
-      if (part.type === "attachment") return sum + 220; // attachment cards are tall and text-less
-      return sum + (part.text?.length ?? part.html?.length ?? 0);
-    }, 0);
-    const lines = Math.max(1, Math.ceil(chars / 42)); // ~42 chars per rendered line
-    const base = 32 + lines * 20; // meta + padding, then line-height per line
-    return base + this.#dividerController.estimateExtra(message, index); // divider folds into the row
+    const parts = message.parts ?? [];
+    const chars = parts.reduce(
+      (sum, part) =>
+        part.type === "attachment" ? sum : sum + (part.text?.length ?? part.html?.length ?? 0),
+      0,
+    );
+    const density = this.compact ? ESTIMATE.compact : ESTIMATE.regular;
+    const lines = Math.max(1, Math.ceil(chars / density.charsPerLine));
+    let size = lines * density.lineHeight + density.padding;
+    if (parts.some((part) => part.type === "attachment")) size += ESTIMATE.attachments;
+
+    const { groupStart, groupEnd } = this.#groups.at(index);
+    // regular own rows hide their meta and avatar in CSS, so their author adds no height
+    const authorShown = this.#authorFor(message) !== undefined && (this.compact || !message.own);
+    if (groupStart && authorShown) size += density.meta;
+    if (this.compact && authorShown)
+      size = Math.max(size, ESTIMATE.compact.avatar + density.padding);
+    if (groupEnd) size += ESTIMATE.groupGap;
+
+    // divider folds into the row
+    return size + ESTIMATE.rowPadding + this.#dividerController.estimateExtra(message, index);
+  }
+
+  /** The row's author, per `author-display`. @param {ChxMessage} message */
+  #authorFor(message) {
+    return this.authorDisplay === "all" || (this.authorDisplay === "incoming" && !message.own)
+      ? message.author
+      : undefined;
   }
 
   /** Passed to chx-infinity-scroll as `.renderItem`. @param {ChxMessage} message @param {number} index */
@@ -454,7 +489,7 @@ export class ChxMessageList extends LitElement {
     /** @type {import("../../types/message.js").ChxRowState} */
     const row = {
       message,
-      author: undefined,
+      author: this.#authorFor(message),
       own: message.own,
       unread: message.readState === "unread",
       streaming,
@@ -513,7 +548,11 @@ export class ChxMessageList extends LitElement {
   willUpdate(changedProperties) {
     if (changedProperties.has("messages")) this.#readTracking.syncReadStates();
     // rows only re-render when infinity-scroll does, which a plain host update doesn't trigger
-    if (changedProperties.has("compact") || changedProperties.has("selectedId")) {
+    if (
+      changedProperties.has("compact") ||
+      changedProperties.has("selectedId") ||
+      changedProperties.has("authorDisplay")
+    ) {
       this.#infinityScrollElement?.requestUpdate();
     }
   }

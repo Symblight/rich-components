@@ -39,14 +39,21 @@
  * @property {{message: string}} [error]
  * @property {string} [replyToId]
  * @property {"read" | "unread"} [readState]
+ * @property {ChxMessageAuthor} [author] - shown by chx-message-list's `author-display`
  * @property {ChxMessagePart[]} parts
+ */
+
+/**
+ * @typedef {Object} ChxMessageAuthor
+ * @property {string} [name]
+ * @property {string} [avatarUrl]
  */
 
 /**
  * Per-row state, provided through `messageRowContext` to `chx-message` and anything slotted into it.
  * @typedef {Object} ChxRowState
  * @property {ChxMessage} message
- * @property {import("./conversation.js").ChxUser} [author]
+ * @property {ChxMessageAuthor} [author]
  * @property {boolean} own
  * @property {boolean} unread
  * @property {boolean} streaming

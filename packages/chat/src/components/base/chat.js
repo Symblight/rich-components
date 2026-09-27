@@ -48,6 +48,7 @@ export class ChxChat extends LitElement {
     connectionState: { type: String, reflect: true, attribute: "connection-state" },
     readTracking: { type: Boolean, attribute: "read-tracking" },
     noVirtualization: { type: Boolean, attribute: "no-virtualization" },
+    compact: { type: Boolean, reflect: true, attribute: true },
     // Set by a bound <chx-conversations> to mark this chat as conversation-driven (multi-conversation
     // mode), so an empty/removed selection shows the empty state instead of the default conversation.
     conversationsPresent: { attribute: false },
@@ -159,6 +160,9 @@ export class ChxChat extends LitElement {
      * @type {boolean}
      */
     this.noVirtualization = false;
+
+    /** Pushed straight through to `chx-message-list.compact`. @type {boolean} */
+    this.compact = false;
 
     /** Set true by a bound `<chx-conversations>` — engages multi-conversation mode. @type {boolean} */
     this.conversationsPresent = false;
@@ -637,12 +641,17 @@ export class ChxChat extends LitElement {
    * @param {string} [conversationId]
    */
   async #deliver(message, conversationId) {
-    if (!this.adapter?.sendMessage) return;
+    if (!this.adapter?.sendMessage) {
+      this.#markSent(message.id, conversationId); // local echo only — nothing is in flight
+      return;
+    }
     const controller = new AbortController();
     let failed = false;
     this.#delivery.track(message.id, controller, conversationId);
     try {
       const stream = await this.adapter.sendMessage(message, { signal: controller.signal });
+      // sendMessage resolving is the adapter accepting the message; the reply may still be streaming
+      this.#markSent(message.id, conversationId);
       if (!stream) return;
       await this.#stream.deliverStream(stream, { replyToId: message.id, conversationId });
     } catch (error) {
@@ -690,6 +699,16 @@ export class ChxChat extends LitElement {
         conversationId,
       );
     }
+  }
+
+  /** @param {string} messageId @param {string} [conversationId] */
+  #markSent(messageId, conversationId) {
+    const current = this.#internalMessages.find((m) => m.id === messageId);
+    if (current?.status !== "sending") return;
+    this.#applyMessages(
+      this.#internalMessages.map((m) => (m === current ? { ...m, status: "sent" } : m)),
+      conversationId,
+    );
   }
 
   /**
@@ -888,9 +907,11 @@ export class ChxChat extends LitElement {
     list.hasMore = this.#conversationMode.isEmptyState ? false : this.#pagination.hasMore;
     list.readTracking = this.readTracking;
     list.noVirtualization = this.noVirtualization;
+    list.compact = this.compact;
     // chx-message-list forwards this to chx-infinity-scroll, whose LoadMoreController awaits it near
     // the top of the scroll — the sole load-more path now.
-    list.onLoadMore = () => (this.#conversationMode.isEmptyState ? Promise.resolve() : this.#pagination.loadMore());
+    list.onLoadMore = () =>
+      this.#conversationMode.isEmptyState ? Promise.resolve() : this.#pagination.loadMore();
   }
 
   /**

@@ -8,6 +8,8 @@
   --chx-message-list-padding: 0 1rem 0 1.5rem;
   --chx-message-list-dragging-color: var(--md-sys-color-primary);
   --chx-message-list-drop-hint-background-color: var(--md-sys-color-surface);
+  /* inherited by every chx-message — only a list separates runs, a standalone message gets no margin */
+  --chx-message-group-gap: 0.75rem;
   padding: var(--chx-message-list-padding);
 }
 
@@ -31,6 +33,13 @@
   color: var(--chx-message-list-dragging-color);
   font-size: 0.875rem;
   pointer-events: none;
+}
+
+/* reveals chx-message's actions for the whole row, not just its bubble-wide host */
+.message-list__infinity-scroll::part(item):hover,
+.message-list__infinity-scroll::part(item):focus-within {
+  --chx-message-actions-opacity: 1;
+  --chx-message-actions-pointer-events: auto;
 }
 
 .message-list__infinity-scroll {

@@ -9,6 +9,10 @@ import { VirtualizerController } from "@tanstack/lit-virtual";
  */
 const SCROLL_END_THRESHOLD = 8;
 
+/** ms after a prepend during which a row starting at the scroll offset is compensated — covers the
+ *  measurement frames that follow the page landing, not ordinary scrolling afterwards. */
+const PREPEND_ADJUST_WINDOW = 1000;
+
 /**
  * The virtualizer itself, configured for a bottom-anchored list per TanStack's own chat guide:
  * `anchorTo: "end"` + `followOnAppend` — it holds the item under the fold still when the list grows
@@ -40,6 +44,7 @@ export class VirtualListController {
   #getScrollMargin;
   /** @type {unknown[] | undefined} */
   #lastData;
+  #prependAdjustUntil = 0;
 
   /**
    * @param {import("lit").ReactiveControllerHost} host
@@ -79,7 +84,28 @@ export class VirtualListController {
       followOnAppend: true,
       scrollEndThreshold: SCROLL_END_THRESHOLD,
     });
+    this.virtualizer.shouldAdjustScrollPositionOnItemSizeChange = this.#shouldAdjustScroll;
   }
+
+  /**
+   * virtual-core's own rule, plus one case it gets wrong for a prepend. By default a re-measured row
+   * is compensated only when it's entirely above the fold and the user isn't scrolling backward — a
+   * row merely spanning the fold changes size below what's being read (a streaming reply, an
+   * expanded code block). But a prepend can change the row the anchor was just restored onto, at its
+   * *top*: a date divider or a run's author line that the new older neighbour makes redundant. That
+   * row sits right at the offset, mid upward scroll, so both guards skip it and the content jumps.
+   * For a short window after a prepend, any row starting at or above the offset is compensated.
+   * @param {{key: string | number, start: number, size: number}} item
+   * @param {number} _delta
+   * @param {any} instance
+   */
+  #shouldAdjustScroll = (item, _delta, instance) => {
+    const offset = instance.getScrollOffset() + instance.scrollAdjustments;
+    if (!instance.itemSizeCache.has(item.key)) return item.start < offset; // first measurement
+    if (performance.now() < this.#prependAdjustUntil) return item.start <= offset + 1;
+    const size = instance.itemSizeCache.get(item.key);
+    return item.start + size <= offset && instance.scrollDirection !== "backward";
+  };
 
   /** The underlying `@tanstack/virtual-core` instance. */
   get virtualizer() {
@@ -121,6 +147,15 @@ export class VirtualListController {
     // to recompute measurements — here that recompute is what re-derives each row's key fresh from
     // `getItemKey(index)`, which reads `this.#getData()` live.
     const dataChanged = data !== this.#lastData;
+    // grew at the head: older history landed
+    if (
+      dataChanged &&
+      this.#lastData &&
+      count > this.#lastData.length &&
+      data[0] !== this.#lastData[0]
+    ) {
+      this.#prependAdjustUntil = performance.now() + PREPEND_ADJUST_WINDOW;
+    }
     this.#lastData = data;
 
     if (

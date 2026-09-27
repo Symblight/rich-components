@@ -48,7 +48,7 @@ export class PlainListController {
   #onReconciled;
   #measurer;
 
-  /** @type {{element: HTMLElement, offset: number} | null} */
+  /** @type {{element: HTMLElement, offset: number, bottomOffset: number, index: string | undefined} | null} */
   #anchor = null;
   #prevScrollTop = 0;
   #prevScrollHeight = 0;
@@ -250,7 +250,7 @@ export class PlainListController {
    * Remembers the current reading position — the first row still intersecting the scroll element's
    * top edge, and its offset from it. Called automatically on scroll and after every observed DOM
    * change; exposed for callers that mutate content in ways the observers cannot see ahead of.
-   * @returns {{element: HTMLElement, offset: number} | null}
+   * @returns {{element: HTMLElement, offset: number, bottomOffset: number, index: string | undefined} | null}
    */
   captureAnchor() {
     const el = this.#getScrollElement();
@@ -283,7 +283,13 @@ export class PlainListController {
     }
 
     const element = items[found >= 0 ? found : items.length - 1];
-    this.#anchor = { element, offset: element.getBoundingClientRect().top - viewportTop };
+    const rect = element.getBoundingClientRect();
+    this.#anchor = {
+      element,
+      offset: rect.top - viewportTop,
+      bottomOffset: rect.bottom - viewportTop,
+      index: element.dataset.index,
+    };
     return this.#anchor;
   }
 
@@ -298,8 +304,15 @@ export class PlainListController {
     const anchor = this.#anchor;
     if (anchor && anchor.element.isConnected) {
       const viewportTop = el.getBoundingClientRect().top;
-      const current = anchor.element.getBoundingClientRect().top - viewportTop;
-      const delta = current - anchor.offset;
+      const rect = anchor.element.getBoundingClientRect();
+      // A prepend (the anchor's index moved) can resize the anchor row itself at its top — a date
+      // divider or run author line the new older neighbour makes redundant — so hold its bottom edge:
+      // that change is above what's being read. Not tied to the fold: at scrollTop 0 the first row
+      // can sit a few px below it (list padding) and still lose its divider.
+      const heldByBottom = anchor.element.dataset.index !== anchor.index;
+      const delta = heldByBottom
+        ? rect.bottom - viewportTop - anchor.bottomOffset
+        : rect.top - viewportTop - anchor.offset;
       if (Math.abs(delta) > 0.5) el.scrollTop += delta;
       return;
     }

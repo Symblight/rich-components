@@ -39,7 +39,30 @@
  * @property {{message: string}} [error]
  * @property {string} [replyToId]
  * @property {"read" | "unread"} [readState]
+ * @property {ChxMessageAuthor} [author] - shown by chx-message-list's `author-display`
  * @property {ChxMessagePart[]} parts
+ */
+
+/**
+ * @typedef {Object} ChxMessageAuthor
+ * @property {string} [name]
+ * @property {string} [avatarUrl]
+ */
+
+/**
+ * Per-row state, provided through `messageRowContext` to `chx-message` and anything slotted into it.
+ * @typedef {Object} ChxRowState
+ * @property {ChxMessage} message
+ * @property {ChxMessageAuthor} [author]
+ * @property {boolean} own
+ * @property {boolean} unread
+ * @property {boolean} streaming
+ * @property {boolean} sending
+ * @property {boolean} selected
+ * @property {boolean} compact
+ * @property {boolean} actionable - drilled into: interior controls should be tabbable
+ * @property {boolean} groupStart
+ * @property {boolean} groupEnd
  */
 
 export {};

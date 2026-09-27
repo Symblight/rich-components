@@ -75,10 +75,9 @@
   flex-direction: column;
   padding: 2px 0 0;
   overflow-anchor: none;
-  /* the scroller itself is overflow-x: hidden (see .infinity-scroll__scroller) so a stray-wide row
-     doesn't produce a full-width horizontal bar; give oversized row content its own scrollbar here
-     instead of letting it disappear under that clip */
-  overflow-x: auto;
+  /* clip, not auto: auto would force overflow-y to auto too and cut off anything a row floats above
+     itself (chx-message's compact actions panel); wide content scrolls inside its own element instead */
+  overflow-x: clip;
 }
 
 /* no-virtualization: every row is real, static-flow DOM — no windowed canvas height, no per-row

@@ -59,6 +59,8 @@ function renderCodePart(part, previous) {
   const block = /** @type {any} */ (previous ?? document.createElement("chx-code-block"));
   block.code = part.text ?? "";
   block.lang = /** @type {any} */ (part).lang ?? "";
+  block.copyable = true;
+  block.streaming = part.state === "streaming";
   return block;
 }
 
@@ -352,6 +354,9 @@ function renderToolCallPart(part, previous) {
     block.code = part.text;
     block.lang = "bash";
     block.label = data.command ?? "";
+    block.copyable = true;
+    block.streaming = part.state === "streaming";
+    block.error = attrs.status === "failed";
     if (!block.isConnected) el.replaceChildren(block);
   }
   return el;

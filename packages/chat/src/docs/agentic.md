@@ -235,9 +235,9 @@ outright, so this works as long as the adapter keeps a stable `partId` for the p
 
 `path` and `diff` — **ready-made unified-diff text**. ACP's diff block is `{path, oldText, newText}`
 with no diff in it; computing one is the app's job, the same way parsing markdown is. Renders through
-`chx-code-block` with `lang="diff"`, whose line-prefix pass colors added/removed/meta lines.
-`chx-code-block`'s new `label` property puts the file path in the header in place of the language
-name (a terminal block does the same with its command).
+`chx-code-block` with `lang="diff"`, which gives added/removed lines a full-row background and keeps
+the `+`/`−` sign beside it. The file path goes into `chx-code-block`'s `filename`, after the language
+label; a terminal block instead replaces the language label with its command via `label`.
 
 ## Adapter contract
 

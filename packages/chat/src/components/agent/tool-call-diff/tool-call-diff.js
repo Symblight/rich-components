@@ -20,7 +20,7 @@ export class ChxToolCallDiff extends LitElement {
   constructor() {
     super();
 
-    /** Shown as the block's header, in place of the language label. @type {string} */
+    /** Shown in the block's header after the "Diff" label. @type {string} */
     this.path = "";
 
     /** Unified diff text. ACP hands over `oldText`/`newText`, not a diff — computing one is the
@@ -38,9 +38,9 @@ export class ChxToolCallDiff extends LitElement {
       <chx-code-block
         class="tool-call-diff__block"
         part="block"
-        exportparts="container: block-container, header: block-header, label-group: block-label-group, label: block-label, actions: block-actions, body: block-body"
+        exportparts="container: block-container, header: block-header, label-group: block-label-group, label: block-label, filename: block-filename, meta: block-meta, actions: block-actions, copy: block-copy, wrap: block-wrap, body: block-body, toggle: block-toggle"
         .code=${this.diff}
-        .label=${this.path}
+        .filename=${this.path}
         lang="diff"
       >
         <slot name="actions" slot="actions"></slot>

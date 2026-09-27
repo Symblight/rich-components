@@ -161,7 +161,7 @@ export class ChxChat extends LitElement {
      */
     this.noVirtualization = false;
 
-    /** Pushed straight through to `chx-message-list.compact`. @type {boolean} */
+    /** Pushed straight through to `chx-message-list.compact` and `chx-message-composer.compact`. @type {boolean} */
     this.compact = false;
 
     /** Set true by a bound `<chx-conversations>` — engages multi-conversation mode. @type {boolean} */
@@ -884,6 +884,7 @@ export class ChxChat extends LitElement {
     // local echo); a delivery in flight raises it on its own. See `status`.
     composer.loading = this.loading || this.busy;
     composer.dragging = this.dragging;
+    composer.compact = this.compact;
     composer.messagesEmpty = this.#internalMessages.length === 0;
     composer.disabled = this.#conversationMode.isEmptyState; // no active conversation → can't compose/send
   }

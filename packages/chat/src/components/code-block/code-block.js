@@ -86,6 +86,9 @@ export class ChxCodeBlock extends LitElement {
   /** @type {ReturnType<typeof setTimeout> | undefined} */
   #copiedResetTimer;
 
+  /** Set when focusing the editable body expanded a collapsed block, so blur can clamp it again. */
+  #autoExpanded = false;
+
   /** @type {EditableBodyController} */
   #editableBody = new EditableBodyController(this, {
     getContainer: () => {
@@ -162,7 +165,7 @@ export class ChxCodeBlock extends LitElement {
     this.error = false;
 
     /** @type {boolean} Clamps a block longer than `collapsedLines` behind a "Show all" toggle. */
-    this.collapsible = false;
+    this.collapsible = true;
 
     /** @type {number} Visible line count while collapsed. */
     this.collapsedLines = 8;
@@ -308,14 +311,42 @@ export class ChxCodeBlock extends LitElement {
       .join("\n");
   }
 
-  get #isCollapsed() {
-    return (
-      this.collapsible &&
-      !this.editable &&
-      !this.expanded &&
-      this.#lines.length > this.collapsedLines
-    );
+  /** `#lines` is only built for the read-only body, so the editable one counts `code` directly. */
+  get #lineCount() {
+    if (!this.editable) return this.#lines.length;
+    const count = this.code.split("\n").length;
+    return this.code.endsWith("\n") && count > 1 ? count - 1 : count;
   }
+
+  get #overflows() {
+    return this.collapsible && this.#lineCount > this.collapsedLines;
+  }
+
+  get #isCollapsed() {
+    return this.#overflows && !this.expanded;
+  }
+
+  /** @param {boolean} expanded */
+  #setExpanded(expanded) {
+    this.expanded = expanded;
+    this.#emit("chx-code-block-expanded-change", { expanded });
+  }
+
+  /** Editing a clamped body would put the caret in hidden lines, so focus expands it. */
+  handleBodyFocusin = () => {
+    if (!this.#isCollapsed) return;
+    this.#autoExpanded = true;
+    this.#setExpanded(true);
+  };
+
+  /** Re-clamps only a block focus itself expanded, once focus leaves the whole block.
+   *  @param {FocusEvent} event */
+  handleBodyFocusout = (event) => {
+    const next = /** @type {Node | null} */ (event.relatedTarget);
+    if (!this.#autoExpanded || (next && this.renderRoot.contains(next))) return;
+    this.#autoExpanded = false;
+    this.#setExpanded(false);
+  };
 
   /** Applies the picked language from the `md-menu` and fires `chx-code-block-lang-change`.
    *  @param {CustomEvent<{value: string}>} event */
@@ -344,8 +375,8 @@ export class ChxCodeBlock extends LitElement {
   };
 
   handleToggleClick = () => {
-    this.expanded = !this.expanded;
-    this.#emit("chx-code-block-expanded-change", { expanded: this.expanded });
+    this.#autoExpanded = false;
+    this.#setExpanded(!this.expanded);
   };
 
   /** @param {string} type @param {unknown} detail */
@@ -443,6 +474,8 @@ export class ChxCodeBlock extends LitElement {
           @paste=${this.#editableBody.handlePaste}
           @compositionstart=${this.#editableBody.handleCompositionStart}
           @compositionend=${this.#editableBody.handleCompositionEnd}
+          @focusin=${this.handleBodyFocusin}
+          @focusout=${this.handleBodyFocusout}
         ></div>`,
       () =>
         html`<pre
@@ -456,9 +489,7 @@ export class ChxCodeBlock extends LitElement {
   }
 
   #renderToggle() {
-    const overflows =
-      this.collapsible && !this.editable && this.#lines.length > this.collapsedLines;
-    if (!overflows) return nothing;
+    if (!this.#overflows) return nothing;
     return html`
       <button
         class="code-block__toggle"
@@ -468,7 +499,7 @@ export class ChxCodeBlock extends LitElement {
         aria-expanded=${this.expanded ? "true" : "false"}
         @click=${this.handleToggleClick}
       >
-        ${this.expanded ? "Show less" : `Show all ${this.#lines.length} lines`}
+        ${this.expanded ? "Show less" : `Show all ${this.#lineCount} lines`}
         <span class="code-block__toggle-icon" aria-hidden="true">${unsafeSVG(expandMoreIcon)}</span>
       </button>
     `;

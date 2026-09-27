@@ -110,6 +110,16 @@
     margin-inline-end: var(--chx-message-compact-avatar-gap);
   }
 
+  /* compact rows are left-aligned, so the column is reserved even when the row has no avatar to fill
+     it (a joined row whose author lacks one, an optimistic send) — chx-message-list zeroes it for
+     author-display="none" */
+  :host([compact]) & {
+    min-inline-size: var(
+      --chx-message-compact-avatar-column,
+      calc(var(--chx-message-compact-avatar-radius) * 2 + var(--chx-message-compact-avatar-gap))
+    );
+  }
+
   /* covers a slotted avatar too — a run shows one avatar whoever renders it; visibility keeps the column */
   :host([joined-next]:not([compact])) &,
   :host([compact][joined-previous]) & {

@@ -35,6 +35,7 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     getTriggerFields: { attribute: false },
     loading: { type: Boolean, reflect: true, attribute: true },
     disabled: { type: Boolean, reflect: true, attribute: true },
+    compact: { type: Boolean, reflect: true, attribute: true },
     sendLabel: { type: String, attribute: "send-label" },
     stopLabel: { type: String, attribute: "stop-label" },
     simplified: { state: true },
@@ -87,6 +88,9 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
 
     /** @type {Boolean} Pushed down from chx-message-composer — empty state: blocks send + makes the editor read-only. */
     this.disabled = false;
+
+    /** @type {boolean} Set by chx-message-composer — MD3 density −2 sizing, CSS-only. */
+    this.compact = false;
 
     /** @type {String} Mirrors the editor's live value — drives the submit button's visibility. */
     this.value = "";

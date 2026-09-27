@@ -164,7 +164,7 @@ export class ChxMessageList extends LitElement {
     streaming: { type: Boolean, reflect: true, attribute: true },
     emptyState: { type: Boolean, reflect: true, attribute: "empty-state" },
     compact: { type: Boolean, reflect: true, attribute: true },
-    authorDisplay: { type: String, attribute: "author-display" },
+    authorDisplay: { type: String, reflect: true, attribute: "author-display" },
     selectedId: { type: String, attribute: "selected-id" },
     loading: { type: Boolean },
     hasMore: { type: Boolean },
@@ -177,6 +177,9 @@ export class ChxMessageList extends LitElement {
   #partRenderer; // per-part element rendering + cache — assigned in the constructor, below
   /** @type {DividerController} */
   #dividerController; // date dividers — assigned in the constructor, below
+  /** Last known author per authorId, rebuilt when `messages` changes by reference.
+   *  @type {{messages: ChxMessage[], byId: Map<string, import("../../types/message.js").ChxMessageAuthor>} | undefined} */
+  #knownAuthors;
   /** @type {GroupController} */
   #groups; // same-author runs — assigned in the constructor, below
   /** @type {StickyController} */
@@ -454,9 +457,24 @@ export class ChxMessageList extends LitElement {
 
   /** The row's author, per `author-display`. @param {ChxMessage} message */
   #authorFor(message) {
-    return this.authorDisplay === "all" || (this.authorDisplay === "incoming" && !message.own)
-      ? message.author
-      : undefined;
+    if (this.authorDisplay !== "all" && (this.authorDisplay !== "incoming" || message.own))
+      return undefined;
+    // an optimistic send or a realtime event often carries only authorId — borrow the author from
+    // another message by the same authorId
+    if (message.author || message.authorId === undefined) return message.author;
+    return this.#authorsById().get(message.authorId);
+  }
+
+  #authorsById() {
+    if (this.#knownAuthors?.messages !== this.messages) {
+      const byId = new Map();
+      for (const message of this.messages) {
+        if (message.author && message.authorId !== undefined)
+          byId.set(message.authorId, message.author);
+      }
+      this.#knownAuthors = { messages: this.messages, byId };
+    }
+    return this.#knownAuthors.byId;
   }
 
   /** Passed to chx-infinity-scroll as `.renderItem`. @param {ChxMessage} message @param {number} index */

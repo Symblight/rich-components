@@ -1,4 +1,4 @@
-import { html, LitElement } from "lit";
+import { html, LitElement, nothing, render } from "lit";
 import { customElement } from "lit/decorators.js";
 import { directive, Directive, PartType } from "lit/directive.js";
 import { when } from "lit/directives/when.js";
@@ -8,6 +8,7 @@ import { classMap } from "lit/directives/class-map.js";
 
 import "@symblight/wc-material/progress-circular";
 import "../message/message.js";
+import "../message-row/message-row.js";
 import "../infinity-scroll/infinity-scroll.js";
 import "../loading-history/loading-history.js";
 import "../divider/divider.js";
@@ -15,6 +16,7 @@ import { FocusBehaviorController } from "../../controllers/message-list/FocusBeh
 import { BottomAnchorController } from "../../controllers/message-list/BottomAnchorController.js";
 import { ReadTrackingController } from "../../controllers/message-list/ReadTrackingController.js";
 import { DividerController } from "../../controllers/message-list/DividerController.js";
+import { GroupController } from "../../controllers/message-list/GroupController.js";
 import { PartRenderer } from "./PartRenderer.js";
 import { StatusController } from "../../controllers/message-list/StatusController.js";
 import { StickyController } from "../../controllers/message-list/StickyController.js";
@@ -34,7 +36,10 @@ const MESSAGE_PARTS = [
   "body",
   "meta",
   "attachments",
+  "before-content",
   "content",
+  "after-content",
+  "status",
   "actions",
 ];
 const MESSAGE_EXPORTPARTS = MESSAGE_PARTS.map((part) => `${part}: message-${part}`).join(", ");
@@ -46,7 +51,22 @@ const MESSAGE_STATE_PARTS = [
   "message-unread",
   "message-streaming",
   "message-system",
+  "message-compact",
+  "message-loading",
+  "message-selected",
 ];
+// attributes chx-message reflects on itself — a pattern mutating only these is not a consumer change
+const MESSAGE_OWN_ATTRIBUTES = new Set([
+  "role",
+  "aria-busy",
+  "aria-current",
+  "own",
+  "unread",
+  "compact",
+  "loading",
+  "selected",
+  "data-actionable",
+]);
 const INFINITY_SCROLL_EXPORTPARTS = [
   "scroller",
   "sticky",
@@ -57,16 +77,25 @@ const INFINITY_SCROLL_EXPORTPARTS = [
   ...MESSAGE_PARTS.map((part) => `message-${part}`),
 ].join(", ");
 
+/** Own message still being delivered — an incoming reply shell is also "sending" while it streams,
+ * but that's `busy`, not a delivery state. @param {ChxMessage} message */
+function isSending(message) {
+  return message.own && message.status === "sending";
+}
+
 /** The row's part names, drawn from MESSAGE_STATE_PARTS. Custom properties set in a matching
  * `::part()` rule inherit into chx-message's shadow tree, which is how a page restyles a row's
  * interior (e.g. a chrome-free system row) without a nested part selector — those don't exist.
- * @param {ChxMessage} message @param {boolean} streaming */
-function messagePartNames(message, streaming) {
+ * @param {ChxMessage} message @param {{streaming: boolean, compact: boolean, selected: boolean}} state */
+function messagePartNames(message, { streaming, compact, selected }) {
   const names = ["message"];
   names.push(message.own ? "message-own" : "message-incoming");
   if (message.readState === "unread") names.push("message-unread");
   if (streaming) names.push("message-streaming");
   if (message.parts?.[0]?.type === "system") names.push("message-system");
+  if (compact) names.push("message-compact");
+  if (isSending(message)) names.push("message-loading");
+  if (selected) names.push("message-selected");
   return names.join(" ");
 }
 
@@ -125,6 +154,8 @@ export class ChxMessageList extends LitElement {
     typing: { type: Boolean, reflect: true, attribute: true },
     streaming: { type: Boolean, reflect: true, attribute: true },
     emptyState: { type: Boolean, reflect: true, attribute: "empty-state" },
+    compact: { type: Boolean, reflect: true, attribute: true },
+    selectedId: { type: String, attribute: "selected-id" },
     loading: { type: Boolean },
     hasMore: { type: Boolean },
     onLoadMore: { attribute: false },
@@ -136,6 +167,8 @@ export class ChxMessageList extends LitElement {
   #partRenderer; // per-part element rendering + cache — assigned in the constructor, below
   /** @type {DividerController} */
   #dividerController; // date dividers — assigned in the constructor, below
+  /** @type {GroupController} */
+  #groups; // same-author runs — assigned in the constructor, below
   /** @type {StickyController} */
   #stickyController; // floating stuck-section date label — assigned in the constructor, below
   /** @type {StatusController} */
@@ -148,6 +181,23 @@ export class ChxMessageList extends LitElement {
   #readTracking; // fire-once chx-message-read dedup + readState gate — assigned in the constructor, below
   /** @type {BottomAnchorController} */
   #bottomAnchor; // away-from-bottom state + scrollToBottom — assigned in the constructor, below
+  /** The app's `<chx-message slot="message">`, cloned into every row. @type {HTMLElement | undefined} */
+  #messagePattern;
+  /** message id → that row's clone of the pattern. @type {Map<string, HTMLElement>} */
+  #messageClones = new Map();
+  #patternObserver = new MutationObserver((records) => {
+    const consumerChange = records.some(
+      (record) =>
+        !(
+          record.type === "attributes" &&
+          record.target === this.#messagePattern &&
+          MESSAGE_OWN_ATTRIBUTES.has(/** @type {string} */ (record.attributeName))
+        ),
+    );
+    if (!consumerChange) return;
+    this.#messageClones.clear();
+    this.#requestRerender();
+  });
   /** Re-renders this host *and* chx-infinity-scroll. The second call is not redundant: none of the
    *  properties passed down change by reference on a plain host re-render, so Lit's `PropertyPart`
    *  skips re-setting them and the rows never re-run `#renderItem`. Anything that changes what a row
@@ -230,6 +280,12 @@ export class ChxMessageList extends LitElement {
     /** No active conversation (removed / none selected) — gates the `empty` slot, which has a default. @type {boolean} */
     this.emptyState = false;
 
+    /** Pushed onto every row's `compact`. @type {boolean} */
+    this.compact = false;
+
+    /** Id of the highlighted row (jump-to / permalink), persistent until cleared. @type {string | undefined} */
+    this.selectedId = undefined;
+
     /** Forwarded straight to `chx-infinity-scroll` — pushed down from chx-chat's `PaginationController`. @type {boolean} */
     this.loading = false;
 
@@ -254,6 +310,11 @@ export class ChxMessageList extends LitElement {
     });
 
     this.#dividerController = new DividerController({ getMessages: () => this.messages });
+
+    this.#groups = new GroupController({
+      getMessages: () => this.messages,
+      hasDividerBefore: (message, index) => this.#dividerController.shouldShow(message, index),
+    });
 
     this.#partRenderer = new PartRenderer({ getPartElements: () => this.partElements });
 
@@ -284,8 +345,58 @@ export class ChxMessageList extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
+    this.#observePattern();
     // reconnect-must-reset, same posture VisibilityController/RowMeasurer already have
     this.#readTracking.reset();
+  }
+
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this.#patternObserver.disconnect();
+  }
+
+  /** Discovers the app's `<chx-message slot="message">` pattern; renders nothing itself.
+   * @param {Event} event */
+  #handleMessagePatternSlotchange = (event) => {
+    const assigned = /** @type {HTMLSlotElement} */ (event.target).assignedElements();
+    const pattern = assigned[0];
+    if (assigned.length > 1 || (pattern && pattern.localName !== "chx-message")) {
+      console.error('chx-message-list: slot="message" takes exactly one <chx-message>');
+    }
+    this.#messagePattern =
+      assigned.length === 1 && pattern.localName === "chx-message"
+        ? /** @type {HTMLElement} */ (pattern)
+        : undefined;
+    if (this.#messagePattern?.querySelector("[id]")) {
+      console.warn('chx-message-list: ids inside slot="message" are duplicated in every row');
+    }
+    this.#observePattern();
+    this.#messageClones.clear();
+    this.#requestRerender();
+  };
+
+  #observePattern() {
+    this.#patternObserver.disconnect();
+    if (!this.#messagePattern) return;
+    this.#patternObserver.observe(this.#messagePattern, {
+      attributes: true,
+      childList: true,
+      characterData: true,
+      subtree: true,
+    });
+  }
+
+  /** @param {string} id @returns {HTMLElement} */
+  #messageClone(id) {
+    let clone = this.#messageClones.get(id);
+    if (!clone) {
+      clone = /** @type {HTMLElement} */ (
+        /** @type {HTMLElement} */ (this.#messagePattern).cloneNode(true)
+      );
+      clone.removeAttribute("slot");
+      this.#messageClones.set(id, clone);
+    }
+    return clone;
   }
 
   /** Discovers the slotted `<chx-divider slot="divider">` config carrier; renders nothing itself.
@@ -319,8 +430,12 @@ export class ChxMessageList extends LitElement {
     if (!this.#pendingRenderedMessageIds) {
       this.#pendingRenderedMessageIds = new Set();
       queueMicrotask(() => {
+        const rendered = /** @type {Set<string>} */ (this.#pendingRenderedMessageIds);
         this.#partRenderer.sweep();
-        this.#dividerController.sweep(/** @type {Set<string>} */ (this.#pendingRenderedMessageIds));
+        this.#dividerController.sweep(rendered);
+        for (const id of this.#messageClones.keys()) {
+          if (!rendered.has(id)) this.#messageClones.delete(id);
+        }
         this.#pendingRenderedMessageIds = undefined;
       });
     }
@@ -331,30 +446,57 @@ export class ChxMessageList extends LitElement {
   #renderMessage(message, index) {
     /** @type {Set<string>} */ (this.#pendingRenderedMessageIds).add(message.id);
     const streaming = message.parts.some((part) => part.state === "streaming");
+    const selected = this.selectedId !== undefined && message.id === this.selectedId;
     // before the html below — every ${} evaluates eagerly, at tag-call time, so the tabindex binding
     // would otherwise read an unseeded focus state on the very first row
     this.#focusBehavior.ensureSeeded(message.id);
 
+    /** @type {import("../../types/message.js").ChxRowState} */
+    const row = {
+      message,
+      author: undefined,
+      own: message.own,
+      unread: message.readState === "unread",
+      streaming,
+      sending: isSending(message),
+      selected,
+      compact: this.compact,
+      actionable: this.#focusBehavior.isActionable(message.id),
+      ...this.#groups.at(index),
+    };
+    const partNames = messagePartNames(message, { streaming, compact: this.compact, selected });
     // a part missing `id` was already console.error'd by validateMessages — excluded here too
-    const row = html`
-      <chx-message
-        part=${messagePartNames(message, streaming)}
-        exportparts=${MESSAGE_EXPORTPARTS}
+    const parts = message.parts
+      .filter((part) => part.id)
+      .map((part, partIndex) => this.#partRenderer.render(part, message, partIndex));
+
+    let content;
+    if (this.#messagePattern) {
+      const clone = this.#messageClone(message.id);
+      clone.setAttribute("part", partNames);
+      clone.setAttribute("exportparts", MESSAGE_EXPORTPARTS);
+      // appends after the pattern's own children and only ever manages that range
+      render(parts, clone);
+      content = clone;
+    } else {
+      content = html`<chx-message part=${partNames} exportparts=${MESSAGE_EXPORTPARTS}
+        >${parts}</chx-message
+      >`;
+    }
+
+    const rowTemplate = html`
+      <chx-message-row
         data-message-id=${message.id}
         tabindex=${this.#focusBehavior.isFocused(message.id) ? 0 : -1}
         aria-label=${message.own ? "Your message" : "Message"}
-        .own=${message.own}
-        .busy=${streaming}
-        .unread=${message.readState === "unread"}
-        .actionable=${this.#focusBehavior.isActionable(message.id)}
+        aria-busy=${streaming ? "true" : "false"}
+        aria-current=${selected ? "true" : nothing}
+        .row=${row}
         ${interiorTabbing(this.#focusBehavior, message.id)}
+        >${content}</chx-message-row
       >
-        ${message.parts
-          .filter((part) => part.id)
-          .map((part, partIndex) => this.#partRenderer.render(part, message, partIndex))}
-      </chx-message>
     `;
-    return this.#dividerController.wrap(row, message, index);
+    return this.#dividerController.wrap(rowTemplate, message, index);
   }
 
   /** The chx-infinity-scroll instance rendering this list. @returns {ChxInfinityScroll | undefined} */
@@ -370,6 +512,10 @@ export class ChxMessageList extends LitElement {
   /** @param {import("lit").PropertyValues} changedProperties */
   willUpdate(changedProperties) {
     if (changedProperties.has("messages")) this.#readTracking.syncReadStates();
+    // rows only re-render when infinity-scroll does, which a plain host update doesn't trigger
+    if (changedProperties.has("compact") || changedProperties.has("selectedId")) {
+      this.#infinityScrollElement?.requestUpdate();
+    }
   }
 
   /**
@@ -482,6 +628,7 @@ export class ChxMessageList extends LitElement {
       ${when(this.#status.loadingHistory, () => html`<slot name="loading-history"></slot>`)}
       ${when(this.#bottomAnchor.awayFromBottom, () => html`<slot name="scroll-to-bottom"></slot>`)}
       <slot name="divider" hidden @slotchange=${this.#handleDividerSlotchange}></slot>
+      <slot name="message" hidden @slotchange=${this.#handleMessagePatternSlotchange}></slot>
     `;
   }
 }

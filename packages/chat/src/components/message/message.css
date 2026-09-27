@@ -1,21 +1,60 @@
 :host {
+  position: relative;
   display: flex;
-  align-items: flex-start;
+  /* the avatar sits beside the newest bubble of a run, at its bottom edge */
+  align-items: flex-end;
   /* the row wrapper is a column flex container, so this is what keeps a short message hugging its
      own content instead of stretching — chx-message-list used to set it inline, which no page-level
      ::part(message) rule could ever beat */
   align-self: flex-start;
-  --chx-message-max-width: 480px;
-  --chx-message-padding: 0.5rem 0.75rem;
+  --chx-message-max-width: min(480px, 78%);
+  --chx-message-font-size: 0.875rem;
+  --chx-message-line-height: 1.6;
+  --chx-message-padding: 0.5rem 0.875rem;
   --chx-message-border-radius: 1rem;
+  /* the corners facing a neighbour in the same run, so the run reads as one reply */
+  --chx-message-joined-border-radius: 0.25rem;
+  --chx-message-color: var(--md-sys-color-on-surface);
   --chx-message-background-color: var(--md-sys-color-surface-container-high);
+  --chx-message-own-color: var(--md-sys-color-on-primary-container);
   --chx-message-own-background-color: var(--md-sys-color-primary-container);
   --chx-message-avatar-gap: 0.5rem;
+  /* px only — md-avatar reads it as a number */
+  --chx-message-avatar-radius: 14px;
+  --chx-message-author-color: var(--md-sys-color-on-surface-variant);
+  --chx-message-author-font-size: 0.75rem;
+  --chx-message-time-font-size: 0.6875rem;
+  --chx-message-content-gap: 0.25rem;
   --chx-message-unread-marker-gap: 0.5rem;
-  --chx-message-meta-gap: 0.25rem;
+  --chx-message-meta-gap: 0.1875rem;
   --chx-message-attachments-gap: 0.375rem;
   --chx-message-actions-gap: 0.25rem;
+  --chx-message-status-gap: 0.25rem;
+  --chx-message-status-color: var(--md-sys-color-on-surface-variant);
+  --chx-message-selected-background-color: color-mix(
+    in srgb,
+    var(--md-sys-color-secondary-container) 40%,
+    transparent
+  );
+  --chx-message-compact-padding: 0.1875rem 0.75rem;
+  --chx-message-compact-border-radius: 0.5rem;
+  --chx-message-compact-font-size: 0.84375rem;
+  --chx-message-compact-line-height: 1.55;
+  --chx-message-compact-author-font-size: 0.78125rem;
+  --chx-message-compact-author-color: var(--md-sys-color-on-surface);
+  --chx-message-compact-own-author-color: var(--md-sys-color-primary);
+  --chx-message-compact-avatar-gap: 0.625rem;
+  /* px only — md-avatar reads it as a number */
+  --chx-message-compact-avatar-radius: 12px;
+  --chx-message-compact-hover-background-color: var(--md-sys-color-surface-container-low);
+  --chx-message-compact-actions-background-color: var(--md-sys-color-surface-container-lowest);
+  --chx-message-compact-actions-border-color: var(--md-sys-color-outline-variant);
   max-width: var(--chx-message-max-width);
+}
+
+/* inherited from chx-message-list, so a standalone message gets no margin */
+:host(:not([joined-previous])) {
+  margin-block-start: var(--chx-message-group-gap, 0);
 }
 
 :host([own]) {
@@ -37,19 +76,64 @@
   flex: none;
 }
 
+/* covers a slotted avatar too — a run shows one avatar whoever renders it; visibility keeps the column */
+:host([joined-next]:not([compact])) .message__avatar,
+:host([compact][joined-previous]) .message__avatar {
+  visibility: hidden;
+}
+
+/* regular own messages: the side already says who wrote it (override via ::part(message-avatar)) */
+:host([own]:not([compact])) .message__avatar,
+:host([own]:not([compact])) .message__meta {
+  display: none;
+}
+
+:host([joined-previous]) .message__meta {
+  display: none;
+}
+
 .message__avatar ::slotted(*) {
   margin-inline-end: var(--chx-message-avatar-gap);
 }
 
+.message__avatar-image {
+  --md-avatar-size: var(--chx-message-avatar-radius);
+
+  flex: none;
+  margin-inline-end: var(--chx-message-avatar-gap);
+  /* md-avatar's inline svg otherwise sits on a text line, adding a descender below the circle */
+  line-height: 0;
+}
+
 .message__body {
+  position: relative;
   display: flex;
   flex-direction: column;
   flex: 1 1 auto;
   min-width: 0;
 }
 
+:host([own]) .message__body {
+  align-items: flex-end;
+}
+
 .message__meta ::slotted(*) {
   margin-block-end: var(--chx-message-meta-gap);
+}
+
+.message__meta-default {
+  display: flex;
+  align-items: baseline;
+  gap: 0.375rem;
+  margin: 0 0.25rem var(--chx-message-meta-gap);
+  color: var(--chx-message-author-color);
+  font-size: var(--chx-message-author-font-size);
+  font-weight: 500;
+}
+
+.message__time {
+  font-size: var(--chx-message-time-font-size);
+  font-weight: 400;
 }
 
 .message__attachments {
@@ -59,11 +143,19 @@
 }
 
 .message__attachments ::slotted(*) {
-  padding: 0.4rem;
+  margin-block-end: 0.25rem;
 }
 
 :host([own]) .message__attachments {
-  align-self: flex-end;
+  justify-content: flex-end;
+}
+
+.message__before-content ::slotted(*) {
+  margin-block-end: var(--chx-message-content-gap);
+}
+
+.message__after-content ::slotted(*) {
+  margin-block-start: var(--chx-message-content-gap);
 }
 
 .message__content {
@@ -71,6 +163,10 @@
   padding: var(--chx-message-padding);
   border-radius: var(--chx-message-border-radius);
   background-color: var(--chx-message-background-color);
+  color: var(--chx-message-color);
+  font-size: var(--chx-message-font-size);
+  font-weight: 400;
+  line-height: var(--chx-message-line-height);
   /* long unbreakable tokens (URLs, hashes, code) wrap inside max-width instead of spilling past it */
   overflow-wrap: anywhere;
   word-break: break-word;
@@ -78,8 +174,170 @@
 
 :host([own]) .message__content {
   background-color: var(--chx-message-own-background-color);
+  color: var(--chx-message-own-color);
 }
 
-.message__actions ::slotted(*) {
-  margin-block-start: var(--chx-message-actions-gap);
+/* the neighbour's side is the avatar side for incoming, the far side for own */
+:host([joined-previous]:not([own])) .message__content {
+  border-start-start-radius: var(--chx-message-joined-border-radius);
+}
+
+:host([joined-next]:not([own])) .message__content {
+  border-end-start-radius: var(--chx-message-joined-border-radius);
+}
+
+:host([joined-previous][own]) .message__content {
+  border-start-end-radius: var(--chx-message-joined-border-radius);
+}
+
+:host([joined-next][own]) .message__content {
+  border-end-end-radius: var(--chx-message-joined-border-radius);
+}
+
+/* out of flow, so they never move the avatar or the row height; beside the bubble on its free side */
+.message__actions {
+  position: absolute;
+  z-index: 3;
+  inset-block-start: 50%;
+  inset-inline-start: 100%;
+  display: flex;
+  align-items: center;
+  gap: var(--chx-message-actions-gap);
+  margin-inline-start: 0.25rem;
+  /* chx-message-list sets these on the whole row's hover — this element alone is only the bubble wide */
+  opacity: var(--chx-message-actions-opacity, 0);
+  pointer-events: var(--chx-message-actions-pointer-events, none);
+  transform: translateY(-50%);
+  transition: opacity 0.12s;
+}
+
+:host([own]) .message__actions {
+  inset-inline: auto 100%;
+  flex-direction: row-reverse;
+  margin-inline: 0 0.25rem;
+}
+
+:host(:hover) .message__actions,
+:host(:focus-within) .message__actions,
+:host([data-actionable]) .message__actions {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+/* no hover to reveal them on touch */
+@media (hover: none) {
+  .message__actions {
+    opacity: 1;
+    pointer-events: auto;
+  }
+}
+
+.message__actions_empty {
+  display: none;
+}
+
+.message__status {
+  display: flex;
+  align-items: center;
+  gap: var(--chx-message-status-gap);
+  margin: 0.1875rem 0.375rem 0;
+  color: var(--chx-message-status-color);
+  font-size: 0.6875rem;
+}
+
+.message__status-spinner {
+  font-size: 0.8125rem;
+  /* the rotating svg's bounding box outgrows 1em and counts as scrollable overflow at the list edge */
+  overflow: hidden;
+}
+
+/* regular rows shrink-wrap their bubble, so the tint bleeds sideways via a clipped shadow */
+:host([selected]:not([compact])) {
+  background-color: var(--chx-message-selected-background-color);
+  box-shadow: 0 0 0 100vmax var(--chx-message-selected-background-color);
+  clip-path: inset(0 -100vmax);
+}
+
+/* compact: flat rows, all left-aligned, the run reads top-down so avatar and meta go on its first line */
+:host([compact]) {
+  align-items: flex-start;
+  align-self: stretch;
+  flex-direction: row;
+  max-width: none;
+  padding: var(--chx-message-compact-padding);
+  border-radius: var(--chx-message-compact-border-radius);
+}
+
+:host([compact]:hover) {
+  background-color: var(--chx-message-compact-hover-background-color);
+}
+
+:host([compact][selected]) {
+  background-color: var(--chx-message-selected-background-color);
+}
+
+:host([compact]) .message__avatar ::slotted(*),
+:host([compact]) .message__avatar-image {
+  margin-inline-end: var(--chx-message-compact-avatar-gap);
+}
+
+:host([compact]) .message__avatar-image {
+  --md-avatar-size: var(--chx-message-compact-avatar-radius);
+
+  margin-block-start: 1px;
+}
+
+:host([compact]) .message__body {
+  position: static;
+  align-items: stretch;
+}
+
+/* compact has no bubble to sit beside — a floating panel over the row's top end instead */
+:host([compact]) .message__actions {
+  inset-block-start: -0.75rem;
+  inset-inline: auto 0.625rem;
+  flex-direction: row;
+  margin: 0;
+  padding: 2px;
+  background-color: var(--chx-message-compact-actions-background-color);
+  border: 1px solid var(--chx-message-compact-actions-border-color);
+  border-radius: var(--chx-message-compact-border-radius);
+  box-shadow: 0 1px 3px rgb(0 0 0 / 12%);
+  transform: none;
+}
+
+:host([compact]) .message__meta-default {
+  margin: 0.1875rem 0 0.0625rem;
+  color: var(--chx-message-compact-author-color);
+  font-size: var(--chx-message-compact-author-font-size);
+}
+
+:host([compact][own]) .message__author {
+  color: var(--chx-message-compact-own-author-color);
+}
+
+:host([compact]) .message__time {
+  color: var(--chx-message-author-color);
+}
+
+:host([compact]) .message__content {
+  padding: 0;
+  border-radius: 0;
+  background-color: transparent;
+  color: var(--chx-message-color);
+  font-size: var(--chx-message-compact-font-size);
+  line-height: var(--chx-message-compact-line-height);
+}
+
+:host([compact]) .message__attachments {
+  justify-content: flex-start;
+}
+
+:host([compact]) .message__attachments ::slotted(*) {
+  margin-block: 0.25rem;
+}
+
+:host([compact]) .message__status {
+  align-self: flex-start;
+  margin-inline: 0;
 }

@@ -150,88 +150,59 @@ function createSlowReplyAdapter() {
 }
 
 /**
- * Own messages align right, the assistant's align left; enough messages to scroll. `scroll-behavior=
- * "smooth"` on `chx-message-list` animates `scrollToBottom()` instead of jumping instantly. Sending a
- * message gets a fake reply after a "thinking" delay (`createSlowReplyAdapter` above) — the slotted
- * `<chx-streaming-indicator slot="streaming">` below shows automatically for that whole window (no
- * story-level wiring needed, `chx-chat` derives `streaming` from its own in-flight-delivery state)
- * and disappears the instant the reply lands.
- */
-/** @type {Story} */
-export const WithMessages = {
-  render: () => html`
-    <chx-chat .userId=${"me"} .messages=${makeMessages(20)} .adapter=${createSlowReplyAdapter()}>
-      <chx-message-list slot="message-list" scroll-behavior="smooth">
-        <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
-      </chx-message-list>
-      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
-        <md-button slot="actions" variant="text">Opus 4.8</md-button>
-      </chx-message-composer>
-    </chx-chat>
-  `,
-};
-
-/**
- * Restyling messages is CSS-only — there is no whole-message render hook. `chx-message-list` always
- * builds the `<chx-message>` itself and stamps a closed vocabulary of part names on it (`message`,
- * plus `message-own`/`message-unread`/`message-streaming`/`message-system` where they apply),
- * forwarding those plus its interior parts (`message-content`, `message-body`, `message-meta`, …)
- * out through an `exportparts` chain at every intermediate host — `::part()` only travels one shadow
- * level at a time, and chx-message sits two deep (chx-message-list → chx-infinity-scroll →
- * chx-message).
+ * Default message styles — own messages align right, the assistant's align left. Controls:
  *
- * Two mechanics worth copying from this block. Part selectors **don't nest** — there is no
- * `::part(message-own)::part(message-content)` — so a rule that has to reach a row's *interior*
- * goes through `--chx-message-*` instead: custom properties set in a matching `::part()` rule
- * inherit right into chx-message's shadow tree, which is how the own-message bubble below gets its
- * own color. And a page-level `::part()` rule beats the component's own `:host` rules, so plain
- * declarations (`max-width`, `align-self`) land directly on the host.
- */
-const customizedMessageStyles = html`
-  <style>
-    .customized-messages::part(message) {
-      --chx-message-border-radius: 0.375rem 1rem 1rem 1rem;
-      --chx-message-background-color: var(--md-sys-color-surface-container-highest);
-      max-width: 520px;
-    }
-    .customized-messages::part(message-own) {
-      --chx-message-border-radius: 1rem 0.375rem 1rem 1rem;
-      --chx-message-background-color: var(--md-sys-color-primary);
-      --chx-message-padding: 0.5rem 1rem;
-    }
-    .customized-messages::part(message-content) {
-      font-size: 0.9375rem;
-      line-height: 1.5;
-    }
-    /* :hover after ::part() is allowed — it matches the part element's own state */
-    .customized-messages::part(message):hover {
-      --chx-message-background-color: var(--md-sys-color-surface-container-high);
-    }
-  </style>
-`;
-
-/**
- * Same `chx-chat`/`chx-message-list`/`chx-message-composer` shape as `WithMessages` above, restyled
- * entirely from the page with `::part()` + `--chx-message-*` (see `customizedMessageStyles` above):
- * asymmetric bubble corners that flip for own messages, a filled own-message bubble, and a hover
- * tint — no JS, no per-message wiring.
+ * - "Toggle compact" button — `chx-chat`'s flat density (pushed through `chx-message-list` onto every
+ *   row): no bubbles, everything left-aligned, hover tint.
+ * - `selectedId` — `chx-message-list`'s persistent highlight (jump-to / permalink), `aria-current`.
+ * - Send a message: it shows the `status` slot's default "Sending…" until the fake adapter accepts
+ *   it (~1.8s, `createSlowReplyAdapter`), while the slotted `<chx-streaming-indicator>` covers the
+ *   wait for the reply.
  */
 /** @type {Story} */
-export const CustomizedMessages = {
-  render: () => html`
-    ${customizedMessageStyles}
-    <chx-chat .userId=${"me"} .messages=${makeMessages(8)} .adapter=${createSlowReplyAdapter()}>
-      <chx-message-list
-        slot="message-list"
-        class="customized-messages"
-        scroll-behavior="smooth"
-      >
-        <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
-      </chx-message-list>
-      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
-      </chx-message-composer>
-    </chx-chat>
-  `,
+export const Messages = {
+  args: { selectedId: "msg-5" },
+  argTypes: {
+    selectedId: {
+      control: "select",
+      options: ["", ...makeMessages(20).map((message) => message.id)],
+    },
+  },
+  render: (args) => {
+    /** @type {import("../components/base/chat.js").ChxChat | undefined} */
+    let chatEl;
+    return html`
+      <div style="height: 100%; display: flex; flex-direction: column; gap: 0.5rem;">
+        <md-button
+          variant="outlined"
+          style="align-self: flex-start;"
+          @click=${() => {
+            if (chatEl) chatEl.compact = !chatEl.compact;
+          }}
+        >
+          Toggle compact
+        </md-button>
+        <chx-chat
+          .userId=${"me"}
+          .messages=${makeMessages(20)}
+          .adapter=${createSlowReplyAdapter()}
+          style="flex: 1; min-height: 0;"
+          ${ref((el) => (chatEl = /** @type {import("../components/base/chat.js").ChxChat} */ (el)))}
+        >
+          <chx-message-list
+            slot="message-list"
+            scroll-behavior="smooth"
+            .selectedId=${args.selectedId || undefined}
+          >
+            <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
+          </chx-message-list>
+          <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
+            <md-button slot="actions" variant="text">Opus 4.8</md-button>
+          </chx-message-composer>
+        </chx-chat>
+      </div>
+    `;
+  },
 };
 
 /**
@@ -772,7 +743,7 @@ export const LoadingHistoryCustomDelay = {
  * slot-with-fallback-content mechanics as `chx-loading-history`'s own default slot), so slotting
  * anything into `slot="initial-loading"` replaces it outright, no opt-out flag needed. Here it's
  * seven `<md-skeleton variant="rectangular">` bubbles of varied width/height, sized/aligned to
- * roughly preview a denser message history about to load, alternating side like `WithMessages`' real
+ * roughly preview a denser message history about to load, alternating side like `Messages`' real
  * messages do — `chx-chat`
  * doesn't know or care what's in the slot, it only toggles whether the slot renders at all. Fixed px
  * widths, not percentages: once content is actually assigned (as opposed to the slot's own native
@@ -830,9 +801,9 @@ export const InitialLoadingCustom = {
 
 /**
  * `chx-message-list`'s `content-align` attribute — with only a couple of messages inside a tall
- * container, `"end"` (the default, see `WithMessages` above) pushes them to the bottom like a real
+ * container, `"end"` (the default, see `Messages` above) pushes them to the bottom like a real
  * chat; `"start"` here leaves them at the top instead, with the leftover space falling below. Only
- * affects the idle/under-full case — scroll to the bottom of `WithMessages` and this behaves
+ * affects the idle/under-full case — scroll to the bottom of `Messages` and this behaves
  * identically either way once there's enough content to actually scroll.
  */
 /** @type {Story} */

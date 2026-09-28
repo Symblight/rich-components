@@ -20,6 +20,7 @@ import { GroupController } from "../../controllers/message-list/GroupController.
 import { PartRenderer } from "./PartRenderer.js";
 import { StatusController } from "../../controllers/message-list/StatusController.js";
 import { StickyController } from "../../controllers/message-list/StickyController.js";
+import tokens from "../../styles/tokens.css?inline";
 import styles from "./message-list.css?inline";
 
 /** @import { ChxMessage } from "../../types/message.js" */
@@ -79,8 +80,8 @@ const INFINITY_SCROLL_EXPORTPARTS = [
 
 // Pre-measurement geometry, mirroring message.css — only an estimate, the virtualizer measures the real row.
 const ESTIMATE = {
-  regular: { charsPerLine: 60, lineHeight: 22, padding: 16, meta: 20 },
-  compact: { charsPerLine: 70, lineHeight: 21, padding: 6, meta: 19, avatar: 25 },
+  regular: { charsPerLine: 52, lineHeight: 24, padding: 16, meta: 20 },
+  compact: { charsPerLine: 70, lineHeight: 20, padding: 6, meta: 19, avatar: 25 },
   rowPadding: 2, // .infinity-scroll__row
   groupGap: 12, // --chx-message-group-gap
   attachments: 128, // one wrapped row of attachment cards
@@ -357,7 +358,7 @@ export class ChxMessageList extends LitElement {
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [styles];
+    return [tokens, styles];
   }
 
   connectedCallback() {

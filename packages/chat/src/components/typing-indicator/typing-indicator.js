@@ -1,6 +1,7 @@
 import { html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
 
+import tokens from "../../styles/tokens.css?inline";
 import styles from "./typing-indicator.css?inline";
 
 /**
@@ -24,7 +25,7 @@ export class ChxTypingIndicator extends LitElement {
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [styles];
+    return [tokens, styles];
   }
 
   render() {

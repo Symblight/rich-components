@@ -1,6 +1,7 @@
 import { html, LitElement, nothing } from "lit";
 import { customElement } from "lit/decorators.js";
 
+import tokens from "../../styles/tokens.css?inline";
 import styles from "./divider.css?inline";
 
 /**
@@ -48,7 +49,7 @@ export class ChxDivider extends LitElement {
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [styles];
+    return [tokens, styles];
   }
 
   /** Today / Yesterday / weekday (within a week) / full date, dropping the year when it's the current one. */

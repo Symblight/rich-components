@@ -3,6 +3,7 @@ import { customElement } from "lit/decorators.js";
 
 import "@symblight/wc-material/progress-circular";
 
+import tokens from "../../styles/tokens.css?inline";
 import styles from "./loading-history.css?inline";
 
 /**
@@ -31,7 +32,7 @@ export class ChxLoadingHistory extends LitElement {
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [styles];
+    return [tokens, styles];
   }
 
   connectedCallback() {

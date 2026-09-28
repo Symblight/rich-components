@@ -14,6 +14,7 @@ import pendingIcon from "@material-design-icons/svg/outlined/radio_button_unchec
 import completedIcon from "@material-design-icons/svg/outlined/check.svg?raw";
 
 import { RowCompactController } from "../../../controllers/agent/RowCompactController.js";
+import tokens from "../../../styles/tokens.css?inline";
 import visuallyHidden from "../../../styles/visually-hidden.css?inline";
 import rowStyles from "../agent-row.css?inline";
 import styles from "./plan.css?inline";
@@ -71,7 +72,7 @@ export class ChxPlan extends LitElement {
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [visuallyHidden, rowStyles, styles];
+    return [tokens, visuallyHidden, rowStyles, styles];
   }
 
   /** Open while there's work left, folded into its summary row once every entry is done.

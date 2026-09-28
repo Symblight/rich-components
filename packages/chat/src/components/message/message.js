@@ -8,6 +8,7 @@ import "@symblight/wc-material/avatar";
 import "@symblight/wc-material/progress-circular";
 import "../unread-marker/unread-marker.js";
 import { messageRowContext } from "../../context/message-row-context.js";
+import tokens from "../../styles/tokens.css?inline";
 import styles from "./message.css?inline";
 
 /** @import { ChxMessageAuthor, ChxRowState } from "../../types/message.js" */
@@ -113,7 +114,7 @@ export class ChxMessage extends LitElement {
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [styles];
+    return [tokens, styles];
   }
 
   /** The row state this message is showing, if it's inside a row. @returns {ChxRowState | undefined} */

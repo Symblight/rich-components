@@ -1,4 +1,4 @@
-import { html, LitElement } from "lit";
+import { html, LitElement, nothing } from "lit";
 import { customElement } from "lit/decorators.js";
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 import { when } from "lit/directives/when.js";
@@ -8,6 +8,7 @@ import "@symblight/wc-material/icon-button";
 
 import closeIcon from "@material-design-icons/svg/outlined/close.svg?raw";
 
+import tokens from "../../styles/tokens.css?inline";
 import styles from "./input-mode-banner.css?inline";
 
 /**
@@ -23,6 +24,7 @@ export class ChxInputModeBanner extends LitElement {
     variant: { type: String, reflect: true },
     dismissible: { type: Boolean, reflect: true },
     dismissLabel: { type: String, attribute: "dismiss-label" },
+    hasLabelContent: { state: true },
   };
 
   constructor() {
@@ -39,11 +41,15 @@ export class ChxInputModeBanner extends LitElement {
 
     /** @type {string} */
     this.dismissLabel = "Dismiss";
+
+    /** Default slot holds real content — the markup's own whitespace doesn't count, which a native
+     *  slot fallback would, hiding `label` behind an indented `actions` child. @type {boolean} */
+    this.hasLabelContent = false;
   }
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [styles];
+    return [tokens, styles];
   }
 
   connectedCallback() {
@@ -52,6 +58,14 @@ export class ChxInputModeBanner extends LitElement {
     // mounted, so a label change is announced rather than an insertion that may be missed
     this.setAttribute("role", "status");
   }
+
+  /** @param {Event} event */
+  #handleLabelSlotchange = (event) => {
+    const slot = /** @type {HTMLSlotElement} */ (event.target);
+    this.hasLabelContent = slot
+      .assignedNodes({ flatten: true })
+      .some((node) => node.nodeType === Node.ELEMENT_NODE || node.textContent?.trim());
+  };
 
   #handleDismiss = () => {
     // announce only; the app owns this element's lifetime, so it decides what dismissing means
@@ -67,7 +81,9 @@ export class ChxInputModeBanner extends LitElement {
           <slot name="icon"></slot>
         </div>
         <div class="input-mode-banner__label" part="label">
-          <slot>${this.label}</slot>
+          <slot @slotchange=${this.#handleLabelSlotchange}></slot>${
+            this.hasLabelContent ? nothing : this.label
+          }
         </div>
         <div class="input-mode-banner__actions" part="actions">
           <slot name="actions"></slot>

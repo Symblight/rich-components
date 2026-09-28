@@ -3,6 +3,7 @@ import { customElement } from "lit/decorators.js";
 
 import "@symblight/wc-material/chips";
 
+import tokens from "../../styles/tokens.css?inline";
 import styles from "./chip.css?inline";
 
 /**
@@ -13,7 +14,7 @@ import styles from "./chip.css?inline";
 export class ChxChip extends LitElement {
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [styles];
+    return [tokens, styles];
   }
 
   render() {

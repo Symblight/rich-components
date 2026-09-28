@@ -18,6 +18,7 @@ import { RealtimeSyncController } from "../../controllers/chat/RealtimeSyncContr
 import { finalizeStreamingParts } from "../../stream/streamHelpers.js";
 import { DEFAULT_CONVERSATION_ID } from "../../constants.js";
 
+import tokens from "../../styles/tokens.css?inline";
 import styles from "./chat.css?inline";
 
 /** @import { ChxMessage } from "../../types/message.js" */
@@ -261,7 +262,7 @@ export class ChxChat extends LitElement {
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [styles];
+    return [tokens, styles];
   }
 
   connectedCallback() {

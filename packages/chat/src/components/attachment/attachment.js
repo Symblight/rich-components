@@ -3,6 +3,7 @@ import { customElement } from "lit/decorators.js";
 import { classMap } from "lit/directives/class-map.js";
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 
+import tokens from "../../styles/tokens.css?inline";
 import styles from "./attachment.css?inline";
 
 import "@symblight/wc-material/card";
@@ -38,7 +39,7 @@ export class ChxAttachment extends LitElement {
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [styles];
+    return [tokens, styles];
   }
 
   constructor() {
@@ -59,8 +60,8 @@ export class ChxAttachment extends LitElement {
     /** @type {string} */
     this.errorLabel = "Upload failed";
 
-    /** @type {boolean} Shows the hover-revealed remove button. */
-    this.removable = true;
+    /** @type {boolean} Shows the hover-revealed remove button — `chx-attachments` turns it on for composer cards. */
+    this.removable = false;
 
     /** @type {string | undefined} Object URL for an image `file`, revoked/recreated as it changes. */
     this.imageUrl = undefined;
@@ -85,7 +86,8 @@ export class ChxAttachment extends LitElement {
   willUpdate(changed) {
     if (changed.has("file")) {
       if (this.imageUrl) URL.revokeObjectURL(this.imageUrl);
-      this.imageUrl = this.file != null && this.isImage ? URL.createObjectURL(this.file) : undefined;
+      this.imageUrl =
+        this.file != null && this.isImage ? URL.createObjectURL(this.file) : undefined;
     }
   }
 
@@ -121,7 +123,9 @@ export class ChxAttachment extends LitElement {
                   this.error
                     ? html` <md-icon>${unsafeSVG(errorOutline)}</md-icon>`
                     : this.loading
-                      ? html` <md-progress-circular></md-progress-circular>`
+                      ? html` <md-progress-circular
+                          class="attachment__progress"
+                        ></md-progress-circular>`
                       : html` <slot name="icon">
                           <md-icon>${unsafeSVG(description)}</md-icon>
                         </slot>`
@@ -146,7 +150,9 @@ export class ChxAttachment extends LitElement {
                 >
                   <md-icon>${unsafeSVG(close)}</md-icon>
                 </md-icon-button>
-                <md-tooltip placement="bottom" for=${this.#removeId}>Remove ${this.displayName}</md-tooltip>`
+                <md-tooltip placement="bottom" for=${this.#removeId}
+                  >Remove ${this.displayName}</md-tooltip
+                >`
             : nothing
         }
       </md-card>

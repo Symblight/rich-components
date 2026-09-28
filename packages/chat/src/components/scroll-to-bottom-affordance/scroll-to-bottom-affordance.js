@@ -4,6 +4,7 @@ import { customElement } from "lit/decorators.js";
 import "@symblight/wc-material/icon-button";
 import "@symblight/wc-material/icon";
 
+import tokens from "../../styles/tokens.css?inline";
 import styles from "./scroll-to-bottom-affordance.css?inline";
 
 /**
@@ -38,7 +39,7 @@ export class ChxScrollToBottomAffordance extends LitElement {
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [styles];
+    return [tokens, styles];
   }
 
   #handleClick = () => {

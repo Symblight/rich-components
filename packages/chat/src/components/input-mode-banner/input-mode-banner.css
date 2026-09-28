@@ -2,13 +2,13 @@
   display: block;
   box-sizing: border-box;
   inline-size: 100%;
-  --chx-input-mode-banner-background-color: var(--md-sys-color-surface-container-high);
-  --chx-input-mode-banner-color: var(--md-sys-color-on-surface);
-  --chx-input-mode-banner-accent-color: var(--md-sys-color-primary);
-  --chx-input-mode-banner-border-radius: 0.75rem;
+  --chx-input-mode-banner-background-color: var(--_chx-color-surface-container-high);
+  --chx-input-mode-banner-color: var(--_chx-color-on-surface);
+  --chx-input-mode-banner-accent-color: var(--_chx-color-primary);
+  --chx-input-mode-banner-border-radius: var(--_chx-shape-corner-medium);
   --chx-input-mode-banner-padding: 0.5rem 0.5rem 0.5rem 0.75rem;
   --chx-input-mode-banner-gap: 0.5rem;
-  --chx-input-mode-banner-font-size: 0.875rem;
+  --chx-input-mode-banner-font-size: var(--_chx-body-medium-font-size);
   --chx-input-mode-banner-icon-size: 1.125rem;
 }
 
@@ -19,9 +19,9 @@
 }
 
 :host([variant="danger"]) {
-  --chx-input-mode-banner-background-color: var(--md-sys-color-error-container);
-  --chx-input-mode-banner-color: var(--md-sys-color-on-error-container);
-  --chx-input-mode-banner-accent-color: var(--md-sys-color-error);
+  --chx-input-mode-banner-background-color: var(--_chx-color-error-container);
+  --chx-input-mode-banner-color: var(--_chx-color-on-error-container);
+  --chx-input-mode-banner-accent-color: var(--_chx-color-error);
 }
 
 .input-mode-banner {

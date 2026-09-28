@@ -238,7 +238,7 @@ function planAt(upTo) {
   }));
 }
 
-/** Two shapes off the same element: prose in `text` (AgenticToolCalls), or `data.steps` as
+/** Two shapes off the same element: prose in `text`, or `data.steps` as
  *  chx-thought-step rows in the default slot (AgenticComposerKit). `data.duration` turns the
  *  settled summary into "Thought for N seconds" — without it chx-thought self-times the streaming
  *  window, which is right until a reload.
@@ -290,6 +290,8 @@ function renderToolCallPart(part, previous) {
   el.status = attrs.status ?? "pending";
   el.locations = attrs.locations ?? [];
   el.meta = attrs.meta ?? "";
+  el.additions = attrs.additions;
+  el.deletions = attrs.deletions;
   el.error = attrs.error ?? "";
 
   const data = /** @type {any} */ (attrs.data ?? {});
@@ -303,6 +305,8 @@ function renderToolCallPart(part, previous) {
     block.label = data.command ?? "";
     block.filename = data.path ?? "";
     block.copyable = true;
+    // terminal output isn't a file — its lines have nothing to be numbered against
+    block.lineNumbers = attrs.kind !== "execute";
     block.streaming = part.state === "streaming";
     block.error = attrs.status === "failed";
     if (!block.isConnected) el.replaceChildren(block);
@@ -318,12 +322,10 @@ function renderAttachmentPart(part, previous) {
     previous?.localName === "chx-attachment" ? previous : document.createElement("chx-attachment")
   );
   card.file = /** @type {any} */ (part).attachment;
-  card.removable = false;
   return card;
 }
 
-/** `chip`/`attachment` only ever fire for AgenticComposerKit below — AgenticToolCalls emits
- *  neither, so they are inert there.
+/** The `partElements` map AgenticComposerKit's live agent renders through.
  *  @type {Record<string, (part: any, previous?: HTMLElement) => HTMLElement>} */
 const AGENT_PART_ELEMENTS = {
   thought: renderThoughtPart,
@@ -491,7 +493,8 @@ function createAgenticAdapter({ requestPermission, thoughtSteps = false }) {
             enqueue(controller, editId, "tool_call", {
               label: "Edited",
               status: "completed",
-              meta: "+1 −1",
+              additions: 1,
+              deletions: 1,
               text: DIFF_TEXT,
               data: {
                 path: "src/components/message-list/message-list.js",
@@ -521,56 +524,195 @@ function createAgenticAdapter({ requestPermission, thoughtSteps = false }) {
   };
 }
 
+const galleryStyles = html`<style>
+  .agent-states {
+    display: flex;
+    flex-direction: column;
+    gap: 1.5rem;
+    max-width: 48rem;
+    padding: 1rem;
+  }
+  .agent-states__group {
+    display: flex;
+    flex-direction: column;
+    gap: 0.25rem;
+  }
+  .agent-states__label {
+    margin-block-end: 0.25rem;
+    font: 500 0.75rem/1 sans-serif;
+    color: var(--md-sys-color-on-surface-variant);
+    text-transform: uppercase;
+  }
+</style>`;
+
+const TOOL_CALL_KINDS = [
+  {
+    kind: "read",
+    label: "Read",
+    path: "src/components/message-list/message-list.js",
+    meta: "412 lines",
+  },
+  { kind: "edit", label: "Edited", path: "src/components/message-list/message-list.js", line: 295 },
+  { kind: "delete", label: "Deleted", path: "src/legacy/scroll-behavior.js" },
+  { kind: "move", label: "Moved", path: "src/components/infinity-scroll/RowMeasurer.js" },
+  { kind: "search", label: "Searched for reconcileChildren", meta: "3 results" },
+  { kind: "execute", label: "Ran pnpm test", meta: "46 passed · 3.1s" },
+  { kind: "think", label: "Thinking" },
+  { kind: "fetch", label: "Fetched lit.dev/docs", meta: "18 KB" },
+  { kind: "switch_mode", label: "Switched to plan mode" },
+  { kind: "other", label: "Called a custom tool" },
+];
+
+/** @param {{kind: string, path?: string, line?: number}} call */
+const locationsOf = (call) => (call.path ? [{ path: call.path, line: call.line }] : []);
+
 /**
- * Send anything — the fake agent thinks out loud, publishes a plan, reads a file, then **stops and
- * asks permission** before running a command. The question appears in `chx-input-mode-banner` above
- * the composer, not on the tool card: a virtualized list can recycle the requesting card out of the
- * DOM entirely while the turn is blocked on it, and a banner docked to the input never goes away.
- * The banner is a generic one — label, variant, `actions` slot — and this story fills it and clears
- * it itself, which is the whole contract: `chx-chat` only provides the `input-banner` slot.
+ * Every agentic element on its own, no `chx-chat` — the `Compact mode` control flips `compact` on all
+ * of them. A real turn builds these from message parts in a `partElements` renderer; see
+ * AgenticComposerKit below for a live agent streaming into a chat.
  */
 /** @type {Story} */
 export const AgenticToolCalls = {
-  render: (args) => {
-    /** @type {any} */
-    let banner;
-    const adapter = createAgenticAdapter({
-      requestPermission: createBannerPermissionPrompt({ getBanner: () => banner }),
-    });
-    return html`
-      ${messageStyleOverrides}
-      <chx-chat
-        .compact=${args.compact}
-        .userId=${"me"}
-        .partElements=${AGENT_PART_ELEMENTS}
-        .adapter=${adapter}
-      >
-        <chx-message-list slot="message-list" scroll-behavior="smooth" content-align="start">
-          <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
-          <chx-scroll-to-bottom-affordance
-            slot="scroll-to-bottom"
-          ></chx-scroll-to-bottom-affordance>
-        </chx-message-list>
-        <chx-input-mode-banner
-          slot="input-banner"
-          hidden
-          ${ref((el) => (banner = el))}
-        ></chx-input-mode-banner>
-        <chx-message-composer
-          slot="message-composer"
-          placeholder="Ask the agent to run the tests..."
+  render: (args) => html`
+    ${galleryStyles}
+    <div class="agent-states">
+      <div class="agent-states__group">
+        <span class="agent-states__label">Tool call — status</span>
+        <chx-tool-call
+          ?compact=${args.compact}
+          kind="read"
+          status="pending"
+          label="Read"
+          .locations=${[{ path: "src/components/message-list/message-list.js" }]}
+        ></chx-tool-call>
+        <chx-tool-call
+          ?compact=${args.compact}
+          kind="execute"
+          status="in_progress"
+          label="Running pnpm test"
+        ></chx-tool-call>
+        <chx-tool-call
+          ?compact=${args.compact}
+          kind="execute"
+          status="awaiting-permission"
+          label="Run pnpm test"
+          meta="needs permission"
+        ></chx-tool-call>
+        <chx-tool-call
+          ?compact=${args.compact}
+          kind="edit"
+          status="completed"
+          label="Edited"
+          .locations=${[{ path: "src/components/message-list/message-list.js", line: 295 }]}
+          .additions=${1}
+          .deletions=${1}
+        ></chx-tool-call>
+        <chx-tool-call
+          ?compact=${args.compact}
+          kind="execute"
+          status="failed"
+          label="Ran pnpm build"
+          error="vite-plugin-dts: Cannot find module './elements.d.ts'"
+        ></chx-tool-call>
+        <chx-tool-call
+          ?compact=${args.compact}
+          kind="delete"
+          status="rejected"
+          label="Delete"
+          .locations=${[{ path: "src/legacy/scroll-behavior.js" }]}
+        ></chx-tool-call>
+        <chx-tool-call
+          ?compact=${args.compact}
+          kind="fetch"
+          status="cancelled"
+          label="Fetch lit.dev/docs"
+        ></chx-tool-call>
+      </div>
+
+      <div class="agent-states__group">
+        <span class="agent-states__label">Tool call — kind</span>
+        ${TOOL_CALL_KINDS.map(
+          (call) =>
+            html`<chx-tool-call
+              ?compact=${args.compact}
+              kind=${call.kind}
+              status="completed"
+              label=${call.label}
+              meta=${call.meta ?? ""}
+              .locations=${locationsOf(call)}
+            ></chx-tool-call>`,
+        )}
+      </div>
+
+      <div class="agent-states__group">
+        <span class="agent-states__label">Tool call — content</span>
+        <chx-tool-call
+          ?compact=${args.compact}
+          open
+          kind="execute"
+          status="completed"
+          label="Ran pnpm test"
+          meta="46 passed · 3.1s"
         >
-          <md-button slot="actions" variant="text">Opus 4.8</md-button>
-        </chx-message-composer>
-      </chx-chat>
-    `;
-  },
+          <chx-code-block
+            .code=${TERMINAL_OUTPUT}
+            lang="bash"
+            label="pnpm test"
+            copyable
+            .lineNumbers=${false}
+          ></chx-code-block>
+        </chx-tool-call>
+        <chx-tool-call
+          ?compact=${args.compact}
+          open
+          kind="edit"
+          status="completed"
+          label="Edited"
+          .locations=${[{ path: "src/components/message-list/message-list.js", line: 295 }]}
+          .additions=${1}
+          .deletions=${1}
+        >
+          <chx-tool-call-diff
+            path="src/components/message-list/message-list.js"
+            .diff=${DIFF_TEXT}
+          ></chx-tool-call-diff>
+        </chx-tool-call>
+      </div>
+
+      <div class="agent-states__group">
+        <span class="agent-states__label">Thought</span>
+        <chx-thought ?compact=${args.compact} streaming open .text=${THOUGHT_TEXT}></chx-thought>
+        <chx-thought ?compact=${args.compact} .duration=${4000} .text=${THOUGHT_TEXT}></chx-thought>
+      </div>
+
+      <div class="agent-states__group">
+        <span class="agent-states__label">Plan</span>
+        <chx-plan ?compact=${args.compact} open .entries=${planAt(1)}></chx-plan>
+        <chx-plan ?compact=${args.compact} .entries=${planAt(PLAN_STEPS.length)}></chx-plan>
+      </div>
+
+      <div class="agent-states__group">
+        <span class="agent-states__label">Input mode banner</span>
+        <chx-input-mode-banner label="Allow the agent to run pnpm test?">
+          <md-button slot="actions" variant="text">Deny</md-button>
+          <md-button slot="actions" variant="tonal">Allow</md-button>
+        </chx-input-mode-banner>
+        <chx-input-mode-banner
+          variant="danger"
+          label="Allow the agent to delete src/legacy/scroll-behavior.js?"
+        >
+          <md-button slot="actions" variant="text">Deny</md-button>
+          <md-button slot="actions" variant="tonal">Delete</md-button>
+        </chx-input-mode-banner>
+      </div>
+    </div>
+  `,
 };
 
 /* ------------------------------------------------------------------------------------------------
  * The full composer kit on top of the same agentic adapter — `@` file picker, attachments,
  * long-paste collapsing, code blocks. Everything below is composer-side wiring; the agent itself is
- * unchanged from AgenticToolCalls above.
+ * the same as `createAgenticAdapter` above.
  * ---------------------------------------------------------------------------------------------- */
 
 /** Mock repository the `@` picker searches. */
@@ -653,7 +795,8 @@ const attachTriggerStyles = html`
 `;
 
 /**
- * The same fake agent as `AgenticToolCalls`, with the composer's optional features all slotted in at
+ * A fake agent (`createAgenticAdapter`) streaming a full turn — thought, plan, tool calls and a
+ * permission request answered from `chx-input-mode-banner` — with the composer's optional features all slotted in at
  * once, to see how they sit together above an agent turn:
  *
  * - **`@` file picker** — `<chx-command-picker commandCharacter="@">` searching `AGENT_FILES`.

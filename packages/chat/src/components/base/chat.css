@@ -5,8 +5,8 @@
   overflow: hidden;
   container-type: size;
   container-name: chat;
-  --chx-chat-background-color: var(--md-sys-color-background);
-  background-color: var(--chx-chat-background-color);
+  background-color: var(--_chx-color-background);
+  color: var(--_chx-color-on-surface);
 }
 
 ::slotted(chx-message-list) {

@@ -11,6 +11,14 @@
   display: none;
 }
 
+/* Standalone opt-in: the same density a compact chx-message passes down to its parts. */
+:host([compact]) {
+  --chx-part-row-height: 1.75rem;
+  --chx-part-icon-size: 1rem;
+  --chx-part-gap: 0.5rem;
+  --chx-part-padding-inline: 0.375rem;
+}
+
 /* No card: the row only gets a background as an MD3 state layer. */
 .agent-row__head {
   position: relative;
@@ -22,7 +30,7 @@
   padding: 0.125rem var(--_chx-agent-row-padding-inline);
   border-radius: var(--_chx-agent-row-border-radius);
   font-size: var(--_chx-agent-row-font-size);
-  line-height: 1.25rem;
+  line-height: var(--_chx-body-medium-line-height);
   cursor: pointer;
   list-style: none;
 

@@ -11,6 +11,7 @@ import {
   stampChipOwner,
 } from "../../editor/command-chip.js";
 
+import tokens from "../../styles/tokens.css?inline";
 import styles from "./command-picker.css?inline";
 
 /** @typedef {HTMLElement & { open: boolean, toggle: (options?: {force?: boolean}) => Promise<void>, openAtPoint: (x: number, y: number) => void }} MenuElement */
@@ -30,7 +31,7 @@ export class ChxCommandPicker extends LitElement {
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [styles];
+    return [tokens, styles];
   }
 
   // real private fields must be declared here, in the class body — a bare `this.#foo = ...`

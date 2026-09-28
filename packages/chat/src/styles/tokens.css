@@ -1,0 +1,186 @@
+/* Chat-wide token layer, adopted first by every rendering component.
+   --chx-chat-* is the public theme: set it on chx-chat (or any ancestor) to retune every component
+   inside at once. No component ever declares --chx-chat-* itself — a declaration on a nested host
+   would hide the ancestor's value — so each host resolves it here into a private --_chx-* (falling
+   back to --md-sys-*), and component tokens (--chx-<component>-*) map only from --_chx-*. */
+:host {
+  /* typography */
+  --_chx-font-family: var(
+    --chx-chat-font-family,
+    var(--md-sys-typescale-font-family, Roboto, system-ui, sans-serif)
+  );
+  --_chx-mono-font-family: var(
+    --chx-chat-mono-font-family,
+    "SF Mono",
+    ui-monospace,
+    "Cascadia Code",
+    "Roboto Mono",
+    Consolas,
+    monospace
+  );
+  --_chx-font-weight-regular: var(--chx-chat-font-weight-regular, 400);
+  --_chx-font-weight-medium: var(--chx-chat-font-weight-medium, 500);
+  --_chx-body-large-font-size: var(
+    --chx-chat-body-large-font-size,
+    var(--md-sys-typescale-body-large-size, 1rem)
+  );
+  --_chx-body-large-line-height: var(
+    --chx-chat-body-large-line-height,
+    var(--md-sys-typescale-body-large-line-height, 1.5rem)
+  );
+  --_chx-body-medium-font-size: var(
+    --chx-chat-body-medium-font-size,
+    var(--md-sys-typescale-body-medium-size, 0.875rem)
+  );
+  --_chx-body-medium-line-height: var(
+    --chx-chat-body-medium-line-height,
+    var(--md-sys-typescale-body-medium-line-height, 1.25rem)
+  );
+  --_chx-body-small-font-size: var(
+    --chx-chat-body-small-font-size,
+    var(--md-sys-typescale-body-small-size, 0.75rem)
+  );
+  --_chx-body-small-line-height: var(
+    --chx-chat-body-small-line-height,
+    var(--md-sys-typescale-body-small-line-height, 1rem)
+  );
+  --_chx-label-large-font-size: var(
+    --chx-chat-label-large-font-size,
+    var(--md-sys-typescale-label-large-size, 0.875rem)
+  );
+  --_chx-label-medium-font-size: var(
+    --chx-chat-label-medium-font-size,
+    var(--md-sys-typescale-label-medium-size, 0.75rem)
+  );
+  --_chx-label-small-font-size: var(
+    --chx-chat-label-small-font-size,
+    var(--md-sys-typescale-label-small-size, 0.6875rem)
+  );
+  --_chx-code-font-size: var(--chx-chat-code-font-size, 0.8125rem);
+  --_chx-code-line-height: var(--chx-chat-code-line-height, 1.7);
+
+  /* color — MD3 roles; setting --md-sys-color-* on chx-chat retunes md-* children too */
+  --_chx-color-primary: var(--chx-chat-color-primary, var(--md-sys-color-primary));
+  --_chx-color-primary-container: var(
+    --chx-chat-color-primary-container,
+    var(--md-sys-color-primary-container)
+  );
+  --_chx-color-on-primary-container: var(
+    --chx-chat-color-on-primary-container,
+    var(--md-sys-color-on-primary-container)
+  );
+  --_chx-color-secondary-container: var(
+    --chx-chat-color-secondary-container,
+    var(--md-sys-color-secondary-container)
+  );
+  --_chx-color-tertiary: var(--chx-chat-color-tertiary, var(--md-sys-color-tertiary));
+  --_chx-color-tertiary-container: var(
+    --chx-chat-color-tertiary-container,
+    var(--md-sys-color-tertiary-container)
+  );
+  --_chx-color-on-tertiary-container: var(
+    --chx-chat-color-on-tertiary-container,
+    var(--md-sys-color-on-tertiary-container)
+  );
+  --_chx-color-error: var(--chx-chat-color-error, var(--md-sys-color-error));
+  --_chx-color-error-container: var(
+    --chx-chat-color-error-container,
+    var(--md-sys-color-error-container)
+  );
+  --_chx-color-on-error-container: var(
+    --chx-chat-color-on-error-container,
+    var(--md-sys-color-on-error-container)
+  );
+  --_chx-color-background: var(--chx-chat-color-background, var(--md-sys-color-background));
+  --_chx-color-surface: var(--chx-chat-color-surface, var(--md-sys-color-surface));
+  --_chx-color-surface-container-lowest: var(
+    --chx-chat-color-surface-container-lowest,
+    var(--md-sys-color-surface-container-lowest)
+  );
+  --_chx-color-surface-container-low: var(
+    --chx-chat-color-surface-container-low,
+    var(--md-sys-color-surface-container-low)
+  );
+  --_chx-color-surface-container: var(
+    --chx-chat-color-surface-container,
+    var(--md-sys-color-surface-container)
+  );
+  --_chx-color-surface-container-high: var(
+    --chx-chat-color-surface-container-high,
+    var(--md-sys-color-surface-container-high)
+  );
+  --_chx-color-surface-container-highest: var(
+    --chx-chat-color-surface-container-highest,
+    var(--md-sys-color-surface-container-highest)
+  );
+  --_chx-color-on-surface: var(--chx-chat-color-on-surface, var(--md-sys-color-on-surface));
+  --_chx-color-on-surface-variant: var(
+    --chx-chat-color-on-surface-variant,
+    var(--md-sys-color-on-surface-variant)
+  );
+  --_chx-color-outline: var(--chx-chat-color-outline, var(--md-sys-color-outline));
+  --_chx-color-outline-variant: var(
+    --chx-chat-color-outline-variant,
+    var(--md-sys-color-outline-variant)
+  );
+  --_chx-color-shadow: var(--chx-chat-color-shadow, var(--md-sys-color-shadow, #000));
+  /* MD3 has no success role — hand-picked diff hues (≥ 4.5:1 on surface), dark variants below */
+  --_chx-color-diff-added: var(--chx-chat-color-diff-added, #0a5c2c);
+  --_chx-color-diff-removed: var(--chx-chat-color-diff-removed, #93211a);
+
+  /* shape */
+  --_chx-shape-corner-extra-small: var(
+    --chx-chat-shape-corner-extra-small,
+    var(--md-sys-shape-corner-extra-small, 0.25rem)
+  );
+  --_chx-shape-corner-small: var(
+    --chx-chat-shape-corner-small,
+    var(--md-sys-shape-corner-small, 0.5rem)
+  );
+  --_chx-shape-corner-medium: var(
+    --chx-chat-shape-corner-medium,
+    var(--md-sys-shape-corner-medium, 0.75rem)
+  );
+  --_chx-shape-corner-large: var(
+    --chx-chat-shape-corner-large,
+    var(--md-sys-shape-corner-large, 1rem)
+  );
+  --_chx-shape-corner-extra-large: var(
+    --chx-chat-shape-corner-extra-large,
+    var(--md-sys-shape-corner-extra-large, 1.75rem)
+  );
+  --_chx-shape-corner-full: var(
+    --chx-chat-shape-corner-full,
+    var(--md-sys-shape-corner-full, 9999px)
+  );
+
+  /* elevation */
+  --_chx-elevation-1: var(
+    --chx-chat-elevation-1,
+    0 1px 3px color-mix(in srgb, var(--_chx-color-shadow) 12%, transparent)
+  );
+  --_chx-elevation-2: var(
+    --chx-chat-elevation-2,
+    0 2px 6px color-mix(in srgb, var(--_chx-color-shadow) 30%, transparent)
+  );
+
+  /* md-* children read their font from these; only the *-font roles are bridged — they don't feed
+     back into --_chx-font-family, so there's no cycle (bridging a size or color would create one) */
+  --md-sys-typescale-body-large-font: var(--_chx-font-family);
+  --md-sys-typescale-body-medium-font: var(--_chx-font-family);
+  --md-sys-typescale-body-small-font: var(--_chx-font-family);
+  --md-sys-typescale-label-large-font: var(--_chx-font-family);
+  --md-sys-typescale-label-medium-font: var(--_chx-font-family);
+  --md-sys-typescale-label-small-font: var(--_chx-font-family);
+  --md-sys-typescale-title-medium-font: var(--_chx-font-family);
+  --md-sys-typescale-title-small-font: var(--_chx-font-family);
+
+  font-family: var(--_chx-font-family);
+}
+
+@media (prefers-color-scheme: dark) {
+  :host {
+    --_chx-color-diff-added: var(--chx-chat-color-diff-added, #a8dab5);
+    --_chx-color-diff-removed: var(--chx-chat-color-diff-removed, #f2b8b5);
+  }
+}

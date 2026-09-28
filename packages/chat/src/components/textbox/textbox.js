@@ -7,6 +7,7 @@ import { FormControlMixin, requiredValidator } from "@open-wc/form-control";
 
 import { Editor } from "../../editor/Editor.js";
 
+import tokens from "../../styles/tokens.css?inline";
 import visuallyHidden from "../../styles/visually-hidden.css?inline";
 import styles from "./textbox.css?inline";
 
@@ -98,7 +99,7 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [visuallyHidden, styles];
+    return [tokens, visuallyHidden, styles];
   }
 
   /** The ProseMirror mount div — see the class doc comment. @returns {HTMLElement} */

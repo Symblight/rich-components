@@ -207,15 +207,19 @@ export class ChxAttachments extends LitElement {
    * `icon`/default/`actions` slots instead of substituting a different
    * element. `slot="attachment"` is set here regardless of whether the
    * caller already set it, so this can't silently produce an unrendered
-   * (unassigned-slot) card.
+   * (unassigned-slot) card. Every card here is in the composer, so it's made removable too — set
+   * `removable = false` on it afterwards to lock one.
    * @param {Element | DocumentFragment} container
    */
   addAttachments(container) {
-    const items = [...container.children].filter(
-      (element) => element.localName === "chx-attachment",
+    const items = /** @type {(Element & {removable?: boolean})[]} */ (
+      [...container.children].filter((element) => element.localName === "chx-attachment")
     );
     if (items.length === 0) return;
-    for (const item of items) item.slot = "attachment";
+    for (const item of items) {
+      item.slot = "attachment";
+      item.removable = true;
+    }
     this.append(...items);
   }
 

@@ -34,7 +34,8 @@ import "@symblight/chat";
 
 Clicking the button opens the native file picker; dropping files anywhere on the field works
 too. Each file becomes a default `<chx-attachment>` card (icon + name), with a built-in remove
-button. `chx-send-message`'s `detail` gains a third field for exactly this: `attachments: File[]`
+button — `removable` is `false` on a bare `<chx-attachment>`, and `<chx-attachments>` turns it on
+for every card it adopts (`addAttachments`), so composer cards are always closable. `chx-send-message`'s `detail` gains a third field for exactly this: `attachments: File[]`
 — see "Sending" below.
 
 Like `chx-command-picker`'s options, `<chx-attachments>`' children ARE its cards — no `.files`
@@ -191,16 +192,8 @@ chatEl.partElements = {
 };
 ```
 
-Suppress the remove button yourself if you want an immutable look for sent cards — a plain
-override works, since `buildAttachment` doesn't decide `.slot`/actions for you either way:
-
-```js
-attachment: (part) => {
-  const card = attachmentsEl.buildAttachment(part.attachment, "message");
-  card.append(Object.assign(document.createElement("span"), { slot: "actions" }));
-  return card;
-},
-```
+A sent card has no remove button — `removable` defaults to `false`, and only `addAttachments`
+(the composer tray) turns it on.
 
 ## `<chx-attachments>` reference
 
@@ -250,11 +243,12 @@ at all — see "Two modes" above.
 
 ### Properties
 
-| Property       | Type                | Notes                                                                                                      |
-| -------------- | ------------------- | ---------------------------------------------------------------------------------------------------------- |
-| `file`         | `File \| undefined` | The attached file — name/size/icon all derive from this. Required for `getAttachments()` to see this card. |
-| `loading`      | `boolean`           | Shows `loadingLabel` (and a spinner) in place of the icon/name — set this while an upload is in flight.    |
-| `loadingLabel` | `string`            | Defaults to `"Uploading…"`.                                                                                |
+| Property       | Type                | Notes                                                                                                         |
+| -------------- | ------------------- | ------------------------------------------------------------------------------------------------------------- |
+| `file`         | `File \| undefined` | The attached file — name/size/icon all derive from this. Required for `getAttachments()` to see this card.    |
+| `loading`      | `boolean`           | Shows `loadingLabel` (and a spinner) in place of the icon/name — set this while an upload is in flight.       |
+| `loadingLabel` | `string`            | Defaults to `"Uploading…"`.                                                                                   |
+| `removable`    | `boolean`           | Shows the hover-revealed remove button. Defaults to `false`; `chx-attachments.addAttachments` sets it `true`. |
 
 ### Slots
 

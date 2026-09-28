@@ -1,5 +1,6 @@
 import { closestTreeItemParent } from "../components/tree-item/tree-item.js";
 
+/** Fallback row height (px) for PageUp/PageDown when an item hasn't laid out yet. */
 const DEFAULT_ROW_HEIGHT = 32;
 
 /** Interprets `keydown` per the spec's keyboard table, delegating to the other controllers. */
@@ -100,7 +101,8 @@ export class KeyboardNavController {
         // checkboxSelection, selecting is exclusively the checkbox's job (row clicks don't select
         // either — see tree-item's #onRowClick), so Space mirrors a checkbox click and cascades.
         event.preventDefault();
-        if (this.host.checkboxSelection) this.selection.selectCascading(item, this.host.buildIndexTree());
+        if (this.host.checkboxSelection)
+          this.selection.selectCascading(item, this.host.buildIndexTree());
         else this.selection.activate(item);
         return;
       }
@@ -123,6 +125,7 @@ export class KeyboardNavController {
   /**
    * @param {import("../components/tree-item/tree-item.js").TvxTreeItem} item
    * @param {1 | -1} direction
+   * @returns {import("../components/tree-item/tree-item.js").TvxTreeItem | null}
    */
   #step(item, direction) {
     const visible = [...this.host.visibleItems()];
@@ -131,7 +134,8 @@ export class KeyboardNavController {
     return visible[index + direction] ?? null;
   }
 
-  /** @param {import("../components/tree-item/tree-item.js").TvxTreeItem} item */
+  /** @param {import("../components/tree-item/tree-item.js").TvxTreeItem} item
+   * @returns {import("../components/tree-item/tree-item.js").TvxTreeItem | null} */
   #parentItem(item) {
     return closestTreeItemParent(item);
   }
@@ -139,6 +143,7 @@ export class KeyboardNavController {
   /**
    * @param {import("../components/tree-item/tree-item.js").TvxTreeItem} item
    * @param {1 | -1} direction
+   * @returns {import("../components/tree-item/tree-item.js").TvxTreeItem | null}
    */
   #page(item, direction) {
     const visible = [...this.host.visibleItems()];
@@ -151,6 +156,7 @@ export class KeyboardNavController {
   /**
    * Rows-per-viewport estimate, from the item's own row height and the nearest scroll container.
    * @param {import("../components/tree-item/tree-item.js").TvxTreeItem} item
+   * @returns {number}
    */
   #pageSize(item) {
     const rowHeight = item.getBoundingClientRect().height || DEFAULT_ROW_HEIGHT;
@@ -159,12 +165,16 @@ export class KeyboardNavController {
     return Math.max(1, Math.floor(availableHeight / rowHeight));
   }
 
-  /** Nearest scrollable ancestor of the tree host, if any — falls back to the viewport otherwise. */
+  /** Nearest scrollable ancestor of the tree host, if any — falls back to the viewport otherwise.
+   * @returns {HTMLElement | null} */
   #scrollContainer() {
     let node = this.host.parentElement;
     while (node) {
       const overflowY = getComputedStyle(node).overflowY;
-      if ((overflowY === "auto" || overflowY === "scroll") && node.scrollHeight > node.clientHeight) {
+      if (
+        (overflowY === "auto" || overflowY === "scroll") &&
+        node.scrollHeight > node.clientHeight
+      ) {
         return node;
       }
       node = node.parentElement;

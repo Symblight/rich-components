@@ -1,4 +1,6 @@
 /**
+ * Keyed n-ary tree; the root is synthetic (`key: null`, no `value`). Iterating yields the node
+ * itself then every descendant, pre-order.
  * @template T
  * @typedef {{
  *   value?: T,
@@ -12,7 +14,7 @@
 
 /**
  * @template T
- * @returns {IndexTree<T>}
+ * @returns {IndexTree<T>} A fresh synthetic root.
  */
 export function createEmptyIndexTree() {
   /** @type {IndexTree<T>} */
@@ -32,6 +34,7 @@ export function createEmptyIndexTree() {
 }
 
 /**
+ * Adds a child under `parent`, replacing any existing child with the same key.
  * @template T
  * @param {IndexTree<T>} parent
  * @param {PropertyKey} key
@@ -48,8 +51,10 @@ export function insertIndexTree(parent, key, value) {
 }
 
 /**
+ * Detaches `node` (and its subtree) from its parent.
  * @template T
  * @param {IndexTree<T>} node
+ * @returns {void}
  */
 export function removeIndexTree(node) {
   if (node.key !== null) node.parent?.children.delete(node.key);
@@ -57,6 +62,7 @@ export function removeIndexTree(node) {
 }
 
 /**
+ * Pre-order search of `root`'s subtree, `root` itself included.
  * @template T
  * @param {IndexTree<T>} root
  * @param {PropertyKey} key

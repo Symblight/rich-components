@@ -88,9 +88,9 @@ npm install @symblight/tree-view lit
 
 ## Theming
 
-Every color is read from `--md-sys-color-*` custom properties (Material Design 3 system color
-tokens) — the component has no colors of its own. Generate a token set with
-[`@symblight/md-colors`](https://www.npmjs.com/package/@symblight/md-colors):
+Every color, size and font is read from CSS custom properties. The components have no hard-coded
+theme of their own. Start from a Material Design 3 system token set (`--md-sys-*`), for example one
+generated with [`@symblight/md-colors`](https://www.npmjs.com/package/@symblight/md-colors):
 
 ```bash
 npm install @symblight/md-colors
@@ -100,6 +100,100 @@ npx md-colors --sourceColor="#6750A4" --scheme=light --output=./theme.css
 ```html
 <link rel="stylesheet" href="./theme.css" />
 ```
+
+### Token tiers
+
+```
+--md-sys-*          MD3 system tokens (your theme.css)
+   ↓ fallback
+--tvx-tree-view-*   tree-wide theme: typography, color roles, shape
+   ↓ default
+--tvx-<component>-* one component: --tvx-tree-item-*, --tvx-item-sub-tree-*, --tvx-tree-skeleton-*
+```
+
+- **`--tvx-tree-view-*`** retunes every tree component at once. Set it on `tvx-tree-view` or any
+  ancestor, and it reaches every item however deep it's nested. No component ever declares one, so
+  your value always wins. Each falls back to the matching `--md-sys-*` token, or to a built-in
+  default where MD3 has no equivalent.
+- **`--tvx-<component>-*`** retunes one component. Its defaults come from the tree tier. Each
+  element declares its own defaults, so set these on the element itself (`tvx-tree-item { … }`),
+  not on the tree.
+- To recolor the `md-*` controls inside the tree as well (checkbox, spinner, skeleton), set
+  `--md-sys-color-*` on `tvx-tree-view` instead of `--tvx-tree-view-color-*`.
+
+```css
+tvx-tree-view {
+  --tvx-tree-view-font-family: "Inter", sans-serif;
+  --tvx-tree-view-color-secondary-container: #d8e6ff; /* selected row */
+  --tvx-tree-view-row-gap: 0; /* space between root rows */
+}
+
+tvx-tree-item {
+  --tvx-tree-item-row-height: 2rem;
+  --tvx-tree-item-shape: 0.25rem;
+}
+
+tvx-item-sub-tree {
+  --tvx-item-sub-tree-guide-color: var(--md-sys-color-outline-variant);
+}
+```
+
+### `--tvx-tree-view-*` reference
+
+| Token | Default | Used by |
+| --- | --- | --- |
+| `--tvx-tree-view-font-family` | `--md-sys-typescale-font-family` | every component |
+| `--tvx-tree-view-font-weight-regular` / `-medium` | `400` / `500` | item label |
+| `--tvx-tree-view-body-medium-font-size` / `-line-height` | `0.875rem` / `1.25rem` | item label |
+| `--tvx-tree-view-color-<role>` | `--md-sys-color-<role>` | `on-surface` (row text), `on-surface-variant` (chevron, loading row), `surface-container-high` (hover), `secondary-container` / `on-secondary-container` (selected row, drop target), `primary` (focus ring, drop indicator) |
+| `--tvx-tree-view-shape-corner-extra-small` / `-small` / `-medium` / `-large` / `-full` | `--md-sys-shape-corner-*` | row shape (`-full`) |
+| `--tvx-tree-view-row-gap` | `0.125rem` | space between root-level rows |
+
+### Component tokens
+
+| Token | Default |
+| --- | --- |
+| `--tvx-tree-item-row-height` / `-padding` / `-gap` | `2.25rem` / `0.5rem` / `0.2rem` |
+| `--tvx-tree-item-shape` | `shape-corner-full` |
+| `--tvx-tree-item-color` | `on-surface` |
+| `--tvx-tree-item-hover-background-color` | `surface-container-high` |
+| `--tvx-tree-item-selected-background-color` / `-selected-color` | `secondary-container` / `on-secondary-container` |
+| `--tvx-tree-item-focus-outline-color` | `primary` |
+| `--tvx-tree-item-chevron-color` / `-loading-color` | `on-surface-variant` |
+| `--tvx-tree-item-label-font` | body-medium, `font` shorthand |
+| `--tvx-tree-item-drop-target-background-color` / `-drop-indicator-color` | `secondary-container` / `primary` |
+| `--tvx-item-sub-tree-indent` | the parent row's padding + half a chevron |
+| `--tvx-item-sub-tree-guide-color` / `-guide-width` | `transparent` / `1px` |
+| `--tvx-tree-skeleton-row-height` / `-padding` | the enclosing item's row height / padding |
+| `--tvx-tree-skeleton-bar-height` | `1em` |
+
+### Using the tokens in your own components
+
+`@symblight/tree-view/tokens.css` is the same token layer every tree component loads first. Add it
+to your own component's shadow root, for example custom `slot="leading"` content, and it resolves
+`--tvx-tree-view-*` exactly like the built-in components do. Your styles then read the resolved
+values, `--_tvx-*`: `--_tvx-color-on-surface`, `--_tvx-body-medium-font-size`,
+`--_tvx-shape-corner-full`, and so on.
+
+```js
+import tokens from "@symblight/tree-view/tokens.css" with { type: "css" };
+
+class MyBadge extends LitElement {
+  static styles = [
+    tokens,
+    css`
+      :host {
+        color: var(--_tvx-color-on-surface-variant);
+        font-size: var(--_tvx-body-medium-font-size);
+      }
+    `,
+  ];
+}
+```
+
+The file's rules target `:host`, so it only applies inside a shadow root. With a bundler that
+doesn't support CSS module scripts, import the file as a string (Vite: `?inline`) and wrap it in
+Lit's `unsafeCSS`.
 
 ## Development
 

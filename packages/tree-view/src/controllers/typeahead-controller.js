@@ -1,3 +1,4 @@
+/** Idle time (ms) after which the typed-prefix buffer clears. */
 const RESET_MS = 500;
 
 /**

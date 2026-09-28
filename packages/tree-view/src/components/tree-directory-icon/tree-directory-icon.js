@@ -6,19 +6,26 @@ import "@symblight/wc-material/icon";
 
 import { toggledItemsContext } from "../../base/toggled-items-context.js";
 
-/** @tag tvx-tree-directory-icon */
+/**
+ * @tag tvx-tree-directory-icon
+ * @summary Folder icon for a `slot="leading"` that swaps to an open folder while its enclosing
+ * `<tvx-tree-item>` is expanded — read through context, since light-DOM content can't observe the
+ * item's attributes directly.
+ */
 @customElement("tvx-tree-directory-icon")
 export class TvxTreeDirectoryIcon extends LitElement {
   constructor() {
     super();
+    /** @type {ContextConsumer<typeof toggledItemsContext, TvxTreeDirectoryIcon>} */
     this._toggled = new ContextConsumer(this, { context: toggledItemsContext, subscribe: true });
   }
 
+  /** @returns {boolean} */
   get _expanded() {
     const item = this.closest("tvx-tree-item");
     if (!item) return false;
     const map = this._toggled.value;
-    return map?.has(item.key) ? map.get(item.key) : item.expanded;
+    return map?.get(item.key) ?? item.expanded;
   }
 
   #renderIcon() {

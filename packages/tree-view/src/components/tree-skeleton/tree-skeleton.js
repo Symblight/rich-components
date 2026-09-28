@@ -1,4 +1,5 @@
 import { html, LitElement } from "lit";
+import { classMap } from "lit/directives/class-map.js";
 import { customElement } from "lit/decorators.js";
 
 import "@symblight/wc-material/skeleton";
@@ -32,7 +33,7 @@ export class TvxTreeSkeleton extends LitElement {
 
   constructor() {
     super();
-    /** Expected child count — rendered row count is `min(count, MAX_ROWS)`, at least 1. */
+    /** Expected child count — rendered row count is `min(count, MAX_ROWS)`, at least 1. @type {number} */
     this.count = 1;
   }
 
@@ -45,11 +46,19 @@ export class TvxTreeSkeleton extends LitElement {
 
   render() {
     const rows = Math.min(Math.max(this.count, 1), MAX_ROWS);
+    // Cycles bar widths (default / short / long) so the shimmer doesn't read as one solid block.
     return html`${Array.from(
       { length: rows },
-      () => html`
+      (_, index) => html`
         <div class="tree-skeleton__row" part="row">
-          <md-skeleton class="tree-skeleton__bar" part="bar"></md-skeleton>
+          <md-skeleton
+            class=${classMap({
+              "tree-skeleton__bar": true,
+              "tree-skeleton__bar_short": index % 3 === 1,
+              "tree-skeleton__bar_long": index % 3 === 2,
+            })}
+            part="bar"
+          ></md-skeleton>
         </div>
       `,
     )}`;

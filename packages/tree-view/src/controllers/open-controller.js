@@ -16,10 +16,12 @@ export class OpenController {
   /** @param {MouseEvent} event */
   handleAuxClick(event) {
     if (event.button !== 1) return;
-    const item = /** @type {Element} */ (event.target)?.closest?.("tvx-tree-item");
-    if (!item || /** @type {any} */ (item).disabled) return;
+    const item = /** @type {import("../components/tree-item/tree-item.js").TvxTreeItem | null} */ (
+      /** @type {Element} */ (event.target)?.closest?.("tvx-tree-item")
+    );
+    if (!item || item.disabled) return;
     event.preventDefault();
-    this.activate(/** @type {import("../components/tree-item/tree-item.js").TvxTreeItem} */ (item));
+    this.activate(item);
   }
 
   /** @param {import("../components/tree-item/tree-item.js").TvxTreeItem} item */
@@ -41,7 +43,8 @@ export class OpenController {
     );
   }
 
-  /** @param {string} href */
+  /** @param {string} href
+   * @returns {boolean} */
   #isSafeUrl(href) {
     try {
       return ALLOWED_URL_SCHEMES.has(new URL(href, window.location.href).protocol);

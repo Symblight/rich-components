@@ -5,9 +5,11 @@ const STATUS_ERROR = "error";
 
 const ROOT_KEY = Symbol("root");
 
+/** @typedef {typeof STATUS_IDLE | typeof STATUS_LOADING | typeof STATUS_LOADED | typeof STATUS_ERROR} LoadStatus */
+
 /** Drives `dataSource`-based loading: `loadRoot()` populates the top level, `maybeLoad(item)` is called on every expand. */
 export class DataSourceController {
-  /** @type {Map<PropertyKey | typeof ROOT_KEY, string>} */
+  /** @type {Map<PropertyKey | typeof ROOT_KEY, LoadStatus>} */
   #status = new Map();
   /** In-flight loads, so a disconnect or a `dataSource` swap can mark them stale instead of
    * letting a late response mutate DOM that's gone (or been replaced) by the time it resolves.
@@ -23,7 +25,8 @@ export class DataSourceController {
     this.focus = focus;
   }
 
-  /** No-ops unless a `dataSource` is configured and the root hasn't loaded yet. Uses `.items` as the root batch if set, otherwise fetches via `getTreeItems()`. */
+  /** No-ops unless a `dataSource` is configured and the root hasn't loaded yet. Uses `.items` as the root batch if set, otherwise fetches via `getTreeItems()`.
+   * @returns {Promise<void>} */
   async loadRoot() {
     if (!this.host.dataSource) return;
     if ((this.#status.get(ROOT_KEY) ?? STATUS_IDLE) !== STATUS_IDLE) return;
@@ -73,7 +76,7 @@ export class DataSourceController {
     );
   }
 
-  /** Called on a `dataSource` property change: a already-settled root is reset so `loadRoot()`
+  /** Called on a `dataSource` property change: an already-settled root is reset so `loadRoot()`
    * fetches fresh from the new source; a first-ever assignment (root still idle/loading) is left
    * alone so this doesn't abort the load that's already in flight for it. */
   handleDataSourceChange() {
@@ -99,7 +102,7 @@ export class DataSourceController {
   maybeLoad(item) {
     if (!item.hasChildren || !this.host.dataSource) return;
     if (item._subTreeEl?.querySelector(":scope > tvx-tree-item")) return;
-    if ((this.#status.get(item.key ?? "") ?? STATUS_IDLE) !== STATUS_IDLE) return;
+    if ((this.#status.get(item.key) ?? STATUS_IDLE) !== STATUS_IDLE) return;
     this.#load(item);
   }
 
@@ -141,8 +144,7 @@ export class DataSourceController {
     const focusWasOnPlaceholder =
       !knownCount &&
       this.focus.focusedKey ===
-        /** @type {import("../components/tree-item/tree-item.js").TvxTreeItem} */ (placeholder)
-          .key;
+        /** @type {import("../components/tree-item/tree-item.js").TvxTreeItem} */ (placeholder).key;
     placeholder.remove();
 
     if (!children || children.length === 0) {

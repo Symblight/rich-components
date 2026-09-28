@@ -2,7 +2,7 @@
   display: flex;
   align-items: center;
   --chx-unread-marker-size: 0.5rem;
-  --chx-unread-marker-color: var(--md-sys-color-primary);
+  --chx-unread-marker-color: var(--_chx-color-primary);
 }
 
 .unread-marker__dot {

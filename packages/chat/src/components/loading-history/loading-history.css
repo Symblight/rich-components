@@ -4,7 +4,7 @@
   inset-block-end: var(--chx-loading-history-offset, 0.75rem);
   z-index: 1;
   display: flex;
-  --chx-loading-history-background-color: var(--md-sys-color-surface-container-high);
+  --chx-loading-history-background-color: var(--_chx-color-surface-container-high);
 }
 
 .loading-history__bubble {
@@ -14,7 +14,7 @@
   padding: 0.5rem;
   border-radius: 50%;
   background-color: var(--chx-loading-history-background-color);
-  box-shadow: var(--chx-loading-history-shadow, 0 2px 6px rgb(0 0 0 / 0.3));
+  box-shadow: var(--chx-loading-history-shadow, var(--_chx-elevation-2));
   font-size: 1.25rem;
 }
 

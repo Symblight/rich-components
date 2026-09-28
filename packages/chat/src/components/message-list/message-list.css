@@ -4,10 +4,11 @@
   box-sizing: border-box;
   position: relative;
   overflow-anchor: unset;
-  --chx-message-list-border-color: var(--md-sys-color-on-primary-container);
   --chx-message-list-padding: 0 1rem 0 1.5rem;
-  --chx-message-list-dragging-color: var(--md-sys-color-primary);
-  --chx-message-list-drop-hint-background-color: var(--md-sys-color-surface);
+  --chx-message-list-dragging-color: var(--_chx-color-primary);
+  --chx-message-list-drop-hint-background-color: var(--_chx-color-surface);
+  --chx-message-list-hint-font-size: var(--_chx-body-medium-font-size);
+  --chx-message-list-empty-color: var(--_chx-color-on-surface-variant);
   /* inherited by every chx-message — only a list separates runs, a standalone message gets no margin */
   --chx-message-group-gap: 0.75rem;
   padding: var(--chx-message-list-padding);
@@ -36,7 +37,7 @@
     transparent 15%
   );
   color: var(--chx-message-list-dragging-color);
-  font-size: 0.875rem;
+  font-size: var(--chx-message-list-hint-font-size);
   pointer-events: none;
 }
 
@@ -71,7 +72,8 @@
 }
 
 .message-list__empty-default {
-  color: var(--md-sys-color-on-surface-variant);
+  color: var(--chx-message-list-empty-color);
+  font-size: var(--chx-message-list-hint-font-size);
 }
 
 .message-list__status {

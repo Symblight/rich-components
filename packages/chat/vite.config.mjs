@@ -1,5 +1,6 @@
 import { defineConfig } from "vite";
 import postcssLit from "rollup-plugin-postcss-lit";
+import { copyFileSync } from "node:fs";
 import path from "node:path";
 import { rimrafSync } from "rimraf";
 import dts from "vite-plugin-dts";
@@ -16,8 +17,10 @@ export default defineConfig({
   build: {
     target: "esnext",
     rollupOptions: {
-      // two entries: a messenger importing only "." never pulls the agentic components in
+      // separate entries: a messenger importing only "." never pulls the agentic components in
       input: ["src/index.js", "src/agent.js"],
+      // Vite's app build defaults this to false, which strips every entry's exports
+      preserveEntrySignatures: "strict",
       external: [
         "lit",
         /^lit\/.*/,
@@ -37,6 +40,16 @@ export default defineConfig({
   },
   plugins: [
     postcssLit(),
+    // `@symblight/chat/tokens.css` — the raw token layer, for an app's own shadow roots
+    {
+      name: "copy-tokens-css",
+      closeBundle() {
+        copyFileSync(
+          path.resolve(import.meta.dirname, "src/styles/tokens.css"),
+          path.resolve(import.meta.dirname, "dist/tokens.css"),
+        );
+      },
+    },
     babel({
       filter: /\.js$/,
       babelConfig: {

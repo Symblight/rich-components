@@ -1,41 +1,29 @@
 :host {
-  --chx-tool-call-row-height: var(--chx-agent-row-height, 2.25rem);
-  --chx-tool-call-font-size: var(--chx-agent-font-size, 0.875rem);
-  --chx-tool-call-meta-font-size: var(--chx-agent-meta-font-size, 0.78125rem);
-  --chx-tool-call-mono-font-size: var(--chx-agent-mono-font-size, 0.8125rem);
-  --chx-tool-call-mono-font-family: var(
-    --chx-agent-mono-font-family,
-    "SF Mono",
-    ui-monospace,
-    "Roboto Mono",
-    monospace
-  );
-  --chx-tool-call-icon-size: var(--chx-agent-icon-size, 1.25rem);
-  --chx-tool-call-gap: var(--chx-agent-gap, 0.625rem);
-  --chx-tool-call-padding-inline: var(--chx-agent-padding-inline, 0.5rem);
-  --chx-tool-call-border-radius: var(--chx-agent-border-radius, 0.5rem);
-  --chx-tool-call-color: var(--chx-agent-color, var(--md-sys-color-on-surface-variant));
-  --chx-tool-call-label-color: var(--chx-agent-label-color, var(--md-sys-color-on-surface));
-  --chx-tool-call-rule-color: var(--chx-agent-rule-color, var(--md-sys-color-outline-variant));
+  --chx-tool-call-row-height: var(--chx-part-row-height, 2.25rem);
+  --chx-tool-call-font-size: var(--_chx-body-medium-font-size);
+  --chx-tool-call-meta-font-size: var(--_chx-body-small-font-size);
+  --chx-tool-call-icon-size: var(--chx-part-icon-size, 1.25rem);
+  --chx-tool-call-gap: var(--chx-part-gap, 0.625rem);
+  --chx-tool-call-padding-inline: var(--chx-part-padding-inline, 0.5rem);
+  --chx-tool-call-border-radius: var(--chx-agent-border-radius, var(--_chx-shape-corner-small));
+  --chx-tool-call-color: var(--chx-agent-color, var(--_chx-color-on-surface-variant));
+  --chx-tool-call-label-color: var(--chx-agent-label-color, var(--_chx-color-on-surface));
+  --chx-tool-call-rule-color: var(--chx-agent-rule-color, var(--_chx-color-outline-variant));
   --chx-tool-call-state-layer-color: var(
     --chx-agent-state-layer-color,
-    var(--md-sys-color-on-surface)
+    var(--_chx-color-on-surface)
   );
-  --chx-tool-call-focus-ring-color: var(--chx-agent-focus-ring-color, var(--md-sys-color-primary));
+  --chx-tool-call-focus-ring-color: var(--chx-agent-focus-ring-color, var(--_chx-color-primary));
   --chx-tool-call-content-gap: 0.5rem;
-  --chx-tool-call-file-color: var(--md-sys-color-on-surface);
-  --chx-tool-call-path-color: var(--md-sys-color-on-surface-variant);
-  --chx-tool-call-path-hover-color: var(--md-sys-color-primary);
-  --chx-tool-call-pending-color: var(--md-sys-color-outline);
-  --chx-tool-call-running-color: var(--md-sys-color-primary);
-  --chx-tool-call-awaiting-permission-color: var(--md-sys-color-tertiary);
-  --chx-tool-call-awaiting-permission-background-color: color-mix(
-    in srgb,
-    var(--md-sys-color-tertiary) 9%,
-    transparent
-  );
-  --chx-tool-call-cancelled-color: var(--md-sys-color-outline);
-  --chx-tool-call-failed-color: var(--md-sys-color-error);
+  --chx-tool-call-file-color: var(--_chx-color-on-surface-variant);
+  --chx-tool-call-pending-color: var(--_chx-color-outline);
+  --chx-tool-call-running-color: var(--_chx-color-primary);
+  --chx-tool-call-awaiting-permission-color: var(--_chx-color-on-tertiary-container);
+  --chx-tool-call-awaiting-permission-background-color: var(--_chx-color-tertiary-container);
+  --chx-tool-call-cancelled-color: var(--_chx-color-outline);
+  --chx-tool-call-additions-color: var(--_chx-color-diff-added);
+  --chx-tool-call-deletions-color: var(--_chx-color-diff-removed);
+  --chx-tool-call-failed-color: var(--_chx-color-error);
 
   --_chx-agent-row-height: var(--chx-tool-call-row-height);
   --_chx-agent-row-font-size: var(--chx-tool-call-font-size);
@@ -51,14 +39,11 @@
   --_chx-agent-row-focus-ring-color: var(--chx-tool-call-focus-ring-color);
 }
 
-:host([compact]) {
-  --chx-tool-call-row-height: var(--chx-agent-compact-row-height, 1.75rem);
-  --chx-tool-call-font-size: var(--chx-agent-compact-font-size, 0.8125rem);
-  --chx-tool-call-meta-font-size: var(--chx-agent-compact-meta-font-size, 0.75rem);
-  --chx-tool-call-mono-font-size: var(--chx-agent-compact-mono-font-size, 0.78125rem);
-  --chx-tool-call-icon-size: var(--chx-agent-compact-icon-size, 1rem);
-  --chx-tool-call-gap: var(--chx-agent-compact-gap, 0.5rem);
-  --chx-tool-call-padding-inline: var(--chx-agent-compact-padding-inline, 0.375rem);
+/* On the container fill every text/icon role, and the state layer, switches to its on-container pair. */
+:host([status="awaiting-permission"]) {
+  --chx-tool-call-label-color: var(--chx-tool-call-awaiting-permission-color);
+  --chx-tool-call-file-color: var(--chx-tool-call-awaiting-permission-color);
+  --chx-tool-call-state-layer-color: var(--chx-tool-call-awaiting-permission-color);
 }
 
 /* The one row in a turn with a fill: the banner above the composer is asking about it. */
@@ -76,7 +61,7 @@
 
   :host([status="awaiting-permission"]) & {
     color: var(--chx-tool-call-awaiting-permission-color);
-    font-weight: 500;
+    font-weight: var(--_chx-font-weight-medium);
   }
 
   :host([status="failed"]) &,
@@ -86,41 +71,25 @@
 }
 
 .tool-call__file {
-  flex: none;
-  color: var(--chx-tool-call-file-color);
-  font-family: var(--chx-tool-call-mono-font-family);
-  font-size: var(--chx-tool-call-mono-font-size);
-  font-weight: 500;
-  white-space: nowrap;
-}
+  --chx-chip-label-color: var(--chx-tool-call-file-color);
 
-.tool-call__line {
-  color: var(--chx-tool-call-path-color);
-  font-weight: 400;
-}
-
-/* Truncated from the start, so the part nearest the file survives a narrow column; `bdi` keeps
-   the path itself left-to-right inside the rtl box. */
-.tool-call__path {
+  /* absorbs the squeeze before the verb does */
+  flex: 0 1000 auto;
   min-inline-size: 0;
   overflow: hidden;
-  direction: rtl;
-  color: var(--chx-tool-call-path-color);
-  font-family: var(--chx-tool-call-mono-font-family);
-  font-size: calc(var(--chx-tool-call-mono-font-size) - 1px);
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  opacity: 0.85;
-
-  &:hover {
-    color: var(--chx-tool-call-path-hover-color);
-    text-decoration: underline;
-    opacity: 1;
-  }
 }
 
-.tool-call__path-text {
-  direction: ltr;
+.tool-call__diff-stat {
+  display: inline-flex;
+  gap: 0.25rem;
+}
+
+.tool-call__additions {
+  color: var(--chx-tool-call-additions-color);
+}
+
+.tool-call__deletions {
+  color: var(--chx-tool-call-deletions-color);
 }
 
 .tool-call__status {

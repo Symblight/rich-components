@@ -1,21 +1,18 @@
 :host {
-  --chx-thought-row-height: var(--chx-agent-row-height, 2.25rem);
-  --chx-thought-font-size: var(--chx-agent-font-size, 0.875rem);
-  --chx-thought-icon-size: var(--chx-agent-icon-size, 1.25rem);
-  --chx-thought-gap: var(--chx-agent-gap, 0.625rem);
-  --chx-thought-padding-inline: var(--chx-agent-padding-inline, 0.5rem);
-  --chx-thought-border-radius: var(--chx-agent-border-radius, 0.5rem);
-  --chx-thought-color: var(--chx-agent-color, var(--md-sys-color-on-surface-variant));
-  --chx-thought-label-color: var(--chx-agent-label-color, var(--md-sys-color-on-surface));
-  --chx-thought-rule-color: var(--chx-agent-rule-color, var(--md-sys-color-outline-variant));
-  --chx-thought-state-layer-color: var(
-    --chx-agent-state-layer-color,
-    var(--md-sys-color-on-surface)
-  );
-  --chx-thought-focus-ring-color: var(--chx-agent-focus-ring-color, var(--md-sys-color-primary));
-  --chx-thought-shimmer-base-color: var(--md-sys-color-on-surface-variant);
-  --chx-thought-shimmer-highlight-color: var(--md-sys-color-on-surface);
-  --chx-thought-text-color: var(--md-sys-color-on-surface-variant);
+  --chx-thought-row-height: var(--chx-part-row-height, 2.25rem);
+  --chx-thought-font-size: var(--_chx-body-medium-font-size);
+  --chx-thought-icon-size: var(--chx-part-icon-size, 1.25rem);
+  --chx-thought-gap: var(--chx-part-gap, 0.625rem);
+  --chx-thought-padding-inline: var(--chx-part-padding-inline, 0.5rem);
+  --chx-thought-border-radius: var(--chx-agent-border-radius, var(--_chx-shape-corner-small));
+  --chx-thought-color: var(--chx-agent-color, var(--_chx-color-on-surface-variant));
+  --chx-thought-label-color: var(--chx-agent-label-color, var(--_chx-color-on-surface));
+  --chx-thought-rule-color: var(--chx-agent-rule-color, var(--_chx-color-outline-variant));
+  --chx-thought-state-layer-color: var(--chx-agent-state-layer-color, var(--_chx-color-on-surface));
+  --chx-thought-focus-ring-color: var(--chx-agent-focus-ring-color, var(--_chx-color-primary));
+  --chx-thought-shimmer-base-color: var(--_chx-color-on-surface-variant);
+  --chx-thought-shimmer-highlight-color: var(--_chx-color-on-surface);
+  --chx-thought-text-color: var(--_chx-color-on-surface-variant);
   --chx-thought-text-max-width: 68ch;
 
   --_chx-agent-row-height: var(--chx-thought-row-height);
@@ -29,14 +26,6 @@
   --_chx-agent-row-rule-color: var(--chx-thought-rule-color);
   --_chx-agent-row-state-layer-color: var(--chx-thought-state-layer-color);
   --_chx-agent-row-focus-ring-color: var(--chx-thought-focus-ring-color);
-}
-
-:host([compact]) {
-  --chx-thought-row-height: var(--chx-agent-compact-row-height, 1.75rem);
-  --chx-thought-font-size: var(--chx-agent-compact-font-size, 0.8125rem);
-  --chx-thought-icon-size: var(--chx-agent-compact-icon-size, 1rem);
-  --chx-thought-gap: var(--chx-agent-compact-gap, 0.5rem);
-  --chx-thought-padding-inline: var(--chx-agent-compact-padding-inline, 0.375rem);
 }
 
 .thought__label_streaming {

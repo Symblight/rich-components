@@ -3,6 +3,7 @@ import { customElement } from "lit/decorators.js";
 
 import "../../code-block/code-block.js";
 
+import tokens from "../../../styles/tokens.css?inline";
 import styles from "./tool-call-diff.css?inline";
 
 /**
@@ -30,7 +31,7 @@ export class ChxToolCallDiff extends LitElement {
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [styles];
+    return [tokens, styles];
   }
 
   render() {

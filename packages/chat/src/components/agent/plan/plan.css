@@ -1,24 +1,24 @@
 :host {
-  --chx-plan-row-height: var(--chx-agent-row-height, 2.25rem);
-  --chx-plan-font-size: var(--chx-agent-font-size, 0.875rem);
-  --chx-plan-meta-font-size: var(--chx-agent-meta-font-size, 0.78125rem);
-  --chx-plan-icon-size: var(--chx-agent-icon-size, 1.25rem);
-  --chx-plan-gap: var(--chx-agent-gap, 0.625rem);
-  --chx-plan-padding-inline: var(--chx-agent-padding-inline, 0.5rem);
-  --chx-plan-border-radius: var(--chx-agent-border-radius, 0.5rem);
-  --chx-plan-color: var(--chx-agent-color, var(--md-sys-color-on-surface-variant));
-  --chx-plan-label-color: var(--chx-agent-label-color, var(--md-sys-color-on-surface));
-  --chx-plan-rule-color: var(--chx-agent-rule-color, var(--md-sys-color-outline-variant));
-  --chx-plan-state-layer-color: var(--chx-agent-state-layer-color, var(--md-sys-color-on-surface));
-  --chx-plan-focus-ring-color: var(--chx-agent-focus-ring-color, var(--md-sys-color-primary));
+  --chx-plan-row-height: var(--chx-part-row-height, 2.25rem);
+  --chx-plan-font-size: var(--_chx-body-medium-font-size);
+  --chx-plan-meta-font-size: var(--_chx-body-small-font-size);
+  --chx-plan-icon-size: var(--chx-part-icon-size, 1.25rem);
+  --chx-plan-gap: var(--chx-part-gap, 0.625rem);
+  --chx-plan-padding-inline: var(--chx-part-padding-inline, 0.5rem);
+  --chx-plan-border-radius: var(--chx-agent-border-radius, var(--_chx-shape-corner-small));
+  --chx-plan-color: var(--chx-agent-color, var(--_chx-color-on-surface-variant));
+  --chx-plan-label-color: var(--chx-agent-label-color, var(--_chx-color-on-surface));
+  --chx-plan-rule-color: var(--chx-agent-rule-color, var(--_chx-color-outline-variant));
+  --chx-plan-state-layer-color: var(--chx-agent-state-layer-color, var(--_chx-color-on-surface));
+  --chx-plan-focus-ring-color: var(--chx-agent-focus-ring-color, var(--_chx-color-primary));
   --chx-plan-progress-width: 3.5rem;
   --chx-plan-progress-height: 4px;
-  --chx-plan-progress-color: var(--md-sys-color-primary);
-  --chx-plan-progress-track-color: var(--md-sys-color-surface-container-highest);
-  --chx-plan-entry-color: var(--md-sys-color-on-surface);
-  --chx-plan-pending-color: var(--md-sys-color-outline);
-  --chx-plan-in-progress-color: var(--md-sys-color-primary);
-  --chx-plan-completed-color: var(--md-sys-color-on-surface-variant);
+  --chx-plan-progress-color: var(--_chx-color-primary);
+  --chx-plan-progress-track-color: var(--_chx-color-surface-container-highest);
+  --chx-plan-entry-color: var(--_chx-color-on-surface);
+  --chx-plan-pending-color: var(--_chx-color-outline);
+  --chx-plan-in-progress-color: var(--_chx-color-primary);
+  --chx-plan-completed-color: var(--_chx-color-on-surface-variant);
 
   --_chx-agent-row-height: var(--chx-plan-row-height);
   --_chx-agent-row-font-size: var(--chx-plan-font-size);
@@ -35,12 +35,6 @@
 }
 
 :host([compact]) {
-  --chx-plan-row-height: var(--chx-agent-compact-row-height, 1.75rem);
-  --chx-plan-font-size: var(--chx-agent-compact-font-size, 0.8125rem);
-  --chx-plan-meta-font-size: var(--chx-agent-compact-meta-font-size, 0.75rem);
-  --chx-plan-icon-size: var(--chx-agent-compact-icon-size, 1rem);
-  --chx-plan-gap: var(--chx-agent-compact-gap, 0.5rem);
-  --chx-plan-padding-inline: var(--chx-agent-compact-padding-inline, 0.375rem);
   --chx-plan-progress-width: 2.5rem;
   --chx-plan-progress-height: 3px;
 }
@@ -68,7 +62,7 @@
 }
 
 .plan__entry_in-progress {
-  font-weight: 500;
+  font-weight: var(--_chx-font-weight-medium);
 }
 
 /* Muted, never struck through — a done step still has to be readable. */

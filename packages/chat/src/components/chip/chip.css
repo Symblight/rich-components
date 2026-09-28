@@ -5,12 +5,12 @@
   /* `middle` uses font x-height, growing the line box past 20px — `top` doesn't. */
   vertical-align: top;
 
-  --md-chip-container-color: var(
-    --chx-chip-container-color,
-    var(--md-sys-color-surface-container-low)
-  );
-  --md-chip-label-color: var(--chx-chip-label-color, var(--md-sys-color-on-surface-variant));
-  --md-chip-icon-color: var(--chx-chip-icon-color, var(--md-sys-color-primary));
+  --chx-chip-container-color: var(--_chx-color-surface-container-low);
+  --chx-chip-label-color: var(--_chx-color-on-surface-variant);
+  --chx-chip-icon-color: var(--_chx-color-primary);
+  --md-chip-container-color: var(--chx-chip-container-color);
+  --md-chip-label-color: var(--chx-chip-label-color);
+  --md-chip-icon-color: var(--chx-chip-icon-color);
 }
 
 .chip {

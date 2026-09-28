@@ -1,37 +1,37 @@
 :host {
-  --chx-code-block-background-color: var(--md-sys-color-surface-container-low);
-  --chx-code-block-header-background-color: var(--md-sys-color-surface-container);
-  --chx-code-block-border-color: var(--md-sys-color-outline-variant);
-  --chx-code-block-header-color: var(--md-sys-color-on-surface-variant);
-  --chx-code-block-filename-color: var(--md-sys-color-on-surface);
-  --chx-code-block-body-color: var(--md-sys-color-on-surface);
-  --chx-code-block-border-radius: 0.75rem;
+  --chx-code-block-background-color: var(--_chx-color-surface-container-low);
+  --chx-code-block-header-background-color: var(--_chx-color-surface-container);
+  --chx-code-block-border-color: var(--_chx-color-outline-variant);
+  --chx-code-block-header-color: var(--_chx-color-on-surface-variant);
+  --chx-code-block-filename-color: var(--_chx-color-on-surface);
+  --chx-code-block-body-color: var(--_chx-color-on-surface);
+  --chx-code-block-border-radius: var(--_chx-shape-corner-medium);
   --chx-code-block-header-height: 2.5rem;
-  --chx-code-block-font-family:
-    "SF Mono", ui-monospace, "Cascadia Code", "Roboto Mono", Consolas, monospace;
-  --chx-code-block-font-size: 0.8125rem;
-  --chx-code-block-line-height: 1.7;
+  --chx-code-block-font-family: var(--_chx-mono-font-family);
+  --chx-code-block-font-size: var(--_chx-code-font-size);
+  --chx-code-block-line-height: var(--_chx-code-line-height);
+  --chx-code-block-header-font-size: var(--_chx-label-medium-font-size);
+  --chx-code-block-meta-font-size: var(--_chx-label-small-font-size);
   --chx-code-block-padding-block: 0.75rem;
   --chx-code-block-padding-inline: 0.875rem;
 
-  --chx-code-block-highlight-color: var(--md-sys-color-primary);
+  --chx-code-block-highlight-color: var(--_chx-color-primary);
   --chx-code-block-highlight-background-color: color-mix(
     in srgb,
-    var(--md-sys-color-primary) 10%,
+    var(--_chx-color-primary) 10%,
     transparent
   );
-  --chx-code-block-error-line-color: var(--md-sys-color-error);
+  --chx-code-block-error-line-color: var(--_chx-color-error);
   --chx-code-block-error-line-background-color: color-mix(
     in srgb,
-    var(--md-sys-color-error) 10%,
+    var(--_chx-color-error) 10%,
     transparent
   );
-  --chx-code-block-caret-color: var(--md-sys-color-primary);
-  --chx-code-block-prompt-color: var(--md-sys-color-primary);
-  --chx-code-block-number-gutter-color: var(--md-sys-color-on-surface-variant);
-  --chx-code-block-toggle-color: var(--md-sys-color-primary);
-  --chx-code-block-toast-background-color: var(--md-sys-color-inverse-surface);
-  --chx-code-block-toast-color: var(--md-sys-color-inverse-on-surface);
+  --chx-code-block-caret-color: var(--_chx-color-primary);
+  --chx-code-block-focus-ring-color: var(--_chx-color-primary);
+  --chx-code-block-prompt-color: var(--_chx-color-primary);
+  --chx-code-block-number-gutter-color: var(--_chx-color-on-surface-variant);
+  --chx-code-block-toggle-color: var(--_chx-color-primary);
 
   /* Extended palette: MD3 roles encode importance, syntax tokens just need to differ from each
      other — so these are hand-picked hues (≥ 4.5:1 on surface-container-low), not primary/tertiary. */
@@ -44,10 +44,10 @@
   --chx-code-block-punctuation-color: #5f6368;
   --chx-code-block-property-color: var(--chx-code-block-body-color);
   --chx-code-block-tag-color: #a8321f;
-  --chx-code-block-invalid-color: var(--md-sys-color-error);
+  --chx-code-block-invalid-color: var(--_chx-color-error);
 
-  --chx-code-block-diff-added-color: #0a5c2c;
-  --chx-code-block-diff-removed-color: #93211a;
+  --chx-code-block-diff-added-color: var(--_chx-color-diff-added);
+  --chx-code-block-diff-removed-color: var(--_chx-color-diff-removed);
   --chx-code-block-diff-added-background-color: color-mix(in srgb, #1b7a3d 12%, transparent);
   --chx-code-block-diff-removed-background-color: color-mix(in srgb, #b3261e 10%, transparent);
 
@@ -59,12 +59,12 @@
   :host {
     --chx-code-block-highlight-background-color: color-mix(
       in srgb,
-      var(--md-sys-color-primary) 16%,
+      var(--_chx-color-primary) 16%,
       transparent
     );
     --chx-code-block-error-line-background-color: color-mix(
       in srgb,
-      var(--md-sys-color-error) 16%,
+      var(--_chx-color-error) 16%,
       transparent
     );
 
@@ -77,8 +77,6 @@
     --chx-code-block-punctuation-color: #9aa0a6;
     --chx-code-block-tag-color: #f2b8b5;
 
-    --chx-code-block-diff-added-color: #a8dab5;
-    --chx-code-block-diff-removed-color: #f2b8b5;
     --chx-code-block-diff-added-background-color: color-mix(in srgb, #81c995 14%, transparent);
     --chx-code-block-diff-removed-background-color: color-mix(in srgb, #f2b8b5 14%, transparent);
   }
@@ -96,7 +94,7 @@
 }
 
 :host([error]) .code-block {
-  border-color: color-mix(in srgb, var(--md-sys-color-error) 45%, transparent);
+  border-color: color-mix(in srgb, var(--_chx-color-error) 45%, transparent);
 }
 
 .code-block__header {
@@ -111,16 +109,16 @@
   background-color: var(--chx-code-block-header-background-color);
   border-block-end: 1px solid var(--chx-code-block-border-color);
   color: var(--chx-code-block-header-color);
-  font-size: 0.75rem;
+  font-size: var(--chx-code-block-header-font-size);
 }
 
 /* Only the header turns red — tinting the whole body would make the output being inspected unreadable. */
 :host([error]) .code-block__header {
-  --chx-code-block-header-color: var(--md-sys-color-on-error-container);
-  --chx-code-block-filename-color: var(--md-sys-color-on-error-container);
+  --chx-code-block-header-color: var(--_chx-color-on-error-container);
+  --chx-code-block-filename-color: var(--_chx-color-on-error-container);
 
-  background-color: var(--md-sys-color-error-container);
-  border-block-end-color: color-mix(in srgb, var(--md-sys-color-error) 30%, transparent);
+  background-color: var(--_chx-color-error-container);
+  border-block-end-color: color-mix(in srgb, var(--_chx-color-error) 30%, transparent);
 }
 
 .code-block__label-group {
@@ -142,7 +140,7 @@
 
 .code-block__label {
   flex: none;
-  font-weight: 500;
+  font-weight: var(--_chx-font-weight-medium);
   letter-spacing: 0.03em;
   text-transform: uppercase;
 }
@@ -166,7 +164,7 @@
 .code-block__meta {
   color: var(--chx-code-block-header-color);
   font-family: var(--chx-code-block-font-family);
-  font-size: 0.71875rem;
+  font-size: var(--chx-code-block-meta-font-size);
 
   & ::slotted(*) {
     margin-inline-end: 0.5rem;
@@ -175,8 +173,8 @@
 
 .code-block__button {
   --md-button-foreground-color: inherit;
-  --md-button-font-size: 0.75rem;
-  --md-button-font-weight: 500;
+  --md-button-font-size: var(--chx-code-block-header-font-size);
+  --md-button-font-weight: var(--_chx-font-weight-medium);
   --md-button-inline-start-space: 0.25rem;
   --md-button-inline-end-space: 0.25rem;
   --md-button-block-start-space: 0.125rem;
@@ -193,7 +191,7 @@
   }
 
   &[selected] {
-    --md-icon-button-foreground-color: var(--md-sys-color-primary);
+    --md-icon-button-foreground-color: var(--chx-code-block-toggle-color);
   }
 }
 
@@ -217,7 +215,7 @@
 }
 
 .code-block__body:focus-visible {
-  outline: 2px solid var(--md-sys-color-primary);
+  outline: 2px solid var(--chx-code-block-focus-ring-color);
   outline-offset: -2px;
 }
 
@@ -229,7 +227,7 @@
 }
 
 .code-block__body[contenteditable]:focus-visible {
-  outline: 2px solid var(--md-sys-color-primary);
+  outline: 2px solid var(--chx-code-block-focus-ring-color);
 }
 
 /* The gutter carries the inline-start padding instead. */
@@ -410,8 +408,8 @@
   border-block-start: 1px solid var(--chx-code-block-border-color);
   color: var(--chx-code-block-toggle-color);
   font: inherit;
-  font-size: 0.78125rem;
-  font-weight: 500;
+  font-size: var(--chx-code-block-header-font-size);
+  font-weight: var(--_chx-font-weight-medium);
   cursor: pointer;
 
   /* MD3 state layer. */
@@ -433,7 +431,7 @@
   }
 
   &:focus-visible {
-    outline: 2px solid var(--md-sys-color-primary);
+    outline: 2px solid var(--chx-code-block-focus-ring-color);
     outline-offset: -2px;
   }
 }
@@ -453,30 +451,6 @@
 
 :host([expanded]) .code-block__toggle-icon {
   transform: rotate(180deg);
-}
-
-.code-block__toast {
-  position: absolute;
-  z-index: 1;
-  inset-block-start: calc(var(--chx-code-block-header-height) + 0.375rem);
-  inset-inline-end: 0.625rem;
-  padding: 0.375rem 0.625rem;
-  background-color: var(--chx-code-block-toast-background-color);
-  border-radius: 0.5rem;
-  color: var(--chx-code-block-toast-color);
-  font-size: 0.75rem;
-  font-weight: 500;
-  opacity: 0;
-  pointer-events: none;
-  transform: translateY(-0.25rem);
-  transition:
-    opacity 0.15s,
-    transform 0.15s;
-}
-
-.code-block__toast_visible {
-  opacity: 1;
-  transform: none;
 }
 
 .tok-keyword,

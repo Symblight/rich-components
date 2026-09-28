@@ -27,7 +27,8 @@
     "./agent": {
       "import": "./dist/agent.js",
       "types": "./dist/agent.d.ts"
-    }
+    },
+    "./tokens.css": "./dist/tokens.css"
   },
   "files": [
     "dist",

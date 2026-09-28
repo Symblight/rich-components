@@ -9,6 +9,7 @@ import thoughtIcon from "@material-design-icons/svg/outlined/psychology.svg?raw"
 import chevronIcon from "@material-design-icons/svg/outlined/expand_more.svg?raw";
 
 import { RowCompactController } from "../../../controllers/agent/RowCompactController.js";
+import tokens from "../../../styles/tokens.css?inline";
 import rowStyles from "../agent-row.css?inline";
 import styles from "./thought.css?inline";
 
@@ -66,7 +67,7 @@ export class ChxThought extends LitElement {
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [rowStyles, styles];
+    return [tokens, rowStyles, styles];
   }
 
   /** Override to localize. @param {number} durationMs @returns {string} */

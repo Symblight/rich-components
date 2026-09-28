@@ -1,8 +1,8 @@
 :host {
   display: block;
-  --chx-conversation-item-active-background-color: var(--md-sys-color-secondary-container);
+  --chx-conversation-item-active-background-color: var(--_chx-color-secondary-container);
   --chx-conversation-item-unread-title-weight: 600;
-  --chx-conversation-item-badge-color: var(--md-sys-color-primary);
+  --chx-conversation-item-badge-color: var(--_chx-color-primary);
   --chx-conversation-item-avatar-size: 36px;
 }
 
@@ -20,9 +20,11 @@
   object-fit: cover;
 }
 
-:host([active]) md-list-item {
-  --md-list-item-container-color: var(--chx-conversation-item-active-background-color);
-  background-color: var(--chx-conversation-item-active-background-color);
+.conversation-item__list-item {
+  :host([active]) & {
+    --md-list-item-container-color: var(--chx-conversation-item-active-background-color);
+    background-color: var(--chx-conversation-item-active-background-color);
+  }
 }
 
 .conversation-item__title {
@@ -30,10 +32,10 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
 
-:host([unread]) .conversation-item__title {
-  font-weight: var(--chx-conversation-item-unread-title-weight);
+  :host([unread]) & {
+    font-weight: var(--chx-conversation-item-unread-title-weight);
+  }
 }
 
 .conversation-item__preview {

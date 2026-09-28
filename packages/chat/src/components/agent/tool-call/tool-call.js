@@ -4,6 +4,7 @@ import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 
 import "@symblight/wc-material/icon";
 import "@symblight/wc-material/progress-circular";
+import "../../chip/chip.js";
 
 import readIcon from "@material-design-icons/svg/outlined/description.svg?raw";
 import editIcon from "@material-design-icons/svg/outlined/edit.svg?raw";
@@ -24,6 +25,7 @@ import rejectedIcon from "@material-design-icons/svg/outlined/block.svg?raw";
 import chevronIcon from "@material-design-icons/svg/outlined/expand_more.svg?raw";
 
 import { RowCompactController } from "../../../controllers/agent/RowCompactController.js";
+import tokens from "../../../styles/tokens.css?inline";
 import visuallyHidden from "../../../styles/visually-hidden.css?inline";
 import rowStyles from "../agent-row.css?inline";
 import styles from "./tool-call.css?inline";
@@ -64,17 +66,11 @@ const STATUSES = Object.assign(Object.create(null), {
  *  An unknown status (ACP's set can grow) falls back to `pending`'s look, collapsed. */
 const OPEN_STATUSES = new Set(["in_progress", "failed", "rejected"]);
 
-/** @param {string} path */
-function splitPath(path) {
-  const slash = path.lastIndexOf("/");
-  return { dir: path.slice(0, slash + 1), file: path.slice(slash + 1) };
-}
-
 /**
  * @tag chx-tool-call
  * @summary Agent tool-call row — a `partElements.tool_call` renderer the app wires up itself.
  * @fires chx-tool-call-toggle - `{open}`, on a disclosure change the component didn't make itself.
- * @fires chx-tool-call-location-click - `{path, line}`, a click on the row's folder path.
+ * @fires chx-tool-call-location-click - `{path, line}`, a click on the row's location element (see `buildLocation`).
  */
 @customElement("chx-tool-call")
 export class ChxToolCall extends LitElement {
@@ -86,6 +82,8 @@ export class ChxToolCall extends LitElement {
     status: { type: String, reflect: true },
     locations: { attribute: false },
     meta: { type: String },
+    additions: { type: Number },
+    deletions: { type: Number },
     error: { type: String },
     open: { type: Boolean, reflect: true },
     compact: { type: Boolean, reflect: true },
@@ -94,6 +92,14 @@ export class ChxToolCall extends LitElement {
 
   /** Latches on the first manual toggle — after that `status` never moves `open` again. */
   #userToggled = false;
+
+  /** @type {HTMLElement | null} */
+  #locationElement = null;
+  /** What `#locationElement` was built from — an update re-sends the whole `locations` array, so
+   *  the chip is rebuilt only when its content or `buildLocation` itself changes. */
+  #locationKey = "";
+  /** @type {Function | null} */
+  #locationBuilder = null;
 
   constructor() {
     super();
@@ -122,6 +128,13 @@ export class ChxToolCall extends LitElement {
      *  @type {string} */
     this.meta = "";
 
+    /** Line counts of an edit, shown as a colored `+N −M` before `meta`; leave `undefined` to hide.
+     *  @type {number | undefined} */
+    this.additions = undefined;
+
+    /** @type {number | undefined} */
+    this.deletions = undefined;
+
     /** Failure text, first thing in the expanded body. @type {string} */
     this.error = "";
 
@@ -140,7 +153,7 @@ export class ChxToolCall extends LitElement {
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [visuallyHidden, rowStyles, styles];
+    return [tokens, visuallyHidden, rowStyles, styles];
   }
 
   get #hasBody() {
@@ -153,8 +166,45 @@ export class ChxToolCall extends LitElement {
   willUpdate(changedProperties) {
     super.willUpdate(changedProperties);
     if (changedProperties.has("status") && !this.#userToggled) {
-      this.open = OPEN_STATUSES.has(this.status);
+      // the first pass only opens — an `open` set before the element ever rendered is kept
+      this.open = OPEN_STATUSES.has(this.status) || (!this.hasUpdated && this.open);
     }
+    this.#syncLocationElement();
+  }
+
+  #syncLocationElement() {
+    const location = /** @type {ChxToolCallLocation[]} */ (this.locations ?? [])[0];
+    const key = location?.path ? `${location.path}:${location.line ?? ""}` : "";
+    if (key === this.#locationKey && this.buildLocation === this.#locationBuilder) return;
+    this.#locationKey = key;
+    this.#locationBuilder = this.buildLocation;
+    this.#locationElement = null;
+    if (!location?.path) return;
+
+    const element = this.buildLocation(location);
+    element.classList.add("tool-call__file");
+    element.part.add("file");
+    element.addEventListener("click", this.#handleLocationClick);
+    this.#locationElement = element;
+  }
+
+  /**
+   * Builds the element shown after the verb for `locations[0]`. Override (assign or subclass) to
+   * change its icon, label or click — the result gets `part="file"`, and a click on it never
+   * toggles the row and still fires `chx-tool-call-location-click`.
+   * @param {ChxToolCallLocation} location
+   * @returns {HTMLElement}
+   */
+  buildLocation(location) {
+    const chip = document.createElement("chx-chip");
+    chip.title = location.line === undefined ? location.path : `${location.path}:${location.line}`;
+    chip.dataset.path = location.path;
+    if (location.line !== undefined) chip.dataset.line = String(location.line);
+    const icon = document.createElement("md-icon");
+    icon.slot = "icon";
+    icon.innerHTML = readIcon;
+    chip.append(icon, location.path.slice(location.path.lastIndexOf("/") + 1));
+    return chip;
   }
 
   /** Latched from the click, not from `toggle`: `toggle` is a queued task, so a `tool_call_update`
@@ -191,8 +241,8 @@ export class ChxToolCall extends LitElement {
       .some((node) => node.nodeType === Node.ELEMENT_NODE || node.textContent?.trim());
   };
 
-  /** Opens the file instead of toggling the row. @param {MouseEvent} event */
-  #handlePathClick = (event) => {
+  /** Opens the file instead of toggling the row. @param {Event} event */
+  #handleLocationClick = (event) => {
     event.preventDefault();
     event.stopPropagation();
     const { path, line } = /** @type {ChxToolCallLocation} */ (this.locations[0]);
@@ -219,30 +269,19 @@ export class ChxToolCall extends LitElement {
     >`;
   }
 
-  #renderLocation() {
-    const location = /** @type {ChxToolCallLocation[]} */ (this.locations ?? [])[0];
-    if (!location?.path) return nothing;
-    const { dir, file } = splitPath(location.path);
-    return html`
-      <span class="tool-call__file" part="file"
-        >${file}${
-          location.line === undefined
-            ? nothing
-            : html`<span class="tool-call__line">:${location.line}</span>`
-        }</span
-      >
-      ${
-        dir
-          ? html`<span
-              class="tool-call__path"
-              part="path"
-              title=${location.path}
-              @click=${this.#handlePathClick}
-              ><bdi class="tool-call__path-text">${dir}</bdi></span
-            >`
-          : nothing
-      }
-    `;
+  #renderDiffStat() {
+    if (this.additions == null && this.deletions == null) return nothing;
+    return html`<span class="tool-call__diff-stat"
+      >${
+        this.additions == null
+          ? nothing
+          : html`<span class="tool-call__additions">+${this.additions}</span>`
+      }${
+        this.deletions == null
+          ? nothing
+          : html`<span class="tool-call__deletions">−${this.deletions}</span>`
+      }</span
+    >`;
   }
 
   render() {
@@ -259,10 +298,10 @@ export class ChxToolCall extends LitElement {
             >${unsafeSVG(KIND_ICONS[this.kind] ?? KIND_ICONS.other)}</md-icon
           >
           <span class="tool-call__label agent-row__label" part="label">${this.label}</span>
-          ${this.#renderLocation()}
+          ${this.#locationElement ?? nothing}
           <span class="agent-row__spacer"></span>
           <span class="tool-call__meta agent-row__meta" part="meta"
-            ><slot name="meta">${this.meta}</slot></span
+            ><slot name="meta">${this.#renderDiffStat()}${this.meta}</slot></span
           >
           ${this.#renderStatusIcon(status)}
           <!-- Not a live region: announcing agent progress is the app's call. -->

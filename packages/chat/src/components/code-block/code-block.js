@@ -19,6 +19,7 @@ import wrapTextIcon from "@material-design-icons/svg/outlined/wrap_text.svg?raw"
 
 import { LANGUAGES, highlightToHTML, highlightToLines, renderLinePrefix } from "./highlight.js";
 import { EditableBodyController } from "../../controllers/code-block/EditableBodyController.js";
+import tokens from "../../styles/tokens.css?inline";
 import styles from "./code-block.css?inline";
 
 const COPIED_RESET_MS = 1500;
@@ -183,7 +184,7 @@ export class ChxCodeBlock extends LitElement {
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [styles];
+    return [tokens, styles];
   }
 
   disconnectedCallback() {
@@ -437,8 +438,8 @@ export class ChxCodeBlock extends LitElement {
     `;
   }
 
-  /** The accessible name swaps along with the icon, so a screen reader hears the confirmation on
-   *  the button it just activated; the visual toast is `aria-hidden`. */
+  /** The accessible name and the tooltip swap along with the icon — one confirmation, on the button
+   *  that was just activated. */
   #renderCopyButton() {
     if (!this.copyable || this.streaming) return nothing;
     const label = this.copied ? "Copied" : "Copy code";
@@ -452,7 +453,7 @@ export class ChxCodeBlock extends LitElement {
       >
         <md-icon>${unsafeSVG(this.copied ? checkIcon : contentCopyIcon)}</md-icon>
       </md-icon-button>
-      <md-tooltip show-delay="300" for=${this.#copyId}>Copy code</md-tooltip>
+      <md-tooltip show-delay="300" for=${this.#copyId}>${label}</md-tooltip>
     `;
   }
 
@@ -549,12 +550,6 @@ export class ChxCodeBlock extends LitElement {
           ${collapsed ? html`<div class="code-block__fade" aria-hidden="true"></div>` : nothing}
         </div>
         ${this.#renderToggle()}
-        <div
-          class="code-block__toast ${this.copied ? "code-block__toast_visible" : ""}"
-          aria-hidden="true"
-        >
-          Copied
-        </div>
       </div>
     `;
   }

@@ -81,7 +81,7 @@ npm install @symblight/chat lit
 
 ## Theming
 
-Every color is read from `--md-sys-color-*` custom properties (Material Design 3 system color tokens) — the component has no colors of its own. Generate a token set with [`@symblight/md-colors`](https://www.npmjs.com/package/@symblight/md-colors):
+Every color, size and font is read from CSS custom properties. The components have no hard-coded theme of their own. Start from a Material Design 3 system token set (`--md-sys-*`), for example one generated with [`@symblight/md-colors`](https://www.npmjs.com/package/@symblight/md-colors):
 
 ```bash
 npm install @symblight/md-colors
@@ -91,6 +91,100 @@ npx md-colors --sourceColor="#6750A4" --scheme=light --output=./theme.css
 ```html
 <link rel="stylesheet" href="./theme.css" />
 ```
+
+### Token tiers
+
+```
+--md-sys-*          MD3 system tokens (your theme.css)
+   ↓ fallback
+--chx-chat-*        chat-wide theme: typography, color roles, shape, elevation
+   ↓ default
+--chx-<component>-* one component: --chx-message-*, --chx-textbox-*, --chx-code-block-*, …
+```
+
+- **`--chx-chat-*`** retunes every chat component at once. Set it on `chx-chat` or any ancestor, and it reaches components however deep they sit in the shadow DOM. No component ever declares one, so your value always wins. Each falls back to the matching `--md-sys-*` token, or to a built-in default where MD3 has no equivalent.
+- **`--chx-<component>-*`** retunes one component. Its defaults come from the chat tier. Set it on the element itself, or through `::part()`.
+- To recolor the `md-*` controls inside the chat (buttons, lists) as well, set `--md-sys-color-*` on `chx-chat` instead of `--chx-chat-color-*`. `--chx-chat-font-family` already reaches them.
+
+```css
+chx-chat {
+  --chx-chat-font-family: "Inter", sans-serif;
+  --chx-chat-body-large-font-size: 1.0625rem; /* message + composer text */
+  --chx-chat-body-large-line-height: 1.625rem; /* change it together with the size */
+  --chx-chat-color-primary-container: #d8e6ff; /* own-message bubble */
+  --chx-chat-shape-corner-large: 1.25rem; /* message bubbles */
+}
+```
+
+### `--chx-chat-*` reference
+
+**Typography**
+
+| Token                                               | Default                                 | Used by                                                              |
+| --------------------------------------------------- | --------------------------------------- | -------------------------------------------------------------------- |
+| `--chx-chat-font-family`                            | `--md-sys-typescale-font-family`        | everything, including `md-*` children                                |
+| `--chx-chat-mono-font-family`                       | `"SF Mono", ui-monospace, …, monospace` | code blocks                                                          |
+| `--chx-chat-font-weight-regular` / `-medium`        | `400` / `500`                           | body text / authors, labels, emphasis                                |
+| `--chx-chat-body-large-font-size` / `-line-height`  | `1rem` / `1.5rem`                       | message and composer text                                            |
+| `--chx-chat-body-medium-font-size` / `-line-height` | `0.875rem` / `1.25rem`                  | compact message and composer text, agent rows, banner, typing, hints |
+| `--chx-chat-body-small-font-size` / `-line-height`  | `0.75rem` / `1rem`                      | agent row metadata                                                   |
+| `--chx-chat-label-large-font-size`                  | `0.875rem`                              | —                                                                    |
+| `--chx-chat-label-medium-font-size`                 | `0.75rem`                               | author, date divider, code-block header                              |
+| `--chx-chat-label-small-font-size`                  | `0.6875rem`                             | time, delivery status, attachment name                               |
+| `--chx-chat-code-font-size` / `-line-height`        | `0.8125rem` / `1.7`                     | code blocks, diffs, tool-call file names                             |
+
+The size defaults come from the matching `--md-sys-typescale-*-size` / `-line-height` token when your theme defines one.
+
+**Color:** `--chx-chat-color-<role>`, each defaulting to `--md-sys-color-<role>`
+
+| Role                                                             | Used for                                                                                                                                             |
+| ---------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `on-surface`                                                     | primary text: incoming messages, composer input, labels                                                                                              |
+| `on-surface-variant`                                             | secondary text: author, time, status, placeholder, icons                                                                                             |
+| `background`, `surface`, `surface-container-lowest` … `-highest` | chat background, bubbles, composer field, code blocks                                                                                                |
+| `primary-container` / `on-primary-container`                     | own-message bubble                                                                                                                                   |
+| `primary`                                                        | accents: unread marker, focus rings, running status                                                                                                  |
+| `secondary-container`                                            | selected message, active conversation                                                                                                                |
+| `tertiary`, `tertiary-container` / `on-tertiary-container`       | a tool call awaiting permission                                                                                                                      |
+| `error`, `error-container` / `on-error-container`                | failures, the danger banner                                                                                                                          |
+| `outline`, `outline-variant`                                     | dividers, rules, pending/cancelled status icons                                                                                                      |
+| `shadow`                                                         | the base color for `elevation-*`                                                                                                                     |
+| `diff-added` / `diff-removed`                                    | `+N` / `−N` counts and diff lines in code blocks. MD3 has no green role, so these default to built-in hues with dark-mode variants, not `--md-sys-*` |
+
+**Shape and elevation**
+
+| Token                                                                                              | Default                                                     |
+| -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------- |
+| `--chx-chat-shape-corner-extra-small` / `-small` / `-medium` / `-large` / `-extra-large` / `-full` | `--md-sys-shape-corner-*` (`0.25rem` … `1.75rem`, `9999px`) |
+| `--chx-chat-elevation-1`                                                                           | `0 1px 3px` shadow at 12%, compact message actions          |
+| `--chx-chat-elevation-2`                                                                           | `0 2px 6px` shadow at 30%, floating buttons                 |
+
+### Compact density
+
+`compact` on `chx-chat` switches message and composer text from body-large to body-medium and tightens the spacing. Agent rows inside a compact message pick up the `--chx-part-*` density tokens (`row-height`, `icon-size`, `gap`, `padding-inline`) automatically. See [Agentic parts API](./src/docs/agentic.md).
+
+### Using the tokens in your own components
+
+`@symblight/chat/tokens.css` is the same token layer every chat component loads first. Add it to your own component's shadow root, for example a custom `partElements` renderer, and it resolves `--chx-chat-*` exactly like the built-in components do. Your styles then read the resolved values, `--_chx-*`, named after the public tokens: `--_chx-body-large-font-size`, `--_chx-color-on-surface`, `--_chx-shape-corner-medium`, and so on.
+
+```js
+import tokens from "@symblight/chat/tokens.css" with { type: "css" };
+
+class MyPart extends LitElement {
+  static styles = [
+    tokens,
+    css`
+      :host {
+        color: var(--_chx-color-on-surface);
+        font-size: var(--_chx-body-large-font-size);
+        line-height: var(--_chx-body-large-line-height);
+      }
+    `,
+  ];
+}
+```
+
+The file's rules target `:host`, so it only applies inside a shadow root. On a regular page, set the `--chx-chat-*` tokens directly instead. With a bundler that doesn't support CSS module scripts, import the file as a string (Vite: `?inline`) and wrap it in Lit's `unsafeCSS`.
 
 ## Development
 

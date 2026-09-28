@@ -1,11 +1,11 @@
 /* Code is the one thing in a turn with a fill — no border, so it sits flush under the row's rule. */
 :host {
-  --chx-tool-call-diff-background-color: var(--md-sys-color-surface-container);
-  --chx-tool-call-diff-header-background-color: var(--md-sys-color-surface-container);
+  --chx-tool-call-diff-background-color: var(--_chx-color-surface-container);
+  --chx-tool-call-diff-header-background-color: var(--_chx-color-surface-container);
   --chx-tool-call-diff-border-color: transparent;
-  --chx-tool-call-diff-border-radius: 0.5rem;
-  --chx-tool-call-diff-font-size: 0.78125rem;
-  --chx-tool-call-diff-line-height: 1.65;
+  --chx-tool-call-diff-border-radius: var(--_chx-shape-corner-small);
+  --chx-tool-call-diff-font-size: var(--_chx-code-font-size);
+  --chx-tool-call-diff-line-height: var(--_chx-code-line-height);
 
   display: block;
 }

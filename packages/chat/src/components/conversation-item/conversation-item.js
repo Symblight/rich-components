@@ -5,6 +5,7 @@ import { when } from "lit/directives/when.js";
 import "@symblight/wc-material/list";
 import "@symblight/wc-material/badge";
 
+import tokens from "../../styles/tokens.css?inline";
 import styles from "./conversation-item.css?inline";
 
 /**
@@ -49,7 +50,7 @@ export class ChxConversationItem extends LitElement {
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [styles];
+    return [tokens, styles];
   }
 
   /** @returns {(HTMLElement & {getTabIndex(): number, setTabIndex(v: number): void, focusInteractive(): void, updateComplete: Promise<boolean>}) | null} */
@@ -83,7 +84,7 @@ export class ChxConversationItem extends LitElement {
 
   render() {
     return html`
-      <md-list-item button aria-current=${this.active ? "true" : nothing}>
+      <md-list-item class="conversation-item__list-item" button aria-current=${this.active ? "true" : nothing}>
         <div class="conversation-item__avatar" part="avatar" slot="leading">
           <slot name="avatar">
             ${when(

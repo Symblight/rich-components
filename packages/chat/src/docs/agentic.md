@@ -45,9 +45,10 @@ nothing in this package needs to know which you picked.
 **The one rule: reuse `previous`.** A fresh element per chunk looks like a brand-new, never-measured
 row to the virtualized list, and the row re-measures on every flush.
 
-`src/components/stories/agent.stories.js` (`AgenticToolCalls`) is a complete working wiring — all
+`src/stories/agent.stories.js` (`AgenticComposerKit`) is a complete working wiring — all
 four part renderers, the page-level CSS that strips the bubble down to a full-width document, and
-the permission round-trip. Copy from it.
+the permission round-trip. Copy from it. `AgenticToolCalls` in the same file shows every element standalone, in each status
+and kind.
 
 **There is no whole-message hook.** `partElements` is the only rendering override; the
 `<chx-message>` wrapper is always the library's, so every row reliably carries the part names and
@@ -118,10 +119,12 @@ border — an icon, a verb, metadata, a chevron, and an MD3 state layer on hover
 sits under a thin rule dropped from the icon's centre line, so a turn reads as one list rather than
 three components. Only code blocks inside the body keep a fill.
 
-Density is pure CSS inheritance, no property. A compact `chx-message` sets the part density tokens
-(`--chx-part-row-height`, `-font-size`, `-meta-font-size`, `-mono-font-size`, `-icon-size`, `-gap`,
-`-padding-inline`: 28px rows, 13px text, 16px icons), and they inherit through its slot into every
-part; each component reads them with its default (36/14/20) as the fallback. So `chx-chat compact`
+Density is pure CSS inheritance. A compact `chx-message` sets the part density tokens
+(`--chx-part-row-height`, `-icon-size`, `-gap`, `-padding-inline`: 28px rows, 16px icons), and they
+inherit through its slot into every part; each component reads them with its default (36/20) as the
+fallback. Text sizes don't change with density — they come from the chat type scale
+(`--chx-chat-body-medium-font-size`, `-body-small-font-size`, `-code-font-size`), same as message
+text. Outside a chat, the `compact` attribute on a part sets the same four tokens on itself. So `chx-chat compact`
 reaches agent parts with no wiring. Retune compact from a page with
 `chx-message-list::part(message-compact) { --chx-part-row-height: … }`; standalone, set the tokens
 on any ancestor. `--chx-part-*` is not agent-specific — any element rendered as a part can read it.
@@ -137,7 +140,8 @@ Theming has two layers:
   `chx-chat` or any ancestor retunes all three: part elements sit several shadow roots deep, where
   no page-level selector reaches but inheritance does. Sizes come from `--chx-part-*` above; the
   row's look from `--chx-agent-border-radius`, `-color`, `-label-color`, `-rule-color`,
-  `-state-layer-color`, `-focus-ring-color`, `-mono-font-family` (then `--md-sys-color-*`).
+  `-state-layer-color`, `-focus-ring-color` (then the `--chx-chat-*` tier, see
+  the README's "Chat tokens").
 
 The shared row mix (`agent-row.css`) owns no tokens — each block maps its own onto the private
 `--_chx-agent-row-*` bridges the mix reads.
@@ -146,20 +150,22 @@ The shared row mix (`agent-row.css`) owns no tokens — each block maps its own 
 
 One row per `toolCallId`; `tool_call_update` deltas patch the same part in place.
 
-| Property     | Type                   | Notes                                                                                                                                                        |
-| ------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `toolCallId` | `string`               | carried for your own correlation, never interpreted here                                                                                                     |
-| `label`      | `string`               | ACP's `title`, rendered as the row's verb — named `label` so it doesn't collide with the native `title` tooltip attribute                                    |
-| `kind`       | `string`               | `read \| edit \| delete \| move \| search \| execute \| think \| fetch \| switch_mode \| other`, drives the row icon; anything unknown renders as `other` |
-| `status`     | `string`               | `pending \| in_progress \| awaiting-permission \| completed \| failed \| rejected \| cancelled` — an unknown value falls back to `pending`'s look, collapsed |
-| `locations`  | `Array<{path, line?}>` | only the first is shown: file name + `:line` after the verb, its folder muted after that, truncated from the start                                          |
-| `meta`       | `string`               | the result at a glance (`+1 −1`, `46 passed`); the `meta` slot overrides it                                                                                  |
-| `error`      | `string`               | first thing in the expanded body, whenever non-empty                                                                                                         |
-| `open`       | `boolean`              | disclosure state                                                                                                                                             |
+| Property     | Type                   | Notes                                                                                                                                                                                                                        |
+| ------------ | ---------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `toolCallId` | `string`               | carried for your own correlation, never interpreted here                                                                                                                                                                     |
+| `label`      | `string`               | ACP's `title`, rendered as the row's verb — named `label` so it doesn't collide with the native `title` tooltip attribute                                                                                                    |
+| `kind`       | `string`               | `read \| edit \| delete \| move \| search \| execute \| think \| fetch \| switch_mode \| other`, drives the row icon; anything unknown renders as `other`                                                                    |
+| `status`     | `string`               | `pending \| in_progress \| awaiting-permission \| completed \| failed \| rejected \| cancelled` — an unknown value falls back to `pending`'s look, collapsed                                                                 |
+| `locations`  | `Array<{path, line?}>` | only the first is shown, as a `chx-chip` after the verb (the command picker's chip): the file name as its label, the full path and line as its value (`data-path`/`data-line`, tooltip); built by `buildLocation`, see below |
+| `meta`       | `string`               | the result at a glance (`46 passed`); the `meta` slot overrides it                                                                                                                                                           |
+| `additions`  | `number \| undefined`  | an edit's added lines, shown green as `+N` before `meta` (`--chx-tool-call-additions-color`)                                                                                                                                 |
+| `deletions`  | `number \| undefined`  | an edit's removed lines, shown red as `−N` (`--chx-tool-call-deletions-color`)                                                                                                                                               |
+| `error`      | `string`               | first thing in the expanded body, whenever non-empty                                                                                                                                                                         |
+| `open`       | `boolean`              | disclosure state                                                                                                                                                                                                             |
 
 `completed` shows no status icon — success needs no attention. `in_progress` colors the verb
 `primary` with a spinner; `failed`/`rejected` color it `error`; `awaiting-permission` gives the row
-the turn's only fill (`tertiary` 9%) and a `back_hand` icon. A click on the folder path fires
+the turn's only fill (`tertiary-container`, with every text/icon role on `on-tertiary-container`) and a `back_hand` icon. A click on the file chip fires
 `chx-tool-call-location-click` (`{path, line}`) instead of toggling the row — open the file from it.
 
 Fires `chx-tool-call-toggle` (`{open}`) on a disclosure change it didn't make itself — enough to
@@ -177,7 +183,33 @@ failure text too, and an error that is set but never rendered is a silent failur
 
 Content is the **default slot** — the component renders the header and status, and never interprets
 ACP content blocks. Build the children in your renderer: a `chx-code-block` for
-terminal output, a `chx-tool-call-diff` for a diff, anything else you like.
+terminal output (set `lineNumbers = false` for `kind: "execute"` — a shell transcript has no lines
+worth numbering), a `chx-tool-call-diff` for a diff, anything else you like.
+
+### Customizing the location chip
+
+`buildLocation(location)` builds the element shown after the verb for `locations[0]`. Override it, by
+assigning or subclassing, the same way as `chx-command-picker.buildChip`. Whatever it returns gets
+`part="file"`. A click on it never toggles the row and still fires `chx-tool-call-location-click`, so
+an override can add its own listener or rely on the event:
+
+```js
+function renderToolCallPart(part, previous) {
+  const el = previous ?? document.createElement("chx-tool-call");
+  el.buildLocation = (location) => {
+    const chip = document.createElement("chx-chip");
+    chip.innerHTML = `<md-icon slot="icon">${iconForFile(location.path)}</md-icon>`;
+    chip.append(location.path.split("/").pop());
+    chip.addEventListener("click", () => openInEditor(location));
+    return chip;
+  };
+  el.locations = part.locations ?? [];
+  // …
+}
+```
+
+It runs again only when `locations[0]`'s path or line changes, or when `buildLocation` itself is
+replaced. A streamed update that re-sends the same location reuses the element and its listeners.
 
 ### Permission is not a state of the row
 

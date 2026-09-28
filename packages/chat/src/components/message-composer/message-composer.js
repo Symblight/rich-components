@@ -6,6 +6,7 @@ import "@symblight/wc-material/icon";
 
 import stop from "@material-design-icons/svg/outlined/stop.svg?raw";
 
+import tokens from "../../styles/tokens.css?inline";
 import styles from "./message-composer.css?inline";
 
 import "../textbox/textbox.js";
@@ -63,7 +64,7 @@ export class ChxMessageComposer extends LitElement {
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [styles];
+    return [tokens, styles];
   }
 
   connectedCallback() {

@@ -8,6 +8,7 @@ import "../conversation-item/conversation-item.js";
 // consumer can't reach it: rows are authored here, not slotted in
 import "../typing-indicator/typing-indicator.js";
 
+import tokens from "../../styles/tokens.css?inline";
 import styles from "./conversations.css?inline";
 
 /** @import { ChxConversation } from "../../types/conversation.js" */
@@ -62,7 +63,7 @@ export class ChxConversations extends LitElement {
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [styles];
+    return [tokens, styles];
   }
 
   /**
@@ -261,7 +262,7 @@ export class ChxConversations extends LitElement {
 
   render() {
     return html`
-      <md-list part="list" @click=${this.#onClick} @keydown=${this.#onKeydown}>
+      <md-list class="conversations__list" part="list" @click=${this.#onClick} @keydown=${this.#onKeydown}>
         ${this.#renderItems()}
       </md-list>
     `;

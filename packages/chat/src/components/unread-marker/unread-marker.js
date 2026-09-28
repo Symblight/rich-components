@@ -1,6 +1,7 @@
 import { html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
 
+import tokens from "../../styles/tokens.css?inline";
 import styles from "./unread-marker.css?inline";
 
 /**
@@ -14,7 +15,7 @@ import styles from "./unread-marker.css?inline";
 export class ChxUnreadMarker extends LitElement {
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [styles];
+    return [tokens, styles];
   }
 
   connectedCallback() {

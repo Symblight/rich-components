@@ -114,14 +114,14 @@ export class ChxPasteLongText extends LitElement {
    */
   buildElement({ text, lines, data }, _source) {
     if (typeof data?.lang === "string") {
-      const block =
-        /** @type {HTMLElement & {code: string, lang: string, langMenu: boolean, editable: boolean}} */ (
-          document.createElement("chx-code-block")
-        );
+      const block = /** @type {import("../code-block/code-block.js").ChxCodeBlock} */ (
+        document.createElement("chx-code-block")
+      );
       block.code = text;
       block.lang = data.lang;
       block.langMenu = true;
       block.editable = true;
+      block.lineNumbers = true;
       return block;
     }
 

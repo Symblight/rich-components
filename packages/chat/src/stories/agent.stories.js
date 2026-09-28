@@ -19,8 +19,10 @@ import "../components/attachments/attachments.js";
 import "../components/attachment/attachment.js";
 import "../components/paste-long-text/paste-long-text.js";
 
-import { buildChipElement, chipPartRule, createSplitOnSendHandler } from "../index.js";
+import { buildChipElement, chipPartRule, splitMessageParts } from "../index.js";
 import { createBannerPermissionPrompt } from "../agent.js";
+
+import { endTurn, sleep, streamChunks } from "./shared/adapters.js";
 
 const messageStyleOverrides = html`
   <style>
@@ -31,6 +33,7 @@ const messageStyleOverrides = html`
        through the exportparts chain chx-message-list maintains; --chx-message-* set here inherits
        into it as well. */
     chx-message-list::part(message-incoming) {
+      box-sizing: border-box;
       max-width: 100%;
       width: 100%;
       --chx-message-padding: 0;
@@ -69,6 +72,10 @@ const meta = {
   title: "Agent",
   component: "chx-chat",
   tags: ["autodocs"],
+  args: { compact: false },
+  argTypes: {
+    compact: { name: "Compact mode", control: "boolean" },
+  },
 };
 export default meta;
 
@@ -84,57 +91,6 @@ const REPLY_CODE = `function scrollSnapshot(scroller, virtualizer) {
   };
 }`;
 const REPLY_OUTRO = "That object is enough to tell whether the view is still pinned to the bottom.";
-
-/** @param {number} ms */
-function sleep(ms) {
-  return new Promise((resolve) => setTimeout(resolve, ms));
-}
-
-/**
- * Streams `text` into `partId` word by word — each word its own delta chunk, matching how a real
- * token-streaming LLM API arrives (small, frequent chunks rather than one big one).
- * @param {ReadableStreamDefaultController} controller
- * @param {{messageId: string, partId: string, partType: string, text: string, extra?: Record<string, unknown>, delayMs: number, signal: AbortSignal}} options
- */
-async function streamWords(
-  controller,
-  { messageId, partId, partType, text, extra, delayMs, signal },
-) {
-  const words = text.split(/(?<=\s)/);
-  for (const [i, word] of words.entries()) {
-    if (signal.aborted) return;
-    await sleep(delayMs);
-    controller.enqueue({
-      messageId,
-      authorId: "assistant",
-      partId,
-      partType,
-      // `lang` rides the first chunk only — later deltas would just re-set it unchanged.
-      delta: /** @type {any} */ (i === 0 && extra ? { text: word, ...extra } : { text: word }),
-    });
-  }
-}
-
-/**
- * Streams `code` line by line into `partId` — coarser chunks than `streamWords` since a line is
- * the natural unit code arrives in, and it's enough to make `chx-code-block` visibly grow mid-stream.
- * @param {ReadableStreamDefaultController} controller
- * @param {{messageId: string, partId: string, code: string, lang: string, delayMs: number, signal: AbortSignal}} options
- */
-async function streamCodeLines(controller, { messageId, partId, code, lang, delayMs, signal }) {
-  const lines = code.split(/(?<=\n)/);
-  for (const [i, line] of lines.entries()) {
-    if (signal.aborted) return;
-    await sleep(delayMs);
-    controller.enqueue({
-      messageId,
-      authorId: "assistant",
-      partId,
-      partType: "code",
-      delta: /** @type {any} */ (i === 0 ? { text: line, lang } : { text: line }),
-    });
-  }
-}
 
 /**
  * A fake `adapter.sendMessage` streaming one reply message as three parts, in order — intro text,
@@ -161,7 +117,7 @@ function createStreamingCodeAgentAdapter() {
             await sleep(600); // "thinking" — chx-streaming-indicator covers this window
             if (signal.aborted) return;
 
-            await streamWords(controller, {
+            await streamChunks(controller, {
               messageId: replyId,
               partId: introId,
               partType: "text",
@@ -171,17 +127,19 @@ function createStreamingCodeAgentAdapter() {
             });
             controller.enqueue({ kind: "part-end", messageId: replyId, partId: introId });
 
-            await streamCodeLines(controller, {
+            await streamChunks(controller, {
               messageId: replyId,
               partId: codeId,
-              code: REPLY_CODE,
-              lang: "javascript",
+              partType: "code",
+              text: REPLY_CODE,
+              split: /(?<=\n)/, // a line is the natural unit code arrives in
+              first: { lang: "javascript" },
               delayMs: 150,
               signal,
             });
             controller.enqueue({ kind: "part-end", messageId: replyId, partId: codeId });
 
-            await streamWords(controller, {
+            await streamChunks(controller, {
               messageId: replyId,
               partId: outroId,
               partType: "text",
@@ -191,14 +149,7 @@ function createStreamingCodeAgentAdapter() {
             });
             controller.enqueue({ kind: "part-end", messageId: replyId, partId: outroId });
           } finally {
-            // One terminator for every exit. Returning from `start()` on abort without closing would
-            // leave chx-chat's read pending forever — an aborted turn still has to be ended, and an
-            // explicit `abort` chunk is the clean way to do it.
-            controller.enqueue({
-              kind: signal.aborted ? "abort" : "finish",
-              messageId: replyId,
-            });
-            controller.close();
+            endTurn(controller, replyId, signal);
           }
         },
       });
@@ -215,9 +166,10 @@ function createStreamingCodeAgentAdapter() {
  */
 /** @type {Story} */
 export const StreamingCodeReply = {
-  render: () => html`
+  render: (args) => html`
     ${messageStyleOverrides}
     <chx-chat
+      .compact=${args.compact}
       .userId=${"me"}
       .partElements=${{ code: renderCodePart }}
       .adapter=${createStreamingCodeAgentAdapter()}
@@ -324,9 +276,9 @@ function renderPlanPart(part, previous) {
 }
 
 /**
- * The card's content is a plain default-slot child — chx-tool-call renders header and status and
- * never interprets ACP content blocks itself. Here a `data.diff` becomes a chx-tool-call-diff and
- * streamed `text` a terminal chx-code-block; swap either for your own element freely.
+ * The row's content is a plain default-slot child — chx-tool-call renders the row and status and
+ * never interprets ACP content blocks itself. Here `text` becomes a chx-code-block: a terminal for
+ * streamed output, or a syntax-colored diff when `data.diff` is set; swap it for your own element.
  * @param {import("../types/message.js").ChxMessagePart} part @param {HTMLElement} [previous]
  */
 function renderToolCallPart(part, previous) {
@@ -337,23 +289,19 @@ function renderToolCallPart(part, previous) {
   el.kind = attrs.kind ?? "other";
   el.status = attrs.status ?? "pending";
   el.locations = attrs.locations ?? [];
+  el.meta = attrs.meta ?? "";
   el.error = attrs.error ?? "";
 
   const data = /** @type {any} */ (attrs.data ?? {});
-  if (data.diff) {
-    const diff = /** @type {any} */ (
-      el.querySelector("chx-tool-call-diff") ?? document.createElement("chx-tool-call-diff")
-    );
-    diff.path = data.path ?? "";
-    diff.diff = data.diff;
-    if (!diff.isConnected) el.replaceChildren(diff);
-  } else if (part.text) {
+  if (part.text) {
     const block = /** @type {any} */ (
       el.querySelector("chx-code-block") ?? document.createElement("chx-code-block")
     );
     block.code = part.text;
-    block.lang = "bash";
+    block.diff = Boolean(data.diff);
+    block.lang = data.lang ?? "bash";
     block.label = data.command ?? "";
+    block.filename = data.path ?? "";
     block.copyable = true;
     block.streaming = part.state === "streaming";
     block.error = attrs.status === "failed";
@@ -444,7 +392,7 @@ function createAgenticAdapter({ requestPermission, thoughtSteps = false }) {
                 },
               });
             } else {
-              await streamWords(controller, {
+              await streamChunks(controller, {
                 messageId: replyId,
                 partId: thoughtId,
                 partType: "thought",
@@ -459,7 +407,7 @@ function createAgenticAdapter({ requestPermission, thoughtSteps = false }) {
             await sleep(400);
 
             enqueue(controller, readId, "tool_call", {
-              label: "Read message-list.js",
+              label: "Reading",
               kind: "read",
               status: "pending",
               locations: [{ path: "src/components/message-list/message-list.js", line: 297 }],
@@ -467,7 +415,11 @@ function createAgenticAdapter({ requestPermission, thoughtSteps = false }) {
             await sleep(300);
             enqueue(controller, readId, "tool_call", { status: "in_progress" });
             await sleep(700);
-            enqueue(controller, readId, "tool_call", { status: "completed" });
+            enqueue(controller, readId, "tool_call", {
+              label: "Read",
+              status: "completed",
+              meta: "412 lines",
+            });
             controller.enqueue({ kind: "part-end", messageId: replyId, partId: readId });
             enqueue(controller, planId, "plan", { entries: planAt(1) });
             await sleep(400);
@@ -476,7 +428,7 @@ function createAgenticAdapter({ requestPermission, thoughtSteps = false }) {
             // the part records that the call is blocked; the *question* is asked in the banner, which
             // lives above the composer and so can't be recycled away like a scrolled-off card can
             enqueue(controller, runId, "tool_call", {
-              label: "Run the test suite",
+              label: "Run pnpm test",
               kind: "execute",
               status: "awaiting-permission",
               data: { command: "pnpm test" },
@@ -508,7 +460,10 @@ function createAgenticAdapter({ requestPermission, thoughtSteps = false }) {
               return; // the finally below ends the turn
             }
 
-            enqueue(controller, runId, "tool_call", { status: "in_progress" });
+            enqueue(controller, runId, "tool_call", {
+              label: "Running pnpm test",
+              status: "in_progress",
+            });
             // terminal output appends, so it rides in the tool call's own `text` — a `content` array
             // re-sent in full each chunk would be O(n²) in both payload and merge cost over the turn
             for (const line of TERMINAL_OUTPUT.split(/(?<=\n)/)) {
@@ -516,28 +471,39 @@ function createAgenticAdapter({ requestPermission, thoughtSteps = false }) {
               await sleep(220);
               enqueue(controller, runId, "tool_call", { text: line });
             }
-            enqueue(controller, runId, "tool_call", { status: "completed" });
+            enqueue(controller, runId, "tool_call", {
+              label: "Ran pnpm test",
+              status: "completed",
+              meta: "46 passed · 3.1s",
+            });
             controller.enqueue({ kind: "part-end", messageId: replyId, partId: runId });
             enqueue(controller, planId, "plan", { entries: planAt(2) });
             await sleep(400);
             if (signal.aborted) return;
 
             enqueue(controller, editId, "tool_call", {
-              label: "Edit message-list.js",
+              label: "Editing",
               kind: "edit",
               status: "in_progress",
-              locations: [{ path: "src/components/message-list/message-list.js" }],
+              locations: [{ path: "src/components/message-list/message-list.js", line: 295 }],
             });
             await sleep(800);
             enqueue(controller, editId, "tool_call", {
+              label: "Edited",
               status: "completed",
-              data: { path: "src/components/message-list/message-list.js", diff: DIFF_TEXT },
+              meta: "+1 −1",
+              text: DIFF_TEXT,
+              data: {
+                path: "src/components/message-list/message-list.js",
+                lang: "javascript",
+                diff: true,
+              },
             });
             controller.enqueue({ kind: "part-end", messageId: replyId, partId: editId });
             enqueue(controller, planId, "plan", { entries: planAt(3) });
             controller.enqueue({ kind: "part-end", messageId: replyId, partId: planId });
 
-            await streamWords(controller, {
+            await streamChunks(controller, {
               messageId: replyId,
               partId: outroId,
               partType: "text",
@@ -547,14 +513,7 @@ function createAgenticAdapter({ requestPermission, thoughtSteps = false }) {
             });
             controller.enqueue({ kind: "part-end", messageId: replyId, partId: outroId });
           } finally {
-            // One terminator for every exit. Returning from `start()` on abort without closing would
-            // leave chx-chat's read pending forever — an aborted turn still has to be ended, and an
-            // explicit `abort` chunk is the clean way to do it.
-            controller.enqueue({
-              kind: signal.aborted ? "abort" : "finish",
-              messageId: replyId,
-            });
-            controller.close();
+            endTurn(controller, replyId, signal);
           }
         },
       });
@@ -572,7 +531,7 @@ function createAgenticAdapter({ requestPermission, thoughtSteps = false }) {
  */
 /** @type {Story} */
 export const AgenticToolCalls = {
-  render: () => {
+  render: (args) => {
     /** @type {any} */
     let banner;
     const adapter = createAgenticAdapter({
@@ -580,7 +539,12 @@ export const AgenticToolCalls = {
     });
     return html`
       ${messageStyleOverrides}
-      <chx-chat .userId=${"me"} .partElements=${AGENT_PART_ELEMENTS} .adapter=${adapter}>
+      <chx-chat
+        .compact=${args.compact}
+        .userId=${"me"}
+        .partElements=${AGENT_PART_ELEMENTS}
+        .adapter=${adapter}
+      >
         <chx-message-list slot="message-list" scroll-behavior="smooth" content-align="start">
           <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
           <chx-scroll-to-bottom-affordance
@@ -655,9 +619,19 @@ const pasteCodePartRule = {
   toPart: (element) => ({ text: element.textContent ?? "", lang: element.dataset.lang ?? "" }),
 };
 
-/** Re-splits a sent message's flat text into real `chip`/`code` parts — without this the resolved
- *  `@` chip and the collapsed paste survive only as plain text in the sent message. */
-const handleComposerKitMessagesChange = createSplitOnSendHandler([chipPartRule, pasteCodePartRule]);
+/** Re-splits a sent message's leading text part into real `chip`/`code` parts, keeping any
+ *  attachment parts after it — `createSplitOnSendHandler` bails on anything but a lone text part,
+ *  so a send with an attachment would leave the chip and paste as flat text.
+ *  @param {CustomEvent<{messages: import("../types/message.js").ChxMessage[]}>} event */
+function handleComposerKitMessagesChange(event) {
+  const last = event.detail.messages.at(-1);
+  const [first, ...rest] = last?.parts ?? [];
+  if (!last?.own || first?.type !== "text" || typeof first.html !== "string") return;
+
+  const parts = splitMessageParts(last.id, first.html, [chipPartRule, pasteCodePartRule]);
+  if (!parts) return;
+  /** @type {any} */ (event.currentTarget).addMessage({ ...last, parts: [...parts, ...rest] });
+}
 
 /** @param {Event} event */
 function openAttachmentPicker(event) {
@@ -694,7 +668,7 @@ const attachTriggerStyles = html`
  */
 /** @type {Story} */
 export const AgenticComposerKit = {
-  render: () => {
+  render: (args) => {
     /** @type {any} */
     let banner;
     const adapter = createAgenticAdapter({
@@ -703,6 +677,7 @@ export const AgenticComposerKit = {
     return html`
       ${attachTriggerStyles} ${messageStyleOverrides}
       <chx-chat
+        .compact=${args.compact}
         .userId=${"me"}
         .partElements=${AGENT_PART_ELEMENTS}
         .adapter=${adapter}

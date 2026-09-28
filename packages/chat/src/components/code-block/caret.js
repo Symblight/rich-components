@@ -1,7 +1,7 @@
 /** `window.getSelection()` doesn't see into a shadow root; `container`'s own root does.
  * @param {HTMLElement} container
  * @returns {Selection | null} */
-function getSelectionFor(container) {
+export function getSelectionFor(container) {
   const root = container.getRootNode();
   if (
     root instanceof ShadowRoot &&

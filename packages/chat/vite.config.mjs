@@ -48,7 +48,7 @@ export default defineConfig({
       entryRoot: "src",
       outDir: "dist",
       copyDtsFiles: true,
-      exclude: ["**/*.stories.js", "**/__tests__/**", "vite-env.d.ts"],
+      exclude: ["**/*.stories.js", "src/stories/**", "**/__tests__/**", "vite-env.d.ts"],
       beforeWriteFile(filePath, content) {
         const elementsDts = path.resolve(import.meta.dirname, "dist/elements.d.ts");
         if (filePath === elementsDts || filePath.includes("/stories/")) {

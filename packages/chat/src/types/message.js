@@ -11,18 +11,20 @@
  *   there too, so it doesn't collide with the native `title` attribute on chx-tool-call)
  * @property {string | null} [icon] - `type: "chip"`
  * @property {string} [lang] - `type: "code"` (app-defined, e.g. `chx-code-block`'s paste handler)
- * @property {"pending" | "in_progress" | "completed" | "failed" | "awaiting-permission" | "cancelled"} [status] -
+ * @property {"pending" | "in_progress" | "completed" | "failed" | "awaiting-permission" | "rejected" | "cancelled"} [status] -
  *   `type: "tool_call"` — the tool call's own lifecycle, independent of `state` below (which only
  *   tracks whether this package is still receiving stream deltas for the part, not what the tool
- *   itself is doing). `awaiting-permission`/`cancelled` are this package's own, not ACP statuses —
- *   the latter is set locally when a turn is aborted with a tool call still mid-flight. Note
- *   `chx-tool-call` renders no permission UI for `awaiting-permission` (it falls back to `pending`'s
- *   look): answering a request is `chx-input-mode-banner`'s job, above the composer
+ *   itself is doing). `awaiting-permission`/`rejected`/`cancelled` are this package's own, not
+ *   ACP statuses — `rejected` when the user denies a permission request, `cancelled` set locally
+ *   when a turn is aborted with a tool call still mid-flight. Note
+ *   `chx-tool-call` renders no permission UI for `awaiting-permission` (it only accents the row):
+ *   answering a request is `chx-input-mode-banner`'s job, above the composer
  * @property {string} [kind] - `type: "tool_call"` — ACP's tool kind (`read`/`edit`/`execute`/…),
- *   drives chx-tool-call's header icon; anything unknown renders as `other`
+ *   drives chx-tool-call's row icon; anything unknown renders as `other`
  * @property {Array<{path: string, line?: number}>} [locations] - `type: "tool_call"` — files the
- *   call touches, rendered as chips
- * @property {string} [error] - `type: "tool_call"` — failure text for `status: "failed"`
+ *   call touches; chx-tool-call shows the first one in its row
+ * @property {string} [meta] - `type: "tool_call"` — the result at a glance (`+1 −1`, `46 passed`)
+ * @property {string} [error] - `type: "tool_call"` — failure text for `failed`/`rejected`
  * @property {Array<{content: string, priority?: string, status?: "pending" | "in_progress" | "completed"}>} [entries] -
  *   `type: "plan"` — the whole plan, re-sent in full on every update
  * @property {Record<string, unknown>} [data] - opaque bag, round-tripped by `type: "chip"`/`"code"` parts

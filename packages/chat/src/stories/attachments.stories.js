@@ -15,12 +15,19 @@ import "../components/attachment/attachment.js";
 
 import { buildChipElement } from "../editor/command-chip.js";
 import { chipPartRule, createSplitOnSendHandler } from "../utils/split-message-parts.js";
+import { sleep } from "./shared/adapters.js";
+import { createBuiltInSentCards, sentAttachmentParts } from "./shared/attachments.js";
+import { chipPart, makeMessage, textPart } from "./shared/fixtures.js";
 
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
   title: "Attachments API",
   component: "chx-attachments",
   tags: ["autodocs"],
+  args: { compact: false },
+  argTypes: {
+    compact: { name: "Compact mode", control: "boolean" },
+  },
 };
 export default meta;
 
@@ -65,22 +72,25 @@ function createOpenHandler(selector) {
  */
 /** @type {Story} */
 export const Basic = {
-  render: () => html`
-    ${triggerStyles}
-    <chx-chat>
-      <chx-message-list slot="message-list"></chx-message-list>
-      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
-        <md-icon-button
-          slot="leading"
-          class="attach-trigger"
-          @click=${createOpenHandler("chx-attachments")}
-        >
-          <md-icon>${unsafeSVG(attachFileIcon)}</md-icon>
-        </md-icon-button>
-        <chx-attachments slot="attachments"></chx-attachments>
-      </chx-message-composer>
-    </chx-chat>
-  `,
+  render: (args) => {
+    const { attachmentsRef, partElements } = createBuiltInSentCards();
+    return html`
+      ${triggerStyles}
+      <chx-chat .compact=${args.compact} .partElements=${partElements}>
+        <chx-message-list slot="message-list"></chx-message-list>
+        <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
+          <md-icon-button
+            slot="leading"
+            class="attach-trigger"
+            @click=${createOpenHandler("chx-attachments")}
+          >
+            <md-icon>${unsafeSVG(attachFileIcon)}</md-icon>
+          </md-icon-button>
+          <chx-attachments slot="attachments" ${attachmentsRef}></chx-attachments>
+        </chx-message-composer>
+      </chx-chat>
+    `;
+  },
 };
 
 /**
@@ -120,29 +130,36 @@ async function handleValidatedAttach(event) {
 
   for (const card of cards) {
     if (card.error) continue;
-    await new Promise((resolve) => setTimeout(resolve, 1200)); // stand-in for a real upload
+    await sleep(1200); // stand-in for a real upload
     card.loading = false;
   }
 }
 
 /** @type {Story} */
 export const JsDrivenWithLoading = {
-  render: () => html`
-    ${triggerStyles}
-    <chx-chat>
-      <chx-message-list slot="message-list"></chx-message-list>
-      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
-        <md-icon-button
-          slot="leading"
-          class="attach-trigger"
-          @click=${createOpenHandler("chx-attachments")}
-        >
-          <md-icon>${unsafeSVG(attachFileIcon)}</md-icon>
-        </md-icon-button>
-        <chx-attachments slot="attachments" @chx-attach=${handleValidatedAttach}></chx-attachments>
-      </chx-message-composer>
-    </chx-chat>
-  `,
+  render: (args) => {
+    const { attachmentsRef, partElements } = createBuiltInSentCards();
+    return html`
+      ${triggerStyles}
+      <chx-chat .compact=${args.compact} .partElements=${partElements}>
+        <chx-message-list slot="message-list"></chx-message-list>
+        <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
+          <md-icon-button
+            slot="leading"
+            class="attach-trigger"
+            @click=${createOpenHandler("chx-attachments")}
+          >
+            <md-icon>${unsafeSVG(attachFileIcon)}</md-icon>
+          </md-icon-button>
+          <chx-attachments
+            slot="attachments"
+            @chx-attach=${handleValidatedAttach}
+            ${attachmentsRef}
+          ></chx-attachments>
+        </chx-message-composer>
+      </chx-chat>
+    `;
+  },
 };
 
 /** @type {Record<string, string>} */
@@ -174,32 +191,41 @@ function handleCustomCardAttach(event) {
     );
   const fragment = document.createDocumentFragment();
   for (const file of customEvent.detail.files) {
-    const card = /** @type {HTMLElement & {file?: File}} */ (
-      document.createElement("chx-attachment")
-    );
+    const card = buildCustomCard(file);
     card.slot = "attachment";
-    card.file = file;
-
-    const icon = document.createElement("md-icon");
-    icon.slot = "icon";
-    icon.innerHTML = TYPE_ICONS[file.type] ?? insertDriveFileIcon;
-
-    const text = document.createElement("div");
-    text.className = "custom-file-card__text";
-    text.innerHTML = `
-      <span class="custom-file-card__name">${file.name}</span>
-      <span class="custom-file-card__meta">${file.type || "file"} · ${Math.round(file.size / 1024)} KB</span>
-    `;
-
-    card.append(icon, text);
     fragment.append(card);
   }
   attachments.addAttachments(fragment);
 }
 
+/** Shared by the composer (`handleCustomCardAttach`) and sent messages, so both look the same.
+ * @param {File} file */
+function buildCustomCard(file) {
+  const card = /** @type {HTMLElement & {file?: File}} */ (
+    document.createElement("chx-attachment")
+  );
+  card.file = file;
+
+  const icon = document.createElement("md-icon");
+  icon.slot = "icon";
+  icon.innerHTML = TYPE_ICONS[file.type] ?? insertDriveFileIcon;
+
+  const text = document.createElement("div");
+  text.className = "custom-file-card__text";
+  text.innerHTML = `
+    <span class="custom-file-card__name">${file.name}</span>
+    <span class="custom-file-card__meta">${file.type || "file"} · ${Math.round(file.size / 1024)} KB</span>
+  `;
+
+  card.append(icon, text);
+  return card;
+}
+
+const customSentCardParts = sentAttachmentParts(buildCustomCard);
+
 /** @type {Story} */
 export const CustomCardShape = {
-  render: () => html`
+  render: (args) => html`
     ${triggerStyles}
     <style>
       .custom-file-card__text {
@@ -221,7 +247,7 @@ export const CustomCardShape = {
         opacity: 0.7;
       }
     </style>
-    <chx-chat>
+    <chx-chat .compact=${args.compact} .partElements=${customSentCardParts}>
       <chx-message-list slot="message-list"></chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-icon-button
@@ -248,31 +274,26 @@ const handleChipAttachmentMessagesChange = createSplitOnSendHandler([chipPartRul
  */
 /** @type {Story} */
 export const ChipMode = {
-  render: () => html`
+  render: (args) => html`
     ${triggerStyles}
     <chx-chat
+      .compact=${args.compact}
       .partElements=${{ chip: buildChipElement }}
       @chx-messages-change=${handleChipAttachmentMessagesChange}
       .messages=${[
-        {
+        makeMessage({
           id: "msg-1",
-          authorId: "user-1",
           own: true,
-          createdAt: Date.now(),
-          status: "sent",
           parts: [
-            { id: "msg-1-p1", type: "text", text: "Please review " },
-            {
-              id: "msg-1-p2",
-              type: "chip",
+            textPart("msg-1-p1", "Please review "),
+            chipPart("msg-1-p2", {
               templateId: "files-chip-template",
               label: "report.pdf",
-              icon: null,
               data: { chipOwnerId: "files", fileName: "report.pdf" },
-            },
-            { id: "msg-1-p3", type: "text", text: " before the meeting" },
+            }),
+            textPart("msg-1-p3", " before the meeting"),
           ],
-        },
+        }),
       ]}
     >
       <chx-message-list slot="message-list"></chx-message-list>

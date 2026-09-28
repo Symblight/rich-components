@@ -232,6 +232,11 @@
   outline: 2px solid var(--md-sys-color-primary);
 }
 
+/* The gutter carries the inline-start padding instead. */
+.code-block__body_numbered {
+  padding-inline-start: 0;
+}
+
 :host([wrap]) .code-block__body[contenteditable] {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
@@ -264,6 +269,25 @@
 :host([wrap]) .code-block__text {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
+}
+
+/* The editable body's numbers, beside it rather than inside — same metrics as the body, so rows
+   line up; it doesn't scroll horizontally with the code. */
+.code-block__gutter {
+  flex: none;
+  box-sizing: content-box;
+  min-inline-size: calc(var(--_gutter-digits) * 1ch);
+  padding-block: var(--chx-code-block-padding-block);
+  padding-inline: var(--chx-code-block-padding-inline) 1.25rem;
+  overflow: hidden;
+  color: var(--chx-code-block-number-gutter-color);
+  font-family: var(--chx-code-block-font-family);
+  font-size: var(--chx-code-block-font-size);
+  line-height: var(--chx-code-block-line-height);
+  text-align: end;
+  white-space: pre;
+  opacity: 0.55;
+  user-select: none;
 }
 
 /* Dimmed and unselectable so a selection copies code, not numbers. */
@@ -356,7 +380,8 @@
   }
 }
 
-.code-block__viewport_collapsed .code-block__body {
+.code-block__viewport_collapsed .code-block__body,
+.code-block__viewport_collapsed .code-block__gutter {
   max-block-size: calc(var(--_collapsed-lines) * 1lh + var(--chx-code-block-padding-block));
   overflow-y: hidden;
 }

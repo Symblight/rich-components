@@ -20,6 +20,7 @@ export class ChxMessageComposer extends LitElement {
   static properties = {
     loading: { type: Boolean, reflect: true },
     disabled: { type: Boolean, reflect: true },
+    compact: { type: Boolean, reflect: true },
     placeholder: { type: String },
     sendLabel: { type: String, attribute: "send-label" },
     stopLabel: { type: String, attribute: "stop-label" },
@@ -52,6 +53,9 @@ export class ChxMessageComposer extends LitElement {
 
     /** @type {boolean} Pushed down by chx-chat — true in the empty state (no active conversation). Blocks send + editing. */
     this.disabled = false;
+
+    /** @type {boolean} MD3 density −2 — 48dp field, body-medium text. Pushed down to chx-textbox. */
+    this.compact = false;
 
     /** @type {boolean} Pushed down by chx-chat — true while #internalMessages is empty. See pushSuggestionListProperties. */
     this.messagesEmpty = true;
@@ -309,6 +313,7 @@ export class ChxMessageComposer extends LitElement {
           ?loading=${this.loading}
           ?disabled=${this.disabled}
           ?dragging=${this.dragging}
+          ?compact=${this.compact}
           @chx-textbox-change=${this.#handleTextboxChange}
         >
           <slot name="leading" slot="leading"></slot>

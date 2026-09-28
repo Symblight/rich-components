@@ -15,7 +15,25 @@
   --chx-textbox-hover-color: var(--md-sys-color-on-surface);
   --chx-textbox-dragging-color: var(--md-sys-color-primary);
   --chx-textbox-action-size: 1.45rem;
+  --chx-textbox-action-padding: 0.237rem;
+  --chx-textbox-slot-min-height: 48px;
+  --chx-textbox-font-size: inherit;
+  --chx-textbox-line-height: 20px;
+  --chx-textbox-content-padding: 12px 0.5rem;
   --chx-textbox-scrollbar-color: var(--md-sys-color-outline);
+}
+
+/* MD3 density −2: 48dp pill, body-medium text, 32dp send; slotted icon buttons keep their 40dp target */
+:host([compact]) {
+  --chx-textbox-shape: 1.5rem;
+  --chx-textbox-padding: 0.25rem 0.5rem;
+  --chx-textbox-min-height: 48px;
+  --chx-textbox-slot-min-height: 40px;
+  --chx-textbox-font-size: 0.875rem;
+  --chx-textbox-line-height: 20px;
+  --chx-textbox-content-padding: 10px 0.375rem;
+  --chx-textbox-action-size: 1.125rem;
+  --chx-textbox-action-padding: 0.375rem;
 }
 
 .textbox {
@@ -95,7 +113,7 @@
 .textbox__trailing {
   align-items: center;
   display: flex;
-  min-height: 48px;
+  min-height: var(--chx-textbox-slot-min-height);
   grid-area: trailing-actions;
   gap: 0.5rem;
 }
@@ -103,7 +121,7 @@
 .textbox__leading {
   display: flex;
   align-items: center;
-  min-height: 48px;
+  min-height: var(--chx-textbox-slot-min-height);
   grid-area: leading-actions;
 
   & ::slotted(md-icon-button) {
@@ -115,7 +133,7 @@
   --md-icon-button-font-size: var(--chx-textbox-action-size);
 
   &::part(button) {
-    padding: 0.237rem;
+    padding: var(--chx-textbox-action-padding);
   }
 }
 
@@ -153,12 +171,13 @@
     outline: none;
     word-break: break-word;
     white-space: pre-wrap;
-    min-height: 20px;
+    min-height: var(--chx-textbox-line-height);
     color: var(--chx-textbox-foreground-color);
-    padding: 12px 0.5rem;
+    font-size: var(--chx-textbox-font-size);
+    padding: var(--chx-textbox-content-padding);
 
     & > div {
-      line-height: 20px;
+      line-height: var(--chx-textbox-line-height);
     }
   }
 }

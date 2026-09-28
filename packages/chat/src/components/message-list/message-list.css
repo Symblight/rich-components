@@ -13,6 +13,11 @@
   padding: var(--chx-message-list-padding);
 }
 
+/* no authors, no avatar column to keep compact rows aligned to — inherited by every chx-message */
+:host([author-display="none"]) {
+  --chx-message-compact-avatar-column: 0px;
+}
+
 :host([dragging]) {
   border: 2px dashed var(--chx-message-list-dragging-color);
 }

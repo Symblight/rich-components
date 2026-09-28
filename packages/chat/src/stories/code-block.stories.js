@@ -14,6 +14,8 @@ import "../index.js";
 import "../components/code-block/code-block.js";
 import "../components/paste-long-text/paste-long-text.js";
 import { createSplitOnSendHandler } from "../utils/split-message-parts.js";
+import { sleep } from "./shared/adapters.js";
+import { makeMessage, textPart } from "./shared/fixtures.js";
 
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
@@ -113,7 +115,7 @@ export const Streaming = {
       block.code = "";
       for (const char of STREAM_TARGET) {
         block.code += char;
-        await new Promise((resolve) => setTimeout(resolve, 20));
+        await sleep(20);
       }
       block.streaming = false;
     };
@@ -352,59 +354,38 @@ const handleMessagesChange = createSplitOnSendHandler([codePartRule]);
  */
 /** @type {Story} */
 export const MockedMessages = {
-  render: () => html`
+  args: { compact: false },
+  argTypes: {
+    compact: { name: "Compact mode", control: "boolean" },
+  },
+  render: (args) => html`
     <chx-chat
+      .compact=${args.compact}
       .partElements=${{ code: renderCodePart }}
       @chx-messages-change=${handleMessagesChange}
       .messages=${[
-        {
+        makeMessage({
           id: "msg-1",
-          authorId: "user-1",
           own: true,
-          createdAt: Date.now(),
-          status: "sent",
-          parts: [
-            {
-              id: "msg-1-t1",
-              type: "text",
-              text: "Can you show me the scroll-restore snapshot shape?",
-            },
-          ],
-        },
-        {
+          text: "Can you show me the scroll-restore snapshot shape?",
+        }),
+        makeMessage({
           id: "msg-2",
-          authorId: "assistant",
           own: false,
-          createdAt: Date.now(),
-          status: "sent",
           parts: [
-            {
-              id: "msg-2-t1",
-              type: "text",
-              text: "Sure — here's the object infinity-scroll captures:",
-            },
+            textPart("msg-2-t1", "Sure — here's the object infinity-scroll captures:"),
             { id: "msg-2-c1", type: "code", text: JS_SNIPPET, lang: "javascript" },
           ],
-        },
-        {
-          id: "msg-3",
-          authorId: "user-1",
-          own: true,
-          createdAt: Date.now(),
-          status: "sent",
-          parts: [{ id: "msg-3-t1", type: "text", text: "And a quick Python example?" }],
-        },
-        {
+        }),
+        makeMessage({ id: "msg-3", own: true, text: "And a quick Python example?" }),
+        makeMessage({
           id: "msg-4",
-          authorId: "assistant",
           own: false,
-          createdAt: Date.now(),
-          status: "sent",
           parts: [
-            { id: "msg-4-t1", type: "text", text: "Here you go:" },
+            textPart("msg-4-t1", "Here you go:"),
             { id: "msg-4-c1", type: "code", text: PYTHON_SNIPPET, lang: "python" },
           ],
-        },
+        }),
       ]}
     >
       <chx-message-list slot="message-list"></chx-message-list>
@@ -443,8 +424,13 @@ function renderMarkdownText(part) {
  */
 /** @type {Story} */
 export const PasteRecognizesCode = {
-  render: () => html`
+  args: { compact: false },
+  argTypes: {
+    compact: { name: "Compact mode", control: "boolean" },
+  },
+  render: (args) => html`
     <chx-chat
+      .compact=${args.compact}
       .partElements=${{ code: renderCodePart, text: renderMarkdownText }}
       @chx-messages-change=${handleMessagesChange}
     >

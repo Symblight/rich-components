@@ -1,122 +1,164 @@
 :host {
-  display: block;
-  --chx-tool-call-background-color: var(--md-sys-color-surface-container-low);
-  --chx-tool-call-border-color: var(--md-sys-color-outline-variant);
-  --chx-tool-call-border-radius: 0.75rem;
-  --chx-tool-call-color: var(--md-sys-color-on-surface);
-  --chx-tool-call-summary-color: var(--md-sys-color-on-surface-variant);
-  --chx-tool-call-focus-ring-color: var(--md-sys-color-primary);
-  --chx-tool-call-icon-size: 1.125rem;
-  --chx-tool-call-font-size: 0.875rem;
-  --chx-tool-call-padding: 0.5rem 0.75rem;
+  --chx-tool-call-row-height: var(--chx-agent-row-height, 2.25rem);
+  --chx-tool-call-font-size: var(--chx-agent-font-size, 0.875rem);
+  --chx-tool-call-meta-font-size: var(--chx-agent-meta-font-size, 0.78125rem);
+  --chx-tool-call-mono-font-size: var(--chx-agent-mono-font-size, 0.8125rem);
+  --chx-tool-call-mono-font-family: var(
+    --chx-agent-mono-font-family,
+    "SF Mono",
+    ui-monospace,
+    "Roboto Mono",
+    monospace
+  );
+  --chx-tool-call-icon-size: var(--chx-agent-icon-size, 1.25rem);
+  --chx-tool-call-gap: var(--chx-agent-gap, 0.625rem);
+  --chx-tool-call-padding-inline: var(--chx-agent-padding-inline, 0.5rem);
+  --chx-tool-call-border-radius: var(--chx-agent-border-radius, 0.5rem);
+  --chx-tool-call-color: var(--chx-agent-color, var(--md-sys-color-on-surface-variant));
+  --chx-tool-call-label-color: var(--chx-agent-label-color, var(--md-sys-color-on-surface));
+  --chx-tool-call-rule-color: var(--chx-agent-rule-color, var(--md-sys-color-outline-variant));
+  --chx-tool-call-state-layer-color: var(
+    --chx-agent-state-layer-color,
+    var(--md-sys-color-on-surface)
+  );
+  --chx-tool-call-focus-ring-color: var(--chx-agent-focus-ring-color, var(--md-sys-color-primary));
   --chx-tool-call-content-gap: 0.5rem;
+  --chx-tool-call-file-color: var(--md-sys-color-on-surface);
+  --chx-tool-call-path-color: var(--md-sys-color-on-surface-variant);
+  --chx-tool-call-path-hover-color: var(--md-sys-color-primary);
+  --chx-tool-call-pending-color: var(--md-sys-color-outline);
   --chx-tool-call-running-color: var(--md-sys-color-primary);
   --chx-tool-call-awaiting-permission-color: var(--md-sys-color-tertiary);
-  --chx-tool-call-completed-color: var(--md-sys-color-on-surface-variant);
+  --chx-tool-call-awaiting-permission-background-color: color-mix(
+    in srgb,
+    var(--md-sys-color-tertiary) 9%,
+    transparent
+  );
   --chx-tool-call-cancelled-color: var(--md-sys-color-outline);
   --chx-tool-call-failed-color: var(--md-sys-color-error);
+
+  --_chx-agent-row-height: var(--chx-tool-call-row-height);
+  --_chx-agent-row-font-size: var(--chx-tool-call-font-size);
+  --_chx-agent-row-meta-font-size: var(--chx-tool-call-meta-font-size);
+  --_chx-agent-row-icon-size: var(--chx-tool-call-icon-size);
+  --_chx-agent-row-gap: var(--chx-tool-call-gap);
+  --_chx-agent-row-padding-inline: var(--chx-tool-call-padding-inline);
+  --_chx-agent-row-border-radius: var(--chx-tool-call-border-radius);
+  --_chx-agent-row-color: var(--chx-tool-call-color);
+  --_chx-agent-row-label-color: var(--chx-tool-call-label-color);
+  --_chx-agent-row-rule-color: var(--chx-tool-call-rule-color);
+  --_chx-agent-row-state-layer-color: var(--chx-tool-call-state-layer-color);
+  --_chx-agent-row-focus-ring-color: var(--chx-tool-call-focus-ring-color);
 }
 
-/* Author `:host` display beats the UA `[hidden]` rule, so the host has to opt back out itself. */
-:host([hidden]) {
-  display: none;
+:host([compact]) {
+  --chx-tool-call-row-height: var(--chx-agent-compact-row-height, 1.75rem);
+  --chx-tool-call-font-size: var(--chx-agent-compact-font-size, 0.8125rem);
+  --chx-tool-call-meta-font-size: var(--chx-agent-compact-meta-font-size, 0.75rem);
+  --chx-tool-call-mono-font-size: var(--chx-agent-compact-mono-font-size, 0.78125rem);
+  --chx-tool-call-icon-size: var(--chx-agent-compact-icon-size, 1rem);
+  --chx-tool-call-gap: var(--chx-agent-compact-gap, 0.5rem);
+  --chx-tool-call-padding-inline: var(--chx-agent-compact-padding-inline, 0.375rem);
 }
 
-.tool-call {
-  box-sizing: border-box;
-  overflow: hidden;
-  background-color: var(--chx-tool-call-background-color);
-  border: 1px solid var(--chx-tool-call-border-color);
-  border-radius: var(--chx-tool-call-border-radius);
-  color: var(--chx-tool-call-color);
-  font-size: var(--chx-tool-call-font-size);
-}
-
-/* The card the banner above the composer is currently asking about — the permission UI itself is
-   deliberately elsewhere, so the accent is the only thing tying the question to its subject. */
-:host([status="awaiting-permission"]) .tool-call {
-  border-color: var(--chx-tool-call-awaiting-permission-color);
-}
-
-/* The whole header is the disclosure control — the native marker is replaced by the status icon,
-   which already says pending/running/done at a glance. */
+/* The one row in a turn with a fill: the banner above the composer is asking about it. */
 .tool-call__summary {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: var(--chx-tool-call-padding);
-  cursor: pointer;
-  list-style: none;
-  color: var(--chx-tool-call-summary-color);
-
-  &::-webkit-details-marker {
-    display: none;
+  :host([status="awaiting-permission"]) & {
+    background-color: var(--chx-tool-call-awaiting-permission-background-color);
+    color: var(--chx-tool-call-awaiting-permission-color);
   }
-
-  &:focus-visible {
-    outline: 2px solid var(--chx-tool-call-focus-ring-color);
-    outline-offset: -2px;
-  }
-}
-
-.tool-call__kind-icon {
-  font-size: var(--chx-tool-call-icon-size);
-  flex: none;
 }
 
 .tool-call__label {
-  flex: 1 1 auto;
-  min-inline-size: 0;
-  color: var(--chx-tool-call-color);
-  overflow-wrap: anywhere;
+  :host([status="in_progress"]) & {
+    color: var(--chx-tool-call-running-color);
+  }
+
+  :host([status="awaiting-permission"]) & {
+    color: var(--chx-tool-call-awaiting-permission-color);
+    font-weight: 500;
+  }
+
+  :host([status="failed"]) &,
+  :host([status="rejected"]) & {
+    color: var(--chx-tool-call-failed-color);
+  }
 }
 
-/* Both are sized at 1em by their own internal svg, so font-size is the size knob for each. */
-.tool-call__status-icon,
-.tool-call__status-progress {
-  font-size: var(--chx-tool-call-icon-size);
+.tool-call__file {
   flex: none;
+  color: var(--chx-tool-call-file-color);
+  font-family: var(--chx-tool-call-mono-font-family);
+  font-size: var(--chx-tool-call-mono-font-size);
+  font-weight: 500;
+  white-space: nowrap;
 }
 
-.tool-call__status-progress {
-  color: var(--chx-tool-call-running-color);
-  /* currentColor, so the spinner follows the running-color token above */
-  --md-progress-circular-active-indicator-color: currentColor;
-  --md-progress-circular-track-color: var(--chx-tool-call-border-color);
+.tool-call__line {
+  color: var(--chx-tool-call-path-color);
+  font-weight: 400;
 }
 
-:host([status="awaiting-permission"]) .tool-call__status-icon {
-  color: var(--chx-tool-call-awaiting-permission-color);
+/* Truncated from the start, so the part nearest the file survives a narrow column; `bdi` keeps
+   the path itself left-to-right inside the rtl box. */
+.tool-call__path {
+  min-inline-size: 0;
+  overflow: hidden;
+  direction: rtl;
+  color: var(--chx-tool-call-path-color);
+  font-family: var(--chx-tool-call-mono-font-family);
+  font-size: calc(var(--chx-tool-call-mono-font-size) - 1px);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  opacity: 0.85;
+
+  &:hover {
+    color: var(--chx-tool-call-path-hover-color);
+    text-decoration: underline;
+    opacity: 1;
+  }
 }
 
-:host([status="completed"]) .tool-call__status-icon {
-  color: var(--chx-tool-call-completed-color);
+.tool-call__path-text {
+  direction: ltr;
 }
 
-/* Without its own color a cancelled call reads exactly like a pending one. */
-:host([status="cancelled"]) .tool-call__status-icon {
-  color: var(--chx-tool-call-cancelled-color);
-}
+.tool-call__status {
+  color: var(--chx-tool-call-pending-color);
 
-:host([status="failed"]) .tool-call__status-icon {
-  color: var(--chx-tool-call-failed-color);
+  :host([status="in_progress"]) & {
+    color: var(--chx-tool-call-running-color);
+  }
+
+  :host([status="awaiting-permission"]) & {
+    color: var(--chx-tool-call-awaiting-permission-color);
+  }
+
+  :host([status="failed"]) &,
+  :host([status="rejected"]) & {
+    color: var(--chx-tool-call-failed-color);
+  }
+
+  /* Without its own color a cancelled call reads exactly like a pending one. */
+  :host([status="cancelled"]) & {
+    color: var(--chx-tool-call-cancelled-color);
+  }
 }
 
 .tool-call__content {
   display: flex;
   flex-direction: column;
   gap: var(--chx-tool-call-content-gap);
-  padding: 0 0.75rem 0.75rem;
-}
 
-.tool-call__locations {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 0.25rem;
+  &[hidden] {
+    display: none;
+  }
 }
 
 .tool-call__error {
-  padding: var(--chx-tool-call-padding);
+  margin: 0;
   color: var(--chx-tool-call-failed-color);
+  font-size: calc(var(--chx-tool-call-font-size) - 0.5px);
+  line-height: 1.5;
   overflow-wrap: anywhere;
 }

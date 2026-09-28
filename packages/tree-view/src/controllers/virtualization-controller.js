@@ -13,6 +13,10 @@ export class VirtualizationController {
   #controller;
   /** @type {unknown[] | null} */
   #lastRows = null;
+  /** Row kept rendered even when scrolled out (the focused one), or -1. */
+  #pinnedIndex = -1;
+  /** @type {() => number} */
+  #getFocusedIndex;
   /** @type {WeakSet<Element>} */
   #measured = new WeakSet();
 
@@ -23,6 +27,7 @@ export class VirtualizationController {
    */
   constructor(host, getRows, getFocusedIndex) {
     this.host = host;
+    this.#getFocusedIndex = getFocusedIndex;
     this.#controller = new VirtualizerController(host, {
       count: 0,
       enabled: false,
@@ -31,19 +36,7 @@ export class VirtualizationController {
       getItemKey: (index) => /** @type {any} */ (getRows()[index]?.key ?? index),
       estimateSize: () => ESTIMATED_ROW_SIZE,
       overscan: OVERSCAN,
-      rangeExtractor: (range) => {
-        const indexes = [];
-        const start = Math.max(range.startIndex - range.overscan, 0);
-        const end = Math.min(range.endIndex + range.overscan, range.count - 1);
-        for (let i = start; i <= end; i++) indexes.push(i);
-
-        const focused = getFocusedIndex();
-        if (focused >= 0 && focused < range.count && (focused < start || focused > end)) {
-          indexes.push(focused);
-          indexes.sort((a, b) => a - b);
-        }
-        return indexes;
-      },
+      rangeExtractor: (range) => withPinned(range, -1),
     });
   }
 
@@ -60,8 +53,13 @@ export class VirtualizationController {
     const virtualizer = this.#virtualizer;
     const enabled = this.enabled;
     const count = enabled ? rows.length : 0;
-    if (virtualizer.options.enabled !== enabled || virtualizer.options.count !== count) {
-      virtualizer.setOptions({ ...virtualizer.options, enabled, count });
+    const pinned = enabled ? this.#getFocusedIndex() : -1;
+    const { options } = virtualizer;
+    if (options.enabled !== enabled || options.count !== count || pinned !== this.#pinnedIndex) {
+      this.#pinnedIndex = pinned;
+      // TanStack caches the range until the scroll range changes; a new extractor forces a recompute
+      const rangeExtractor = (/** @type {any} */ range) => withPinned(range, pinned);
+      virtualizer.setOptions({ ...options, enabled, count, rangeExtractor });
     }
     // row keys are read through a stable `getItemKey`, so new rows must invalidate TanStack's cache
     if (enabled && rows !== this.#lastRows) virtualizer.itemSizeCacheVersion++;
@@ -96,4 +94,20 @@ export class VirtualizationController {
     if (this.enabled) this.#virtualizer.scrollToIndex(index, { align: "auto" });
     else this.host.rowElement(index)?.scrollIntoView({ block: "nearest" });
   }
+}
+
+/** TanStack's default range (visible rows + overscan), plus `pinned` if it lies outside it.
+ * @param {{ startIndex: number, endIndex: number, overscan: number, count: number }} range
+ * @param {number} pinned
+ * @returns {number[]} */
+function withPinned({ startIndex, endIndex, overscan, count }, pinned) {
+  const start = Math.max(startIndex - overscan, 0);
+  const end = Math.min(endIndex + overscan, count - 1);
+  const indexes = [];
+  for (let i = start; i <= end; i++) indexes.push(i);
+  if (pinned >= 0 && pinned < count && (pinned < start || pinned > end)) {
+    indexes.push(pinned);
+    indexes.sort((a, b) => a - b);
+  }
+  return indexes;
 }

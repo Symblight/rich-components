@@ -5,7 +5,6 @@
   overflow: auto;
   outline: none;
 
-  --tvx-tree-view-row-gap: 0.125rem;
   --tvx-tree-item-gap: 0.2rem;
   --tvx-tree-item-row-height: 2.25rem;
   --tvx-tree-item-padding: 0.5rem;
@@ -33,7 +32,7 @@
 /* a row wrapper: the treeitem itself, carrying the gap so measured sizes include it */
 .tree-view__item,
 .tree-view__placeholder {
-  padding-block-end: var(--tvx-tree-view-row-gap);
+  padding-block-end: var(--tvx-tree-view-row-gap, 0.125rem);
   outline: none;
 
   .tree-view_virtualized & {

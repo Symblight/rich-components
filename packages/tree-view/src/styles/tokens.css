@@ -1,0 +1,66 @@
+/* Tree-wide token layer, adopted first by every rendering component.
+   --tvx-tree-view-* is the public theme: set it on tvx-tree-view (or any ancestor) to retune every
+   component inside at once. No component ever declares --tvx-tree-view-* itself — a declaration on a
+   nested host would hide the ancestor's value — so each host resolves it here into a private --_tvx-*
+   (falling back to --md-sys-*), and component tokens (--tvx-<component>-*) map only from --_tvx-*. */
+:host {
+  /* typography */
+  --_tvx-font-family: var(
+    --tvx-tree-view-font-family,
+    var(--md-sys-typescale-font-family, Roboto, system-ui, sans-serif)
+  );
+  --_tvx-font-weight-regular: var(--tvx-tree-view-font-weight-regular, 400);
+  --_tvx-font-weight-medium: var(--tvx-tree-view-font-weight-medium, 500);
+  --_tvx-body-medium-font-size: var(
+    --tvx-tree-view-body-medium-font-size,
+    var(--md-sys-typescale-body-medium-size, 0.875rem)
+  );
+  --_tvx-body-medium-line-height: var(
+    --tvx-tree-view-body-medium-line-height,
+    var(--md-sys-typescale-body-medium-line-height, 1.25rem)
+  );
+
+  /* color — MD3 roles; setting --md-sys-color-* on tvx-tree-view retunes md-* children too */
+  --_tvx-color-primary: var(--tvx-tree-view-color-primary, var(--md-sys-color-primary));
+  --_tvx-color-secondary-container: var(
+    --tvx-tree-view-color-secondary-container,
+    var(--md-sys-color-secondary-container)
+  );
+  --_tvx-color-on-secondary-container: var(
+    --tvx-tree-view-color-on-secondary-container,
+    var(--md-sys-color-on-secondary-container)
+  );
+  --_tvx-color-surface-container-high: var(
+    --tvx-tree-view-color-surface-container-high,
+    var(--md-sys-color-surface-container-high)
+  );
+  --_tvx-color-on-surface: var(--tvx-tree-view-color-on-surface, var(--md-sys-color-on-surface));
+  --_tvx-color-on-surface-variant: var(
+    --tvx-tree-view-color-on-surface-variant,
+    var(--md-sys-color-on-surface-variant)
+  );
+
+  /* shape */
+  --_tvx-shape-corner-extra-small: var(
+    --tvx-tree-view-shape-corner-extra-small,
+    var(--md-sys-shape-corner-extra-small, 0.25rem)
+  );
+  --_tvx-shape-corner-small: var(
+    --tvx-tree-view-shape-corner-small,
+    var(--md-sys-shape-corner-small, 0.5rem)
+  );
+  --_tvx-shape-corner-medium: var(
+    --tvx-tree-view-shape-corner-medium,
+    var(--md-sys-shape-corner-medium, 0.75rem)
+  );
+  --_tvx-shape-corner-large: var(
+    --tvx-tree-view-shape-corner-large,
+    var(--md-sys-shape-corner-large, 1rem)
+  );
+  --_tvx-shape-corner-full: var(
+    --tvx-tree-view-shape-corner-full,
+    var(--md-sys-shape-corner-full, 9999px)
+  );
+
+  font-family: var(--_tvx-font-family);
+}

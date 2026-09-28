@@ -16,9 +16,38 @@ import { TypeaheadController } from "../controllers/typeahead-controller.js";
 import { OpenController } from "../controllers/open-controller.js";
 import { DataSourceController } from "../controllers/data-source-controller.js";
 import { ReorderController } from "../controllers/reorder-controller.js";
+import tokens from "../styles/tokens.css?inline";
 import styles from "./tree-view.css?inline";
 
-/** @tag tvx-tree-view @summary A WAI-ARIA `tree`; composition root for expansion, selection, focus, keyboard nav, typeahead, and async loading. */
+/**
+ * @typedef {import("../components/tree-item/tree-item.js").TvxTreeItem} TvxTreeItem
+ */
+
+/**
+ * Lazy loader: `getChildrenCount` decides which items are branches, `getTreeItems` fetches a
+ * batch (the root when called with no parent).
+ * @typedef {object} TvxTreeDataSource
+ * @property {(parent?: TvxTreeItem) => Promise<TvxTreeItem[]>} getTreeItems
+ * @property {(item: TvxTreeItem) => number | undefined} getChildrenCount
+ */
+
+/**
+ * @typedef {{ parentId: PropertyKey | null, index: number }} TvxTreeItemPosition
+ */
+
+/**
+ * @tag tvx-tree-view
+ * @summary A WAI-ARIA `tree`; composition root for expansion, selection, focus, keyboard nav,
+ * typeahead, reordering and async loading.
+ *
+ * @fires {CustomEvent<{ selectedItems: Set<PropertyKey> }>} tvx-selection-change - Whole-tree snapshot after any selection change.
+ * @fires {CustomEvent<{ expandedItems: Set<PropertyKey> }>} tvx-expansion-change - Whole-tree snapshot after any expand/collapse.
+ * @fires {CustomEvent<{ key: PropertyKey, expanded: boolean }>} tvx-expand-change - One item's expansion toggled.
+ * @fires {CustomEvent<{ key: PropertyKey, oldPosition: TvxTreeItemPosition, newPosition: TvxTreeItemPosition }>} tvx-item-position-change - Cancelable; fires before a reorder moves an item.
+ * @fires {CustomEvent<{ key: PropertyKey | null, node: TvxTreeItem | null, items: TvxTreeItem[] }>} tvx-children-loaded - A `dataSource` batch landed (`key`/`node` null for the root).
+ * @fires {CustomEvent<{ key: PropertyKey | null, node: TvxTreeItem | null, error: unknown }>} tvx-load-error - `dataSource.getTreeItems()` rejected.
+ * @fires {CustomEvent<{ key: PropertyKey, node: TvxTreeItem, newTab: true }>} tvx-open - Cancelable; middle-click / Ctrl+Enter on an item `getHref` didn't resolve.
+ */
 @customElement("tvx-tree-view")
 export class TvxTreeView extends LitElement {
   /** @type {import("lit").PropertyDeclarations} */
@@ -37,10 +66,10 @@ export class TvxTreeView extends LitElement {
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [styles];
+    return [tokens, styles];
   }
 
-  /** @type {import("../components/tree-item/tree-item.js").TvxTreeItem[] | undefined} */
+  /** @type {TvxTreeItem[] | undefined} */
   #items;
   #defaultsApplied = false;
   /** @type {import("../controllers/roving-focus-controller.js").RovingFocusController} */
@@ -70,19 +99,23 @@ export class TvxTreeView extends LitElement {
     super();
 
     /** Opt into ctrl/cmd+click (toggle) and shift+click/shift+arrow (contiguous range) multi-select.
-     * Off by default — a plain click then selects exactly one item. */
+     * Off by default — a plain click then selects exactly one item.
+     * @type {boolean} */
     this.multiSelect = false;
-    /** Disables selection entirely; rows still focus and a branch still toggles expand/collapse on click. */
+    /** Disables selection entirely; rows still focus and a branch still toggles expand/collapse on click.
+     * @type {boolean} */
     this.disableSelection = false;
     /** Renders a checkbox per row (single- or multi-select); clicking it toggles just that item,
-     * independent of the ctrl/shift-click modifiers a plain row click uses in multi-select mode. */
+     * independent of the ctrl/shift-click modifiers a plain row click uses in multi-select mode.
+     * @type {boolean} */
     this.checkboxSelection = false;
-    /** @type {((node: import("../components/tree-item/tree-item.js").TvxTreeItem) => string | undefined) | undefined} */
+    /** @type {((node: TvxTreeItem) => string | undefined) | undefined} */
     this.getHref = undefined;
-    /** @type {{ getTreeItems: (parent?: import("../components/tree-item/tree-item.js").TvxTreeItem) => Promise<import("../components/tree-item/tree-item.js").TvxTreeItem[]>, getChildrenCount: (item: import("../components/tree-item/tree-item.js").TvxTreeItem) => number | undefined } | undefined} */
+    /** @type {TvxTreeDataSource | undefined} */
     this.dataSource = undefined;
+    /** Enables drag-and-drop and Alt+↑/↓ reordering. @type {boolean} */
     this.reordering = false;
-    /** @type {((item: import("../components/tree-item/tree-item.js").TvxTreeItem) => boolean) | undefined} */
+    /** @type {((item: TvxTreeItem) => boolean) | undefined} */
     this.isItemReorderable = undefined;
     /** Uncontrolled initial value, applied once the root batch of items exists — unlike `expandedItems`, later writes have no effect.
      * @type {Iterable<PropertyKey> | undefined} */
@@ -188,12 +221,12 @@ export class TvxTreeView extends LitElement {
   }
 
   /** Real `<tvx-tree-item>` elements; setting this is a `replaceChildren()` convenience.
-   * @returns {import("../components/tree-item/tree-item.js").TvxTreeItem[] | undefined} */
+   * @returns {TvxTreeItem[] | undefined} */
   get items() {
     return this.#items;
   }
 
-  /** @param {import("../components/tree-item/tree-item.js").TvxTreeItem[] | undefined} value */
+  /** @param {TvxTreeItem[] | undefined} value */
   set items(value) {
     this.#items = value;
     if (value) this.replaceChildren(...value);
@@ -229,11 +262,11 @@ export class TvxTreeView extends LitElement {
 
   /** Every `tvx-tree-item` in the tree, regardless of expand state.
    * @param {Element} root
-   * @returns {IterableIterator<import("../components/tree-item/tree-item.js").TvxTreeItem>} */
+   * @returns {IterableIterator<TvxTreeItem>} */
   *allItems(root = this) {
     for (const child of root.children) {
       if (child.tagName === "TVX-TREE-ITEM") {
-        yield /** @type {import("../components/tree-item/tree-item.js").TvxTreeItem} */ (child);
+        yield /** @type {TvxTreeItem} */ (child);
         yield* this.allItems(child);
       } else if (child.tagName === "TVX-ITEM-SUB-TREE") {
         yield* this.allItems(child);
@@ -243,13 +276,11 @@ export class TvxTreeView extends LitElement {
 
   /** Pre-order DFS that stops descending into a collapsed node's children.
    * @param {Element} root
-   * @returns {IterableIterator<import("../components/tree-item/tree-item.js").TvxTreeItem>} */
+   * @returns {IterableIterator<TvxTreeItem>} */
   *visibleItems(root = this) {
     for (const child of root.children) {
       if (child.tagName === "TVX-TREE-ITEM") {
-        const item = /** @type {import("../components/tree-item/tree-item.js").TvxTreeItem} */ (
-          child
-        );
+        const item = /** @type {TvxTreeItem} */ (child);
         yield item;
         if (item.expanded) yield* this.visibleItems(item);
       } else if (child.tagName === "TVX-ITEM-SUB-TREE") {
@@ -258,10 +289,12 @@ export class TvxTreeView extends LitElement {
     }
   }
 
+  /** @returns {TvxTreeItem | null} */
   firstVisibleItem() {
     return this.visibleItems().next().value ?? null;
   }
 
+  /** @returns {TvxTreeItem | null} */
   lastVisibleItem() {
     let last = null;
     for (const item of this.visibleItems()) last = item;
@@ -270,19 +303,21 @@ export class TvxTreeView extends LitElement {
 
   /**
    * @param {Element} item
-   * @returns {import("../components/tree-item/tree-item.js").TvxTreeItem | null}
+   * @returns {TvxTreeItem | null}
    */
   firstChildItem(item) {
     for (const child of item.children) {
       if (child.tagName === "TVX-TREE-ITEM") {
-        return /** @type {import("../components/tree-item/tree-item.js").TvxTreeItem} */ (child);
+        return /** @type {TvxTreeItem} */ (child);
       }
       if (child.tagName === "TVX-ITEM-SUB-TREE") return this.firstChildItem(child);
     }
     return null;
   }
 
-  /** @param {PropertyKey} key */
+  /** Linear scan of every mounted item, collapsed branches included.
+   * @param {PropertyKey} key
+   * @returns {TvxTreeItem | null} */
   getItemByKey(key) {
     for (const item of this.allItems()) if (item.key === key) return item;
     return null;
@@ -322,11 +357,11 @@ export class TvxTreeView extends LitElement {
 
   /** Direct child `tvx-tree-item`s of `root`, resolving through `tvx-item-sub-tree` wrappers.
    * @param {Element} root
-   * @returns {IterableIterator<import("../components/tree-item/tree-item.js").TvxTreeItem>} */
+   * @returns {IterableIterator<TvxTreeItem>} */
   *directChildItems(root = this) {
     for (const child of root.children) {
       if (child.tagName === "TVX-TREE-ITEM") {
-        yield /** @type {import("../components/tree-item/tree-item.js").TvxTreeItem} */ (child);
+        yield /** @type {TvxTreeItem} */ (child);
       } else if (child.tagName === "TVX-ITEM-SUB-TREE") {
         yield* this.directChildItems(child);
       }
@@ -334,7 +369,7 @@ export class TvxTreeView extends LitElement {
   }
 
   /** A fresh `IndexTree` snapshot of the live DOM, keyed by `item.key`, built on demand (never cached).
-   * @returns {import("../core/index-tree.js").IndexTree<import("../components/tree-item/tree-item.js").TvxTreeItem>} */
+   * @returns {import("../core/index-tree.js").IndexTree<TvxTreeItem>} */
   buildIndexTree() {
     return buildIndexTree([...this.directChildItems()], {
       getKey: (item) => item.key,
@@ -367,7 +402,7 @@ export class TvxTreeView extends LitElement {
 
   /** Moves the tree's Tab stop to `item` and focuses it — the one piece of focus API a controller
    * outside this file (`ReorderController`, after a keyboard-driven move) needs to reach.
-   * @param {import("../components/tree-item/tree-item.js").TvxTreeItem | null} item */
+   * @param {TvxTreeItem | null} item */
   focusItem(item) {
     this.#focus.focusNode(item);
   }
@@ -384,13 +419,13 @@ export class TvxTreeView extends LitElement {
     this.#selection.refresh();
   }
 
-  /** @param {CustomEvent<{ item: import("../components/tree-item/tree-item.js").TvxTreeItem }>} event */
+  /** @param {CustomEvent<{ item: TvxTreeItem }>} event */
   #onItemToggle(event) {
     this.#expansion.toggle(event.detail.item);
     this.#focus.focusNode(event.detail.item);
   }
 
-  /** @param {CustomEvent<{ item: import("../components/tree-item/tree-item.js").TvxTreeItem, ctrlKey: boolean, metaKey: boolean, shiftKey: boolean, checkbox: boolean }>} event */
+  /** @param {CustomEvent<{ item: TvxTreeItem, ctrlKey: boolean, metaKey: boolean, shiftKey: boolean, checkbox: boolean }>} event */
   #onItemActivate(event) {
     const { item, ctrlKey, metaKey, shiftKey, checkbox } = event.detail;
     // A checkbox click always bypasses the ctrl/shift-click modifier semantics a plain row click

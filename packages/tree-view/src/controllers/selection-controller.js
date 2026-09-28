@@ -12,7 +12,7 @@ import { findIndexTree } from "../core/index-tree.js";
  * `treeData` mode.
  */
 export class SelectionController {
-  /** @type {PropertyKey | null} item shift-range is measured from */
+  /** Item the shift-range is measured from. @type {PropertyKey | null} */
   #anchor = null;
 
   /** @param {import("../base/tree-view.js").TvxTreeView} host */
@@ -22,7 +22,8 @@ export class SelectionController {
     this.selected = new Set();
   }
 
-  /** @param {PropertyKey} key */
+  /** @param {PropertyKey} key
+   * @returns {boolean} */
   isSelected(key) {
     return this.selected.has(key);
   }
@@ -94,8 +95,7 @@ export class SelectionController {
       : anchorIndex > targetIndex
         ? targetIndex + 1
         : targetIndex - 1;
-    const [start, end] =
-      anchorIndex < endIndex ? [anchorIndex, endIndex] : [endIndex, anchorIndex];
+    const [start, end] = anchorIndex < endIndex ? [anchorIndex, endIndex] : [endIndex, anchorIndex];
 
     const next = new Set(this.selected);
     for (let i = start; i <= end; i++) {
@@ -123,7 +123,8 @@ export class SelectionController {
     this.#commit(next);
   }
 
-  /** @param {import("../components/tree-item/tree-item.js").TvxTreeItem} item @param {boolean} selected */
+  /** @param {import("../components/tree-item/tree-item.js").TvxTreeItem} item
+   * @param {boolean} selected */
   #applySingle(item, selected) {
     if (selected) this.selected = new Set([item.key]);
     else if (this.selected.has(item.key)) this.selected = new Set();

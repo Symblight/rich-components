@@ -15,6 +15,7 @@ import "@symblight/wc-material/progress-circular";
 import "../item-sub-tree/item-sub-tree.js";
 
 import { treeViewContext } from "../../base/tree-view-context.js";
+import tokens from "../../styles/tokens.css?inline";
 import styles from "./tree-item.css?inline";
 
 let nextLabelId = 0;
@@ -28,7 +29,11 @@ export function closestTreeItemParent(el) {
   return parent?.tagName === "TVX-TREE-ITEM" ? /** @type {TvxTreeItem} */ (parent) : null;
 }
 
-/** @tag tvx-tree-item */
+/**
+ * @tag tvx-tree-item
+ * @summary One `role="treeitem"` node: a row (chevron, optional checkbox, leading/label/trailing
+ * slots) plus an optional `<tvx-item-sub-tree>` of children, auto-slotted as `sub-tree`.
+ */
 @customElement("tvx-tree-item")
 export class TvxTreeItem extends LitElement {
   /** @type {import("lit").PropertyDeclarations} */
@@ -47,7 +52,7 @@ export class TvxTreeItem extends LitElement {
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [styles];
+    return [tokens, styles];
   }
 
   constructor() {
@@ -55,27 +60,36 @@ export class TvxTreeItem extends LitElement {
 
     /** @type {PropertyKey} */
     this.key = "";
+    /** Row text; ignored when unslotted light-DOM content overrides it. @type {string} */
     this.label = "";
+    /** @type {boolean} */
     this.disabled = false;
+    /** @type {boolean} */
     this.expanded = false;
+    /** @type {boolean} */
     this.selected = false;
     /** Under `checkboxSelection`, true when some (not all) of this branch's descendants are
      * selected — meaningless (always false) on a leaf. Driven entirely by `SelectionController`,
      * derived fresh from the subtree on every selection change, never set directly. */
+    /** @type {boolean} */
     this.indeterminate = false;
+    /** Placeholder row shown while a branch's children load. @type {boolean} */
     this.loading = false;
+    /** @type {boolean} */
     this.hasChildren = false;
     /** @type {number | undefined} */
     this.childCount = undefined;
+    /** 1-indexed nesting depth, reflected as `aria-level`. @type {number} */
     this.level = 1;
 
+    /** @type {string} */
     this._labelId = `tvx-tree-item-label-${nextLabelId++}`;
     /** Set for real in `_claimSubTree()` (connectedCallback), always before the first render. */
     this._hasLabelOverride = false;
     /** @type {import("../item-sub-tree/item-sub-tree.js").TvxItemSubTree | null} */
     this._subTreeEl = null;
 
-    /** @private */
+    /** @type {ContextConsumer<typeof treeViewContext, TvxTreeItem>} */
     this._treeConsumer = new ContextConsumer(this, { context: treeViewContext, subscribe: true });
 
     /** @type {(() => void) | null} */
@@ -126,7 +140,8 @@ export class TvxTreeItem extends LitElement {
     this.setAttribute("aria-selected", String(this.selected));
   }
 
-  /** 1-indexed nesting depth — self-computed by walking `tvx-tree-item` ancestors. */
+  /** 1-indexed nesting depth — self-computed by walking `tvx-tree-item` ancestors.
+   * @returns {number} */
   _computeLevel() {
     let level = 1;
     let parent = this.parentElement;
@@ -181,12 +196,14 @@ export class TvxTreeItem extends LitElement {
     return this._subTreeEl;
   }
 
+  /** @returns {boolean} */
   get render_disableSelection() {
     return !!this._treeConsumer.value?.disableSelection;
   }
 
   /** A checkbox renders whenever `checkboxSelection` is set, independent of `multiSelect` — but
-   * never alongside `disableSelection`, where it could never actually be checked. */
+   * never alongside `disableSelection`, where it could never actually be checked.
+   * @returns {boolean} */
   get render_checkboxSelection() {
     return !!this._treeConsumer.value?.checkboxSelection && !this.render_disableSelection;
   }
@@ -262,7 +279,8 @@ export class TvxTreeItem extends LitElement {
   }
 
   /** Without this guard, pdnd fires onDrag/onDrop on every ancestor drop target, not just the hovered one.
-   * @param {{ location: { current: { dropTargets: { element: Element }[] } } }} args */
+   * @param {{ location: { current: { dropTargets: { element: Element }[] } } }} args
+   * @returns {boolean} */
   #isInnermostDropTarget(args) {
     return args.location.current.dropTargets[0]?.element === this;
   }
@@ -286,7 +304,8 @@ export class TvxTreeItem extends LitElement {
   }
 
   /** Rejects dropping onto itself, its own descendants, or a `disabled` target.
-   * @param {{ source: { data: Record<string, unknown> } }} args */
+   * @param {{ source: { data: Record<string, unknown> } }} args
+   * @returns {boolean} */
   #canAcceptDrop(args) {
     if (this.disabled) return false;
     const sourceKey = /** @type {PropertyKey} */ (args.source.data.key);
@@ -299,9 +318,9 @@ export class TvxTreeItem extends LitElement {
     return true;
   }
 
-  /**
+  /** Tags the drop target's data with the hitbox instruction for the pointer's current position.
    * @param {import("@atlaskit/pragmatic-drag-and-drop/types").Input} input
-   */
+   * @returns {Record<string | symbol, unknown>} */
   #attachDropInstruction(input) {
     /** @type {import("@atlaskit/pragmatic-drag-and-drop-hitbox/tree-item").Instruction["type"][]} */
     const block = ["reparent"]; // multi-level reparent via horizontal drag — not designed for v1
@@ -319,7 +338,8 @@ export class TvxTreeItem extends LitElement {
     );
   }
 
-  /** Rough px-per-level estimate for the hitbox's horizontal geometry — doesn't need to be exact. */
+  /** Rough px-per-level estimate for the hitbox's horizontal geometry — doesn't need to be exact.
+   * @returns {number} */
   #indentPerLevelPx() {
     const fontSize = parseFloat(getComputedStyle(this).fontSize);
     return (Number.isFinite(fontSize) ? fontSize : 16) * 1.25;
@@ -386,7 +406,8 @@ export class TvxTreeItem extends LitElement {
     this.#activate(undefined, { checkbox: true });
   }
 
-  /** @param {MouseEvent} [event] Modifier keys drive multi-select ctrl/cmd+click and shift+click; absent for a keyboard- or checkbox-triggered activation.
+  /** Dispatches the internal `tvx-tree-item-activate` the tree answers with a selection change.
+   * @param {MouseEvent} [event] Modifier keys drive multi-select ctrl/cmd+click and shift+click; absent for a keyboard- or checkbox-triggered activation.
    * @param {{ checkbox?: boolean }} [options] `checkbox: true` toggles just this item, bypassing the modifier-driven row-click semantics. */
   #activate(event, { checkbox = false } = {}) {
     if (this.loading) return;
@@ -405,6 +426,7 @@ export class TvxTreeItem extends LitElement {
     );
   }
 
+  /** Dispatches the internal `tvx-tree-item-toggle` the tree answers with expand/collapse. */
   #dispatchToggle() {
     this.dispatchEvent(
       new CustomEvent("tvx-tree-item-toggle", {
@@ -461,13 +483,13 @@ export class TvxTreeItem extends LitElement {
             : nothing
         }
         <span class="tree-item__leading" part="leading" aria-hidden="true">
-          <slot name="leading"></slot>
+          <slot class="tree-item__leading-slot" name="leading"></slot>
         </span>
         <span class="tree-item__label" part="label" id=${this._labelId}>
           ${this._hasLabelOverride ? html`<slot></slot>` : this.label}
         </span>
         <span class="tree-item__trailing" part="trailing">
-          <slot name="trailing"></slot>
+          <slot class="tree-item__trailing-slot" name="trailing"></slot>
         </span>
       </div>
       <slot name="sub-tree"></slot>

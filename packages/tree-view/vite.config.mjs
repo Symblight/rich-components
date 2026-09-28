@@ -1,6 +1,7 @@
 import { defineConfig } from "vite";
 import postcssLit from "rollup-plugin-postcss-lit";
 import path from "node:path";
+import { copyFileSync } from "node:fs";
 import { rimrafSync } from "rimraf";
 import dts from "vite-plugin-dts";
 import babel from "vite-plugin-babel";
@@ -49,6 +50,16 @@ export default defineConfig({
   },
   plugins: [
     postcssLit(),
+    // `@symblight/tree-view/tokens.css` — the raw token layer, for an app's own shadow roots
+    {
+      name: "copy-tokens-css",
+      closeBundle() {
+        copyFileSync(
+          path.resolve(import.meta.dirname, "src/styles/tokens.css"),
+          path.resolve(import.meta.dirname, "dist/tokens.css"),
+        );
+      },
+    },
     babel({
       filter: /\.js$/,
       babelConfig: {

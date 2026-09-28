@@ -1,12 +1,13 @@
 :host {
   display: block;
-  --_tvx-item-sub-tree-guide-color: var(--tvx-tree-item-guide-color, transparent);
-  --_tvx-item-sub-tree-inset: calc(
-    var(--tvx-tree-item-padding, 0.5rem) + (var(--_tvx-tree-item-depth, 1) - 1) *
-      var(--tvx-tree-item-indent, 1.25rem) + 0.625rem
-  );
-  border-inline-start: 1px solid var(--_tvx-item-sub-tree-guide-color);
-  margin-inline-start: var(--_tvx-item-sub-tree-inset);
+  /* lines the guide up under the parent row's chevron centre */
+  --tvx-item-sub-tree-indent: calc(var(--tvx-tree-item-padding, 0.5rem) + 0.625rem);
+  --tvx-item-sub-tree-guide-color: transparent;
+  --tvx-item-sub-tree-guide-width: 1px;
+
+  border-inline-start: var(--tvx-item-sub-tree-guide-width) solid
+    var(--tvx-item-sub-tree-guide-color);
+  margin-inline-start: var(--tvx-item-sub-tree-indent);
 }
 
 :host([hidden]) {

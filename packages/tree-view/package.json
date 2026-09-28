@@ -24,7 +24,8 @@
     ".": {
       "import": "./dist/index.js",
       "types": "./dist/index.d.ts"
-    }
+    },
+    "./tokens.css": "./dist/tokens.css"
   },
   "files": [
     "dist",

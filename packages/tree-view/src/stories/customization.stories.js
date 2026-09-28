@@ -19,10 +19,10 @@ const meta = {
           "control lives in light DOM, it isn't driven by the component's internal state the way the " +
           "defaults are — an app supplying its own checkbox is responsible for keeping its `checked` " +
           "in sync with `tvx-selection-change`, same as below. Colors are unaffected either way: " +
-          "every `--tvx-tree-item-*` custom property (row/indent sizing, shape, hover/selected " +
-          "background, chevron color, drop-indicator color, guide-line color) accepts any valid CSS " +
-          "color, not just `--md-sys-color-*` tokens — everything reads from those by default, but " +
-          "nothing requires it.",
+          "tokens come in three tiers — `--md-sys-*` feeds `--tvx-tree-view-*` (tree-wide typography, " +
+          "color roles, shape; set on `tvx-tree-view`), which feeds `--tvx-<component>-*` " +
+          "(`--tvx-tree-item-*`, `--tvx-item-sub-tree-*`, `--tvx-tree-skeleton-*`; set on the element " +
+          "itself). Any of them accepts a literal CSS value, not just another token.",
       },
     },
   },
@@ -73,12 +73,7 @@ export const CustomizedTree = {
     tree.defaultExpandedItems = new Set(["src", "components"]);
     tree.items = buildFileTree().map(customize);
 
-    tree.style.setProperty("--tvx-tree-item-shape", "0.2rem");
-    tree.style.setProperty("--tvx-tree-item-chevron-color", "#7c3aed");
-    tree.style.setProperty("--tvx-tree-item-hover-background-color", "#f5f3ff");
-    tree.style.setProperty("--tvx-tree-item-selected-background-color", "#ede9fe");
-    tree.style.setProperty("--tvx-tree-item-selected-color", "#5b21b6");
-    tree.style.setProperty("--tvx-tree-item-focus-outline-color", "#7c3aed");
+    tree.classList.add("customization-tree");
 
     // The slotted checkbox is plain light DOM — it doesn't see `selected` change the way the
     // built-in `<md-checkbox>` does via Lit's own render(), so keeping its `checked` in sync is
@@ -96,18 +91,28 @@ export const CustomizedTree = {
     tree.addEventListener("tvx-selection-change", syncCheckboxes);
     syncCheckboxes();
 
-    // `--tvx-tree-item-label-font` is one value for the whole tree, so bolding just group items'
-    // labels goes through the `label` CSS part instead, scoped via the class customize() tags them
-    // with — ::part() doesn't inherit to descendants the way a custom property would.
+    // Component tokens go on the items themselves — each item's own :host declares its defaults, so
+    // a value set on the tree would be shadowed. Group labels are bolded through the `label` part,
+    // scoped via the class customize() tags them with.
     const style = document.createElement("style");
-    style.textContent = ".customization-group-item::part(label) { font-weight: 700; }";
+    style.textContent = `
+      .customization-tree tvx-tree-item {
+        --tvx-tree-item-shape: 0.2rem;
+        --tvx-tree-item-chevron-color: #7c3aed;
+        --tvx-tree-item-hover-background-color: #f5f3ff;
+        --tvx-tree-item-selected-background-color: #ede9fe;
+        --tvx-tree-item-selected-color: #5b21b6;
+        --tvx-tree-item-focus-outline-color: #7c3aed;
+      }
+      .customization-group-item::part(label) { font-weight: 700; }
+    `;
 
     return stack(
       hintText(
         "slot=\"checkbox\" swaps in a native <input type=\"checkbox\"> and slot=\"chevron\" swaps in " +
           "a plus icon on every branch, applied recursively down the whole tree. The purple palette " +
-          "and 0.2rem row shape come from the same --tvx-tree-item-* custom properties documented " +
-          "above, just set to literal hex values here instead of --md-sys-color-* tokens. Group " +
+          "and 0.2rem row shape come from --tvx-tree-item-* tokens set on every tvx-tree-item, as " +
+          "literal hex values instead of --md-sys-color-* tokens. Group " +
           "items (folders) get a bolder label via ::part(label), the same CSS part every row exposes.",
       ),
       style,

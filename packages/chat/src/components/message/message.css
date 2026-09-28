@@ -79,6 +79,16 @@
   max-width: none;
   padding: var(--chx-message-compact-padding);
   border-radius: var(--chx-message-compact-border-radius);
+
+  /* Part density — inherited through the slot by anything rendered as a part, which reads these
+     with its own default fallbacks. Retune from a page via ::part(message-compact). */
+  --chx-part-row-height: 1.75rem;
+  --chx-part-font-size: 0.8125rem;
+  --chx-part-meta-font-size: 0.75rem;
+  --chx-part-mono-font-size: 0.78125rem;
+  --chx-part-icon-size: 1rem;
+  --chx-part-gap: 0.5rem;
+  --chx-part-padding-inline: 0.375rem;
 }
 
 :host([compact]:hover) {

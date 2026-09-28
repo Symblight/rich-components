@@ -1,4 +1,12 @@
+/* Code is the one thing in a turn with a fill — no border, so it sits flush under the row's rule. */
 :host {
+  --chx-tool-call-diff-background-color: var(--md-sys-color-surface-container);
+  --chx-tool-call-diff-header-background-color: var(--md-sys-color-surface-container);
+  --chx-tool-call-diff-border-color: transparent;
+  --chx-tool-call-diff-border-radius: 0.5rem;
+  --chx-tool-call-diff-font-size: 0.78125rem;
+  --chx-tool-call-diff-line-height: 1.65;
+
   display: block;
 }
 
@@ -7,6 +15,12 @@
   display: none;
 }
 
+/* Set on the host element here, which outranks chx-code-block's own `:host` defaults. */
 .tool-call-diff__block {
-  --chx-code-block-font-size: 0.8125rem;
+  --chx-code-block-background-color: var(--chx-tool-call-diff-background-color);
+  --chx-code-block-header-background-color: var(--chx-tool-call-diff-header-background-color);
+  --chx-code-block-border-color: var(--chx-tool-call-diff-border-color);
+  --chx-code-block-border-radius: var(--chx-tool-call-diff-border-radius);
+  --chx-code-block-font-size: var(--chx-tool-call-diff-font-size);
+  --chx-code-block-line-height: var(--chx-tool-call-diff-line-height);
 }

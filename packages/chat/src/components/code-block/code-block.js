@@ -143,8 +143,9 @@ export class ChxCodeBlock extends LitElement {
     /** @type {string} 1-based lines to mark as errors, same format. Read-only mode only. */
     this.errorLines = "";
 
-    /** @type {boolean} Renders a line-number gutter. Read-only mode only. */
-    this.lineNumbers = false;
+    /** @type {boolean} Renders a line-number gutter. Editable mode skips it while `wrap` is on — a
+     *  wrapped row spans several visual lines the gutter can't see. */
+    this.lineNumbers = true;
 
     /** @type {number} Number of the first line, e.g. for an excerpt from the middle of a file.
      *  `highlight-lines`/`error-lines` refer to these displayed numbers. */
@@ -200,6 +201,7 @@ export class ChxCodeBlock extends LitElement {
     );
 
     if (this.editable) {
+      this.#gutterDigits = Math.max(2, String(this.startLine + this.#lineCount - 1).length);
       if (changedProperties.has("editable")) {
         this.highlightedHTML = highlightToHTML(this.code, this.lang);
       } else if (sourceChanged) {
@@ -311,11 +313,11 @@ export class ChxCodeBlock extends LitElement {
       .join("\n");
   }
 
-  /** `#lines` is only built for the read-only body, so the editable one counts `code` directly. */
+  /** `#lines` is only built for the read-only body, so the editable one counts `code` directly —
+   *  a trailing `\n` included, since the editable body shows that empty last line for the caret. */
   get #lineCount() {
     if (!this.editable) return this.#lines.length;
-    const count = this.code.split("\n").length;
-    return this.code.endsWith("\n") && count > 1 ? count - 1 : count;
+    return this.code.split("\n").length;
   }
 
   get #overflows() {
@@ -454,13 +456,29 @@ export class ChxCodeBlock extends LitElement {
     `;
   }
 
+  /** Numbers the editable body from outside it — spans inside a contenteditable would end up in
+   *  the caret offsets, the selection and `textContent`. One text node, so a keystroke re-renders
+   *  a single string. */
+  #renderGutter() {
+    if (!this.editable || !this.lineNumbers || this.wrap) return nothing;
+    const numbers = Array.from({ length: this.#lineCount }, (_, index) => this.startLine + index);
+    // a property, not a child: under `white-space: pre` any template whitespace would render
+    return html`<div
+      class="code-block__gutter"
+      part="gutter"
+      aria-hidden="true"
+      .textContent=${numbers.join("\n")}
+    ></div>`;
+  }
+
   /** @param {string} label */
   #renderBody(label) {
+    const numbered = this.lineNumbers && !this.wrap;
     return when(
       this.editable,
       () =>
         html`<div
-          class="code-block__body"
+          class="code-block__body ${numbered ? "code-block__body_numbered" : ""}"
           part="body"
           id=${this.#bodyId}
           contenteditable="true"
@@ -527,7 +545,7 @@ export class ChxCodeBlock extends LitElement {
             "--_gutter-digits": String(this.#gutterDigits),
           })}
         >
-          ${this.#renderBody(label)}
+          ${this.#renderGutter()} ${this.#renderBody(label)}
           ${collapsed ? html`<div class="code-block__fade" aria-hidden="true"></div>` : nothing}
         </div>
         ${this.#renderToggle()}

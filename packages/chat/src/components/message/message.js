@@ -2,12 +2,11 @@ import { html, LitElement, nothing } from "lit";
 import { customElement } from "lit/decorators.js";
 import { when } from "lit/directives/when.js";
 import { classMap } from "lit/directives/class-map.js";
-import { ContextConsumer } from "@lit/context";
 
 import "@symblight/wc-material/avatar";
 import "@symblight/wc-material/progress-circular";
 import "../unread-marker/unread-marker.js";
-import { messageRowContext } from "../../context/message-row-context.js";
+import { MessageRowController } from "../../controllers/message-row/MessageRowController.js";
 import styles from "./message.css?inline";
 
 /** @import { ChxMessageAuthor, ChxRowState } from "../../types/message.js" */
@@ -61,7 +60,7 @@ export class ChxMessage extends LitElement {
   };
 
   /** Row state, only when a direct child of a row — a quote nested in the content must not inherit it.
-   *  @type {ContextConsumer<typeof messageRowContext, ChxMessage> | undefined} */
+   *  @type {MessageRowController | undefined} */
   #rowConsumer;
   // an empty actions slot must not show the compact variant's bordered panel — :has(::slotted()) never matches here
   #hasActions = false;
@@ -122,15 +121,11 @@ export class ChxMessage extends LitElement {
   }
 
   connectedCallback() {
-    // before super — ContextConsumer requests the context in hostConnected, which super triggers
+    // before super — the context is requested in hostConnected, which super triggers
     if (this.parentElement?.localName === ROW_TAG) {
-      this.#rowConsumer ??= new ContextConsumer(this, {
-        context: messageRowContext,
-        subscribe: true,
-        callback: (row) => this.#applyRow(row),
-      });
+      this.#rowConsumer ??= new MessageRowController(this, (row) => this.#applyRow(row));
     } else if (this.#rowConsumer) {
-      this.removeController(this.#rowConsumer);
+      this.#rowConsumer.detach();
       this.#rowConsumer = undefined;
     }
     super.connectedCallback();
@@ -141,9 +136,8 @@ export class ChxMessage extends LitElement {
     else this.setAttribute("role", "article");
   }
 
-  /** Inside a row the context drives state; standalone, properties do. @param {ChxRowState | undefined} row */
+  /** Inside a row the context drives state; standalone, properties do. @param {ChxRowState} row */
   #applyRow(row) {
-    if (!row) return;
     this.own = row.own;
     this.busy = row.streaming;
     this.unread = row.unread;

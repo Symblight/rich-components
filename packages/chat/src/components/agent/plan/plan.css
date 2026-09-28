@@ -1,84 +1,96 @@
 :host {
-  display: block;
-  --chx-plan-background-color: var(--md-sys-color-surface-container-low);
-  --chx-plan-border-color: var(--md-sys-color-outline-variant);
-  --chx-plan-border-radius: 0.75rem;
-  --chx-plan-color: var(--md-sys-color-on-surface);
-  --chx-plan-header-color: var(--md-sys-color-on-surface-variant);
-  --chx-plan-padding: 0.5rem 0.75rem;
-  --chx-plan-entry-gap: 0.5rem;
-  --chx-plan-font-size: 0.875rem;
-  --chx-plan-icon-size: 1.125rem;
+  --chx-plan-row-height: var(--chx-agent-row-height, 2.25rem);
+  --chx-plan-font-size: var(--chx-agent-font-size, 0.875rem);
+  --chx-plan-meta-font-size: var(--chx-agent-meta-font-size, 0.78125rem);
+  --chx-plan-icon-size: var(--chx-agent-icon-size, 1.25rem);
+  --chx-plan-gap: var(--chx-agent-gap, 0.625rem);
+  --chx-plan-padding-inline: var(--chx-agent-padding-inline, 0.5rem);
+  --chx-plan-border-radius: var(--chx-agent-border-radius, 0.5rem);
+  --chx-plan-color: var(--chx-agent-color, var(--md-sys-color-on-surface-variant));
+  --chx-plan-label-color: var(--chx-agent-label-color, var(--md-sys-color-on-surface));
+  --chx-plan-rule-color: var(--chx-agent-rule-color, var(--md-sys-color-outline-variant));
+  --chx-plan-state-layer-color: var(--chx-agent-state-layer-color, var(--md-sys-color-on-surface));
+  --chx-plan-focus-ring-color: var(--chx-agent-focus-ring-color, var(--md-sys-color-primary));
+  --chx-plan-progress-width: 3.5rem;
+  --chx-plan-progress-height: 4px;
+  --chx-plan-progress-color: var(--md-sys-color-primary);
+  --chx-plan-progress-track-color: var(--md-sys-color-surface-container-highest);
+  --chx-plan-entry-color: var(--md-sys-color-on-surface);
+  --chx-plan-pending-color: var(--md-sys-color-outline);
   --chx-plan-in-progress-color: var(--md-sys-color-primary);
   --chx-plan-completed-color: var(--md-sys-color-on-surface-variant);
+
+  --_chx-agent-row-height: var(--chx-plan-row-height);
+  --_chx-agent-row-font-size: var(--chx-plan-font-size);
+  --_chx-agent-row-meta-font-size: var(--chx-plan-meta-font-size);
+  --_chx-agent-row-icon-size: var(--chx-plan-icon-size);
+  --_chx-agent-row-gap: var(--chx-plan-gap);
+  --_chx-agent-row-padding-inline: var(--chx-plan-padding-inline);
+  --_chx-agent-row-border-radius: var(--chx-plan-border-radius);
+  --_chx-agent-row-color: var(--chx-plan-color);
+  --_chx-agent-row-label-color: var(--chx-plan-label-color);
+  --_chx-agent-row-rule-color: var(--chx-plan-rule-color);
+  --_chx-agent-row-state-layer-color: var(--chx-plan-state-layer-color);
+  --_chx-agent-row-focus-ring-color: var(--chx-plan-focus-ring-color);
 }
 
-/* Author `:host` display beats the UA `[hidden]` rule, so the host has to opt back out itself. */
-:host([hidden]) {
-  display: none;
+:host([compact]) {
+  --chx-plan-row-height: var(--chx-agent-compact-row-height, 1.75rem);
+  --chx-plan-font-size: var(--chx-agent-compact-font-size, 0.8125rem);
+  --chx-plan-meta-font-size: var(--chx-agent-compact-meta-font-size, 0.75rem);
+  --chx-plan-icon-size: var(--chx-agent-compact-icon-size, 1rem);
+  --chx-plan-gap: var(--chx-agent-compact-gap, 0.5rem);
+  --chx-plan-padding-inline: var(--chx-agent-compact-padding-inline, 0.375rem);
+  --chx-plan-progress-width: 2.5rem;
+  --chx-plan-progress-height: 3px;
 }
 
-.plan {
-  box-sizing: border-box;
-  background-color: var(--chx-plan-background-color);
-  border: 1px solid var(--chx-plan-border-color);
-  border-radius: var(--chx-plan-border-radius);
-  color: var(--chx-plan-color);
-  font-size: var(--chx-plan-font-size);
-}
-
-.plan__header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 0.5rem;
-  padding: var(--chx-plan-padding);
-  color: var(--chx-plan-header-color);
-  font-size: 0.75rem;
-  border-block-end: 1px solid var(--chx-plan-border-color);
-}
-
-.plan__progress {
-  font-variant-numeric: tabular-nums;
+.plan__progress-bar {
+  flex: none;
+  inline-size: var(--chx-plan-progress-width);
+  --md-progress-linear-track-height: var(--chx-plan-progress-height);
+  --md-progress-linear-active-indicator-color: var(--chx-plan-progress-color);
+  --md-progress-linear-track-color: var(--chx-plan-progress-track-color);
+  --md-progress-linear-stop-indicator-color: transparent;
 }
 
 .plan__entries {
-  margin: 0;
-  padding: var(--chx-plan-padding);
   list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: var(--chx-plan-entry-gap);
 }
 
 .plan__entry {
   display: flex;
-  align-items: flex-start;
-  gap: 0.5rem;
+  align-items: center;
+  gap: var(--chx-plan-gap);
+  min-block-size: calc(var(--chx-plan-row-height) - 0.5rem);
+  line-height: 1.25rem;
+  color: var(--chx-plan-entry-color);
 }
 
 .plan__entry_in-progress {
-  color: var(--chx-plan-in-progress-color);
+  font-weight: 500;
 }
 
+/* Muted, never struck through — a done step still has to be readable. */
 .plan__entry_completed {
   color: var(--chx-plan-completed-color);
-  text-decoration: line-through;
 }
 
-/* Both are sized at 1em by their own internal svg, so font-size is the size knob for each. */
-.plan__entry-icon,
-.plan__entry-progress {
-  font-size: var(--chx-plan-icon-size);
+/* Glyph a notch under the row icon, centred in the same column so the rule lines up. */
+.plan__entry-icon {
   flex: none;
-  /* the glyph is 1em, and the row's own line-height would otherwise offset it */
-  margin-block-start: 0.0625rem;
+  box-sizing: border-box;
+  inline-size: var(--chx-plan-icon-size);
+  padding-inline: 1px;
+  font-size: calc(var(--chx-plan-icon-size) - 2px);
 }
 
-.plan__entry-progress {
-  /* currentColor, so the spinner follows .plan__entry_in-progress's own color token */
-  --md-progress-circular-active-indicator-color: currentColor;
-  --md-progress-circular-track-color: var(--chx-plan-border-color);
+.plan__entry-icon_pending {
+  color: var(--chx-plan-pending-color);
+}
+
+.plan__entry-icon_in-progress {
+  color: var(--chx-plan-in-progress-color);
 }
 
 .plan__entry-content {

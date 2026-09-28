@@ -111,29 +111,66 @@ resolves `null` on abort for exactly this). Without that the agent keeps running
 listening, while the UI already reads `cancelled`. Closing the stream with an explicit
 `{kind: "abort"}` chunk is cleaner than letting the read throw.
 
+## Row layout and density
+
+`chx-thought`, `chx-plan` and `chx-tool-call` share one row shape (`agent-row.css`): no card, no
+border — an icon, a verb, metadata, a chevron, and an MD3 state layer on hover. Expanded content
+sits under a thin rule dropped from the icon's centre line, so a turn reads as one list rather than
+three components. Only code blocks inside the body keep a fill.
+
+Density is pure CSS inheritance, no property. A compact `chx-message` sets the part density tokens
+(`--chx-part-row-height`, `-font-size`, `-meta-font-size`, `-mono-font-size`, `-icon-size`, `-gap`,
+`-padding-inline`: 28px rows, 13px text, 16px icons), and they inherit through its slot into every
+part; each component reads them with its default (36/14/20) as the fallback. So `chx-chat compact`
+reaches agent parts with no wiring. Retune compact from a page with
+`chx-message-list::part(message-compact) { --chx-part-row-height: … }`; standalone, set the tokens
+on any ancestor. `--chx-part-*` is not agent-specific — any element rendered as a part can read it.
+
+Theming has two layers:
+
+- **Component tokens** — each block declares its own on `:host`: `--chx-thought-*`, `--chx-plan-*`,
+  `--chx-tool-call-*`, `--chx-tool-call-diff-*` (row height, font/icon size, gap, colors, plus
+  block-specific ones like `--chx-plan-progress-color` or
+  `--chx-tool-call-awaiting-permission-background-color`). Set them on the element itself to
+  retune one block.
+- **Global tokens** — every component token defaults to an inherited global, so setting one on
+  `chx-chat` or any ancestor retunes all three: part elements sit several shadow roots deep, where
+  no page-level selector reaches but inheritance does. Sizes come from `--chx-part-*` above; the
+  row's look from `--chx-agent-border-radius`, `-color`, `-label-color`, `-rule-color`,
+  `-state-layer-color`, `-focus-ring-color`, `-mono-font-family` (then `--md-sys-color-*`).
+
+The shared row mix (`agent-row.css`) owns no tokens — each block maps its own onto the private
+`--_chx-agent-row-*` bridges the mix reads.
+
 ## `chx-tool-call`
 
-One card per `toolCallId`; `tool_call_update` deltas patch the same part in place.
+One row per `toolCallId`; `tool_call_update` deltas patch the same part in place.
 
-| Property       | Type                   | Notes                                                                                                                                                        |
-| -------------- | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| `toolCallId`   | `string`               | carried for your own correlation, never interpreted here                                                                                                     |
-| `label`        | `string`               | ACP's `title` — named `label` so it doesn't collide with the native `title` tooltip attribute                                                                |
-| `kind`         | `string`               | `read \| edit \| delete \| move \| search \| execute \| think \| fetch \| switch_mode \| other`, drives the header icon; anything unknown renders as `other` |
-| `status`       | `string`               | `pending \| in_progress \| awaiting-permission \| completed \| failed \| cancelled` — an unknown value falls back to `pending`'s look, collapsed             |
-| `locations`    | `Array<{path, line?}>` | chips inside the card                                                                                                                                        |
-| `maxLocations` | `number`               | chips past this many collapse into one `+N more`; default `8`, `0` renders all                                                                               |
-| `error`        | `string`               | shown whenever non-empty, outside the disclosure so a collapsed card still says why                                                                          |
-| `open`         | `boolean`              | disclosure state                                                                                                                                             |
+| Property     | Type                   | Notes                                                                                                                                                        |
+| ------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `toolCallId` | `string`               | carried for your own correlation, never interpreted here                                                                                                     |
+| `label`      | `string`               | ACP's `title`, rendered as the row's verb — named `label` so it doesn't collide with the native `title` tooltip attribute                                    |
+| `kind`       | `string`               | `read \| edit \| delete \| move \| search \| execute \| think \| fetch \| switch_mode \| other`, drives the row icon; anything unknown renders as `other` |
+| `status`     | `string`               | `pending \| in_progress \| awaiting-permission \| completed \| failed \| rejected \| cancelled` — an unknown value falls back to `pending`'s look, collapsed |
+| `locations`  | `Array<{path, line?}>` | only the first is shown: file name + `:line` after the verb, its folder muted after that, truncated from the start                                          |
+| `meta`       | `string`               | the result at a glance (`+1 −1`, `46 passed`); the `meta` slot overrides it                                                                                  |
+| `error`      | `string`               | first thing in the expanded body, whenever non-empty                                                                                                         |
+| `open`       | `boolean`              | disclosure state                                                                                                                                             |
+
+`completed` shows no status icon — success needs no attention. `in_progress` colors the verb
+`primary` with a spinner; `failed`/`rejected` color it `error`; `awaiting-permission` gives the row
+the turn's only fill (`tertiary` 9%) and a `back_hand` icon. A click on the folder path fires
+`chx-tool-call-location-click` (`{path, line}`) instead of toggling the row — open the file from it.
 
 Fires `chx-tool-call-toggle` (`{open}`) on a disclosure change it didn't make itself — enough to
 persist expansion across a reload or a conversation switch, which is the app's job either way.
 
-The card is a `<details>` disclosure, expanded by default while `pending`/`in_progress`/
-`awaiting-permission` and folded once the call settles. A manual toggle latches: after the user
+The row is a `<details>` disclosure, expanded by default while `in_progress`/`failed`/`rejected`
+and folded otherwise. With nothing in the body (no slotted content, no `error`) there's no chevron
+and a click doesn't open it. A manual toggle latches: after the user
 touches it, `status` never moves it again. The latch is set from the `click`, not the `toggle` —
 `toggle` is a queued task, and a `tool_call_update` arriving in between would otherwise re-render
-the card open over the user's collapse and swallow the latch entirely.
+the row open over the user's collapse and swallow the latch entirely.
 
 `error` is not gated on `status === "failed"`: a cancel, or a status ACP adds later, can carry
 failure text too, and an error that is set but never rendered is a silent failure.
@@ -142,13 +179,13 @@ Content is the **default slot** — the component renders the header and status,
 ACP content blocks. Build the children in your renderer: a `chx-code-block` for
 terminal output, a `chx-tool-call-diff` for a diff, anything else you like.
 
-### Permission is not a state of the card
+### Permission is not a state of the row
 
 `chx-tool-call` renders **no** permission UI: no `options`, no `requestId`, no respond event. All
-`status: "awaiting-permission"` does is accent the card and keep it expanded, so the banner's
-question has a visible subject.
+`status: "awaiting-permission"` does is accent the row, so the banner's question has a visible
+subject.
 
-The reason is the virtualized list. A card scrolled out of view is recycled out of the DOM, so its
+The reason is the virtualized list. A row scrolled out of view is recycled out of the DOM, so its
 buttons would be unreachable — not focusable, not in the accessibility tree — while the agent turn
 sits blocked on them, and the user would see a stalled chat with no visible cause.
 `chx-input-mode-banner` is docked above the composer, where nothing can recycle it away.
@@ -219,16 +256,21 @@ Three things it does that a hand-rolled one has to do too:
 
 ## `chx-thought`
 
-`text`, `streaming`, `label` (default `Reasoning`), `streamingLabel` (default `Thinking…`), `open`.
-A `<details>` disclosure, expanded while `streaming` so reasoning can be watched as it arrives,
-folded once the part settles — with the same click-set manual-toggle latch, and the same
-`chx-thought-toggle` event. The default slot overrides `text` if you want to render the thought
+`text`, `streaming`, `label` (default `Thought`), `streamingLabel` (default `Thinking`), `duration`
+(ms), `open`. A collapsed `<details>` row: `Thinking` with a shimmer while `streaming`,
+then `Thought for 4s`. `duration` wins when set; without it the component times the streaming window
+itself, which is right until a reload. Override `formatSettledLabel(durationMs)` to localize. A
+settle folds it back unless the user has toggled it — the same click-set latch and
+`chx-thought-toggle` event as `chx-tool-call`. The default slot overrides `text` if you want to render the thought
 yourself.
 
 ## `chx-plan`
 
-`entries` (`Array<{content, priority?, status?}>`) and `label`. Renders a checklist with a
-completed/total count. ACP re-sends the **whole plan** on every update and the merge replaces arrays
+`entries` (`Array<{content, priority?, status?}>`), `label`, `open`. A row with an
+`md-progress-linear` bar and a `done/total` count, expanded into its checklist while work is left
+and folded into the row once every entry is `completed` — same latch, `chx-plan-toggle` event.
+The running step is `primary` and medium weight; a done step is muted with a check, never struck
+through. ACP re-sends the **whole plan** on every update and the merge replaces arrays
 outright, so this works as long as the adapter keeps a stable `partId` for the plan across the turn.
 
 ## `chx-tool-call-diff`

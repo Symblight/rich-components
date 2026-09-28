@@ -1,5 +1,19 @@
-import { getCaretOffset, setCaretOffset, isCaretCollapsed } from "../../components/code-block/caret.js";
+import {
+  getCaretOffset,
+  getSelectionFor,
+  setCaretOffset,
+  isCaretCollapsed,
+} from "../../components/code-block/caret.js";
 import { UndoController } from "./UndoController.js";
+
+/** A trailing `\n` in a contenteditable renders no empty line, so there's nowhere for the caret to
+ *  go after Enter at the end. A last `<br>` gives that line its height; `textContent` and the
+ *  caret's character offsets both skip it.
+ *  @param {HTMLElement} container */
+function ensureTrailingBreak(container) {
+  if (container.lastChild instanceof HTMLBRElement) return;
+  container.appendChild(document.createElement("br"));
+}
 
 /** Coalesces re-highlighting while typing — a full Lezer reparse per keystroke on a large file is
  *  wasted work otherwise, since only the last one in a burst is ever shown. */
@@ -77,6 +91,7 @@ export class EditableBodyController {
     if (!container) return;
     // Trust boundary: safe only because highlightToHTML/escapeHtml escapes every text run.
     container.innerHTML = this.#getHighlightedHTML();
+    ensureTrailingBreak(container);
     if (this.#pendingCaretOffset === null) return;
     setCaretOffset(container, this.#pendingCaretOffset);
     this.#pendingCaretOffset = null;
@@ -119,13 +134,14 @@ export class EditableBodyController {
    *  otherwise land the text wherever that selection happens to be.
    * @param {string} text @param {HTMLElement} container */
   #insertPlainText(text, container) {
-    const selection = window.getSelection();
+    const selection = getSelectionFor(container);
     if (!selection || selection.rangeCount === 0) return;
     const range = selection.getRangeAt(0);
     if (!container.contains(range.startContainer)) return;
     range.deleteContents();
     const node = document.createTextNode(text);
     range.insertNode(node);
+    ensureTrailingBreak(container);
     range.setStartAfter(node);
     range.collapse(true);
     selection.removeAllRanges();

@@ -38,6 +38,7 @@ export default defineConfig({
         /^@lit-labs\/.*/,
         /^@open-wc\/.*/,
         /^@symblight\/wc-material.*/,
+        /^@tanstack\/.*/,
       ],
       output: {
         format: "es",

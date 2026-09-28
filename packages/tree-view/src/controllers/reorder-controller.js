@@ -1,130 +1,195 @@
-import { closestTreeItemParent } from "../components/tree-item/tree-item.js";
+import {
+  draggable,
+  dropTargetForElements,
+} from "@atlaskit/pragmatic-drag-and-drop/adapter/element-adapter";
+import { attachInstruction } from "@atlaskit/pragmatic-drag-and-drop-hitbox/tree-item/attach-instruction";
+import { extractInstruction } from "@atlaskit/pragmatic-drag-and-drop-hitbox/tree-item/extract-instruction";
 
-/** Performs the tree mutation for a drag-and-drop (or keyboard) reorder; fires a cancelable `tvx-item-position-change` before touching the DOM. */
+import { emit } from "../core/emit.js";
+
+/** @typedef {"before" | "after" | "into"} DropZone */
+/** @typedef {{ clientX: number, clientY: number }} PointerInput */
+
+/** Maps a pdnd hitbox instruction to where the dragged item lands. */
+const ZONES = /** @type {Record<string, DropZone>} */ ({
+  "reorder-above": "before",
+  "reorder-below": "after",
+  "make-child": "into",
+});
+
+/**
+ * Drag-and-drop and Alt+↑/↓ reordering. Fires cancelable `tvx-item-position-change`, then moves the
+ * item in the model — the consumer's `.items` is never mutated.
+ *
+ * pdnd finds elements through `event.target`, which the browser retargets to the host for anything
+ * inside its shadow root. So the host itself is the one draggable and drop target, and the row under
+ * the pointer is looked up with `shadowRoot.elementFromPoint()`.
+ */
 export class ReorderController {
-  /** @param {import("../base/tree-view.js").TvxTreeView} host */
-  constructor(host) {
-    this.host = host;
-  }
+  /** @type {(() => void) | null} */
+  #cleanup = null;
+  /** Row currently showing a drop indicator. @type {HTMLElement | null} */
+  #indicatorRow = null;
 
   /**
-   * @param {import("../components/tree-item/tree-item.js").TvxTreeItem} item
-   * @returns {boolean}
+   * @param {import("../base/tree-view.js").TvxTreeView} host
+   * @param {import("./tree-model-controller.js").TreeModelController} model
    */
-  isReorderable(item) {
-    if (item.disabled) return false;
-    return this.host.isItemReorderable ? this.host.isItemReorderable(item) : true;
+  constructor(host, model) {
+    this.host = host;
+    this.model = model;
+    host.addController(this);
   }
 
-  /** @param {{ sourceKey: PropertyKey, targetKey: PropertyKey, zone: "before" | "after" | "into" }} detail */
-  handleDrop(detail) {
-    // Deferred to next frame — moving DOM synchronously inside pdnd's onDrop leaves its internal
-    // "still dragging" state stuck, breaking subsequent drags.
-    this.#requestMove(detail.sourceKey, detail.targetKey, detail.zone, { defer: true });
+  hostUpdated() {
+    if (this.host.reordering && !this.#cleanup) this.#cleanup = this.#register();
+    if (!this.host.reordering && this.#cleanup) this.#unregister();
   }
 
-  /** `Alt+ArrowUp`/`Alt+ArrowDown` — moves `item` one position among its current siblings.
-   * @param {import("../components/tree-item/tree-item.js").TvxTreeItem} item
-   * @param {-1 | 1} direction */
-  moveBySibling(item, direction) {
-    if (!this.isReorderable(item)) return;
-    const siblings = [...(item.parentElement?.children ?? [])].filter(
-      (el) => el.tagName === "TVX-TREE-ITEM",
-    );
-    const index = siblings.indexOf(item);
-    const targetIndex = index + direction;
-    if (index === -1 || targetIndex < 0 || targetIndex >= siblings.length) return;
-    const target = /** @type {import("../components/tree-item/tree-item.js").TvxTreeItem} */ (
-      siblings[targetIndex]
-    );
-    const moved = this.#requestMove(item.key, target.key, direction < 0 ? "before" : "after", {
-      defer: false,
+  hostDisconnected() {
+    this.#unregister();
+  }
+
+  /** @param {PropertyKey} id */
+  canDrag(id) {
+    if (this.model.isDisabled(id)) return false;
+    return this.host.isItemReorderable?.(this.model.item(id)) ?? true;
+  }
+
+  /** Alt+↑/↓: swap places with the previous/next sibling.
+   * @param {PropertyKey} id
+   * @param {-1 | 1} step */
+  moveBySibling(id, step) {
+    if (!this.canDrag(id)) return;
+    const { parentId, index } = this.model.position(id);
+    const sibling = this.model.childIds(parentId)[index + step];
+    if (sibling === undefined) return;
+    if (this.#move(id, sibling, step < 0 ? "before" : "after")) this.host.focusItem(id);
+  }
+
+  #register() {
+    const cleanupDrag = draggable({
+      element: this.host,
+      canDrag: ({ input }) => {
+        const hit = this.#hitAt(input);
+        return !!hit && !hit.onControl && this.canDrag(hit.id);
+      },
+      getInitialData: ({ input }) => ({ tree: this.host, key: this.#hitAt(input)?.id }),
+      // preview just the dragged row, not the whole tree
+      onGenerateDragPreview: ({ location, nativeSetDragImage }) => {
+        const { input } = location.initial;
+        const row = this.#hitAt(input)?.row;
+        if (!row || !nativeSetDragImage) return;
+        const rect = row.getBoundingClientRect();
+        nativeSetDragImage(row, input.clientX - rect.left, input.clientY - rect.top);
+      },
     });
-    if (moved) this.host.focusItem(item);
-  }
 
-  /** Direct `tvx-tree-item` children of `parent`, or the tree's root items when `parent` is `null`.
-   * @param {import("../components/tree-item/tree-item.js").TvxTreeItem | null} parent
-   * @returns {import("../components/tree-item/tree-item.js").TvxTreeItem[]} */
-  #siblingsOf(parent) {
-    return [...this.host.directChildItems(parent ?? this.host)];
-  }
+    const cleanupDrop = dropTargetForElements({
+      element: this.host,
+      canDrop: ({ source }) => source.data.tree === this.host, // only rows from this tree
+      getData: ({ input, source }) =>
+        this.#dropData(input, /** @type {PropertyKey} */ (source.data.key)),
+      onDrag: ({ self }) => this.#showIndicator(self.data),
+      onDragLeave: () => this.#showIndicator(null),
+      onDrop: ({ source, self }) => {
+        this.#showIndicator(null);
+        const zone = ZONES[extractInstruction(self.data)?.type ?? ""];
+        if (!zone) return;
+        const sourceId = /** @type {PropertyKey} */ (source.data.key);
+        const targetId = /** @type {PropertyKey} */ (self.data.targetId);
+        // next frame: re-rendering inside pdnd's own onDrop can leave it stuck mid-drag
+        requestAnimationFrame(() => this.#move(sourceId, targetId, zone));
+      },
+    });
 
-  /** `item`'s current position among its siblings.
-   * @param {import("../components/tree-item/tree-item.js").TvxTreeItem} item
-   * @returns {{ parentId: PropertyKey | null, index: number }} */
-  #positionOf(item) {
-    const parent = closestTreeItemParent(item);
-    return { parentId: parent?.key ?? null, index: this.#siblingsOf(parent).indexOf(item) };
-  }
-
-  /** Where `sourceItem` will land relative to `targetItem`/`zone`, computed before the DOM mutation happens.
-   * @param {import("../components/tree-item/tree-item.js").TvxTreeItem} sourceItem
-   * @param {import("../components/tree-item/tree-item.js").TvxTreeItem} targetItem
-   * @param {"before" | "after" | "into"} zone
-   * @returns {{ parentId: PropertyKey | null, index: number }} */
-  #nextPositionOf(sourceItem, targetItem, zone) {
-    if (zone === "into") return { parentId: targetItem.key, index: 0 };
-    const parent = closestTreeItemParent(targetItem);
-    // Excludes sourceItem from its old spot so a same-parent reorder lands on the right index.
-    const siblings = this.#siblingsOf(parent).filter((el) => el !== sourceItem);
-    const targetIndex = siblings.indexOf(targetItem);
-    return {
-      parentId: parent?.key ?? null,
-      index: zone === "after" ? targetIndex + 1 : targetIndex,
+    return () => {
+      cleanupDrag();
+      cleanupDrop();
     };
   }
 
-  /**
-   * @param {PropertyKey} sourceKey
-   * @param {PropertyKey} targetKey
-   * @param {"before" | "after" | "into"} zone
-   * @param {{ defer: boolean }} options `defer: true` schedules the DOM mutation on next animation frame.
-   * @returns {boolean} whether the move will happen (not vetoed)
-   */
-  #requestMove(sourceKey, targetKey, zone, { defer }) {
-    const sourceItem = this.host.getItemByKey(sourceKey);
-    const targetItem = this.host.getItemByKey(targetKey);
-    if (!sourceItem || !targetItem || sourceItem === targetItem) return false;
-    // Would create a cycle — dragging a node onto (or into a reorder around) its own descendant.
-    if (sourceItem.contains(targetItem)) return false;
-    if (zone === "into" && !targetItem.hasChildren) return false;
+  #unregister() {
+    this.#cleanup?.();
+    this.#cleanup = null;
+    this.#showIndicator(null);
+  }
 
-    const oldPosition = this.#positionOf(sourceItem);
-    const newPosition = this.#nextPositionOf(sourceItem, targetItem, zone);
-    const proceed = this.host.dispatchEvent(
-      new CustomEvent("tvx-item-position-change", {
-        detail: { key: sourceKey, oldPosition, newPosition },
-        bubbles: true,
-        composed: true,
-        cancelable: true,
-      }),
+  /** The item row under the pointer, and whether the pointer is on its chevron/checkbox.
+   * @param {PointerInput} input */
+  #hitAt(input) {
+    const root = /** @type {ShadowRoot} */ (this.host.renderRoot);
+    const hit = root.elementFromPoint(input.clientX, input.clientY);
+    const row = /** @type {HTMLElement | null | undefined} */ (hit?.closest(".tree-view__item"));
+    const id = row ? this.model.idAt(Number(row.dataset.index)) : null;
+    if (!row || id === null) return null;
+    const onControl = !!hit?.closest(".tree-view__chevron, .tree-view__checkbox");
+    return { row, id, onControl };
+  }
+
+  /** Where a drop at `input` would land; empty data (no instruction) when it isn't allowed.
+   * @param {import("@atlaskit/pragmatic-drag-and-drop/types").Input} input
+   * @param {PropertyKey} sourceId */
+  #dropData(input, sourceId) {
+    const hit = this.#hitAt(input);
+    if (!hit) return {};
+    const { row, id } = hit;
+    if (id === sourceId || this.model.isDisabled(id) || this.model.isAncestor(sourceId, id)) {
+      return {};
+    }
+    return attachInstruction(
+      { targetId: id, row },
+      {
+        element: row,
+        input,
+        currentLevel: this.model.rows[Number(row.dataset.index)]?.level ?? 1,
+        indentPerLevel: 20, // only shapes the hitbox; doesn't need to match the real indent
+        mode: this.model.isExpanded(id) ? "expanded" : "standard",
+        block: this.model.hasChildren(id) ? ["reparent"] : ["reparent", "make-child"],
+      },
     );
-    if (!proceed) return false;
+  }
 
-    if (defer) requestAnimationFrame(() => this.#move(sourceItem, targetItem, zone));
-    else this.#move(sourceItem, targetItem, zone);
+  /** Moves the drop indicator to the row in `data` (or clears it).
+   * @param {Record<string | symbol, unknown> | null} data */
+  #showIndicator(data) {
+    const row = /** @type {HTMLElement | undefined} */ (data?.row) ?? null;
+    if (this.#indicatorRow && this.#indicatorRow !== row)
+      setIndicator(this.#indicatorRow, undefined);
+    this.#indicatorRow = row;
+    if (row && data) setIndicator(row, extractInstruction(data)?.type);
+  }
+
+  /**
+   * @param {PropertyKey} sourceId
+   * @param {PropertyKey} targetId
+   * @param {DropZone} zone
+   * @returns {boolean} whether the item moved (the event wasn't prevented)
+   */
+  #move(sourceId, targetId, zone) {
+    if (zone === "into" && !this.model.hasChildren(targetId)) return false;
+
+    // new index is counted among the siblings without the moved item itself
+    const parentId = zone === "into" ? targetId : this.model.parentId(targetId);
+    const siblings = this.model.childIds(parentId).filter((id) => id !== sourceId);
+    const index = zone === "into" ? 0 : siblings.indexOf(targetId) + (zone === "after" ? 1 : 0);
+
+    const oldPosition = this.model.position(sourceId);
+    const newPosition = { parentId, index };
+    const detail = { key: sourceId, oldPosition, newPosition };
+    if (!emit(this.host, "tvx-item-position-change", detail, true)) return false;
+
+    this.model.move(sourceId, parentId, index);
     return true;
   }
+}
 
-  /**
-   * @param {import("../components/tree-item/tree-item.js").TvxTreeItem} sourceItem
-   * @param {import("../components/tree-item/tree-item.js").TvxTreeItem} targetItem
-   * @param {"before" | "after" | "into"} zone
-   */
-  #move(sourceItem, targetItem, zone) {
-    if (zone === "before") {
-      targetItem.parentElement?.insertBefore(sourceItem, targetItem);
-    } else if (zone === "after") {
-      targetItem.parentElement?.insertBefore(sourceItem, targetItem.nextElementSibling);
-    } else {
-      // Children live in the target's own sub-tree, not straight in its default slot.
-      targetItem._ensureSubTree().prepend(sourceItem);
-    }
-    // A move can change depth, so recompute level for the moved subtree.
-    for (const item of [sourceItem, ...this.host.allItems(sourceItem)]) {
-      item.level = item._computeLevel();
-    }
-    this.host.refreshSelection();
-  }
+/** `data-drop-target` (into) or `data-drop-edge` (above/below) on a row; `undefined` clears both.
+ * @param {HTMLElement} row
+ * @param {string | undefined} instruction */
+function setIndicator(row, instruction) {
+  row.toggleAttribute("data-drop-target", instruction === "make-child");
+  if (instruction === "reorder-above") row.setAttribute("data-drop-edge", "top");
+  else if (instruction === "reorder-below") row.setAttribute("data-drop-edge", "bottom");
+  else row.removeAttribute("data-drop-edge");
 }

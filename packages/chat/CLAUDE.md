@@ -73,7 +73,6 @@ Every `*Controller.js` file in the package — whether a real host-bound `Reacti
 - `src/controllers/infinity-scroll/` — `chx-infinity-scroll` mechanics: `InfinityScrollController`, `VirtualListController`, `PlainListController`, `LoadMoreController`, `VisibilityController`.
 - `src/controllers/message-list/` — `chx-message-list` row/scroll/focus behavior: `StatusController`, `BottomAnchorController`, `StickyController`, `ReadTrackingController`, `DividerController`, `FocusBehaviorController`.
 - `src/controllers/code-block/` — `chx-code-block` editing: `EditableBodyController`, `UndoController`.
-- `src/controllers/message-row/` — `MessageRowController`, the one `messageRowContext` subscription shared by `chx-message` and any part that needs row state in JS (exported publicly next to the context).
 
 Non-controller collaborators (`PartRenderer`, `RowMeasurer`, `StickToBottom`, `caret.js`) stay colocated with their component, not under `src/controllers/`. When adding a new controller, put it in the matching feature folder under `src/controllers/` from the start (creating a new feature folder if none fits) rather than beside the component that first needs it.
 

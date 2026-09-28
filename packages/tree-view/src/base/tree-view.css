@@ -1,12 +1,185 @@
 :host {
   display: block;
-  --_tvx-tree-view-row-gap: var(--tvx-tree-view-row-gap, 0.125rem);
+  position: relative;
+  /* the host is the virtualizer's scroll viewport — give it a height (or max-height) */
+  overflow: auto;
+  outline: none;
+
+  --tvx-tree-item-gap: 0.2rem;
+  --tvx-tree-item-row-height: 2.25rem;
+  --tvx-tree-item-padding: 0.5rem;
+  /* per-level indent; lines a child's chevron up under its parent's chevron centre */
+  --tvx-tree-item-indent: calc(var(--tvx-tree-item-padding) + 0.625rem);
+  --tvx-tree-item-shape: var(--_tvx-shape-corner-full);
+  --tvx-tree-item-color: var(--_tvx-color-on-surface);
+  --tvx-tree-item-hover-background-color: var(--_tvx-color-surface-container-high);
+  --tvx-tree-item-focus-outline-color: var(--_tvx-color-primary);
+  --tvx-tree-item-selected-background-color: var(--_tvx-color-secondary-container);
+  --tvx-tree-item-selected-color: var(--_tvx-color-on-secondary-container);
+  --tvx-tree-item-loading-color: var(--_tvx-color-on-surface-variant);
+  --tvx-tree-item-chevron-color: var(--_tvx-color-on-surface-variant);
+  --tvx-tree-item-label-font: var(--_tvx-font-weight-regular) var(--_tvx-body-medium-font-size) /
+    var(--_tvx-body-medium-line-height) var(--_tvx-font-family);
+  --tvx-tree-item-drop-target-background-color: var(--_tvx-color-secondary-container);
+  --tvx-tree-item-drop-indicator-color: var(--_tvx-color-primary);
+  --tvx-tree-skeleton-bar-height: 1em;
 }
 
 .tree-view {
+  position: relative;
+}
+
+/* a row wrapper: the treeitem itself, carrying the gap so measured sizes include it */
+.tree-view__item,
+.tree-view__placeholder {
+  padding-block-end: var(--tvx-tree-view-row-gap, 0.125rem);
+  outline: none;
+
+  .tree-view_virtualized & {
+    position: absolute;
+    inset-block-start: 0;
+    inset-inline: 0;
+  }
+}
+
+.tree-view__item_disabled {
+  opacity: 0.38;
+  pointer-events: none;
+}
+
+.tree-view__row {
+  position: relative;
   display: flex;
-  flex-direction: column;
-  gap: var(--_tvx-tree-view-row-gap);
+  align-items: center;
+  gap: var(--tvx-tree-item-gap);
+  min-block-size: var(--tvx-tree-item-row-height);
+  margin-inline-start: calc((var(--_tvx-level, 1) - 1) * var(--tvx-tree-item-indent));
+  padding-inline: var(--tvx-tree-item-padding);
+  border-radius: var(--tvx-tree-item-shape);
+  color: var(--tvx-tree-item-color);
+  cursor: pointer;
+
+  &:hover {
+    background-color: var(--tvx-tree-item-hover-background-color);
+  }
+
+  .tree-view__item:focus-visible > & {
+    outline: 2px solid var(--tvx-tree-item-focus-outline-color);
+    outline-offset: -2px;
+  }
+
+  .tree-view__item_selected > & {
+    background-color: var(--tvx-tree-item-selected-background-color);
+    color: var(--tvx-tree-item-selected-color);
+  }
+
+  /* drag state, set by ReorderController */
+  .tree-view__item[data-drop-target] > & {
+    background-color: var(--tvx-tree-item-drop-target-background-color);
+  }
+
+  .tree-view__item[data-drop-edge="top"] > &::before,
+  .tree-view__item[data-drop-edge="bottom"] > &::after {
+    content: "";
+    position: absolute;
+    inset-inline: 0;
+    block-size: 2px;
+    border-radius: var(--_tvx-shape-corner-full);
+    background-color: var(--tvx-tree-item-drop-indicator-color);
+  }
+
+  .tree-view__item[data-drop-edge="top"] > &::before {
+    inset-block-start: 0;
+  }
+
+  .tree-view__item[data-drop-edge="bottom"] > &::after {
+    inset-block-end: 0;
+  }
+}
+
+.tree-view__row_placeholder {
+  cursor: default;
+  color: var(--tvx-tree-item-loading-color);
+
+  &:hover {
+    background-color: transparent;
+  }
+}
+
+.tree-view__spinner {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 1.125rem;
+  block-size: 1.125rem;
+  flex: none;
+  margin-inline-end: var(--tvx-tree-item-gap);
+  font-size: 1.125rem;
+}
+
+.tree-view__skeleton {
+  --md-skeleton-height: var(--tvx-tree-skeleton-bar-height);
+}
+
+.tree-view__chevron {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  flex: none;
+  color: var(--tvx-tree-item-chevron-color);
+  transition: transform 0.15s ease;
+
+  .tree-view__item_expanded & {
+    transform: rotate(90deg);
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+.tree-view__chevron-icon {
+  inline-size: 100%;
+  block-size: 100%;
+  fill: currentColor;
+}
+
+.tree-view__checkbox {
+  display: flex;
+  flex: none;
+}
+
+.tree-view__checkbox-control {
+  inline-size: 1.02rem;
+  block-size: 1.02rem;
+  padding: 0.32rem;
+}
+
+.tree-view__leading {
+  display: flex;
+  margin-inline-end: 0.25rem;
+
+  &:empty {
+    display: none;
+  }
+}
+
+.tree-view__label {
+  flex: 1 1 auto;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font: var(--tvx-tree-item-label-font);
+}
+
+.tree-view__trailing {
+  flex: none;
+
+  &:not(:empty) {
+    margin-inline-start: 0.25rem;
+  }
 }
 
 .tree-view__live-region {

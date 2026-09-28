@@ -1,82 +1,140 @@
 # @symblight/tree-view
 
-A Material Design 3 hierarchical tree view web component built with [Lit](https://lit.dev).
+A virtualized Material Design 3 tree view web component built with [Lit](https://lit.dev).
 Framework-agnostic — works the same in a plain HTML page, React, Vue, Svelte, or anywhere else
 custom elements run.
 
 ## Overview
 
-`<tvx-tree-view>` renders a hierarchical list of `<tvx-tree-item>` nodes — parents can be expanded
-or collapsed to reveal/hide their children. Follows the
+`<tvx-tree-view>` renders hierarchical data as a list of rows; branches expand and collapse to show
+or hide their children. It follows the
 [WAI-ARIA APG tree view pattern](https://www.w3.org/WAI/ARIA/apg/patterns/treeview/): `role="tree"`
-/ `role="treeitem"` / `role="group"`, roving `tabindex`, full arrow-key navigation, typeahead, and
-`aria-current` for deep-linked selection.
+/ `role="treeitem"` with `aria-level` / `aria-setsize` / `aria-posinset`, roving `tabindex`, full
+arrow-key navigation, typeahead, and `aria-current` for the selected row.
 
-- **Declarative** — hand-author nested `<tvx-tree-item>` elements directly in markup, or build
-  them programmatically and assign the array to `.items` (nest a `<tvx-item-sub-tree>` inside an
-  item for its children). `.items` calls `replaceChildren()` under the hood, so it expects real
-  elements, not plain data — see `buildItem()` in `src/stories/shared.js` for a small helper that
-  builds them from `{ id, label, children }`-shaped data.
-- **Selection** — single-select by default (`aria-current` on the selected row). Opt into
-  `multiSelect` for MUI-style multi-select: a plain click still replaces the selection, Ctrl/Cmd+
-  click toggles an item independently, and Shift+click (or Shift+↑/↓) merges a contiguous range
-  into the existing selection — no parent/child cascade, selection is a flat `Set<PropertyKey>`.
-  `disableSelection` turns selection off entirely; `checkboxSelection` renders a checkbox per row
-  (in either mode) that always toggles just that one item.
-- **Async loading** — set `.dataSource` (`{ getTreeItems, getChildrenCount }`) to fetch the tree
-  lazily: `getChildrenCount(item)` decides which items are groups, `getTreeItems(parent?)` fetches
-  a batch (root when called with no parent, a branch's children on expand), with a loading
-  placeholder and live-region announcements ("Loading…" / "Loading N items." / "{label} is
-  empty."). `.items` still works as a plain synchronous data source when `.dataSource` isn't set
-  — or as `initialItems` (the root batch) alongside it.
-- **Reordering** — opt in with the `reordering` attribute for drag-and-drop (and `Alt+↑`/`Alt+↓`
-  keyboard) moves, veto specific moves with `isItemReorderable`.
-- No virtualization in v1 — plain DOM rendering, sized for typical nav/file-tree/menu trees.
+- **Data in, rows out** — `.items` takes your own objects. By default the tree reads `id`, `label`,
+  `children` and `disabled`; point it anywhere else with `getItemId` / `getItemLabel` /
+  `getItemChildren` / `isItemDisabled`.
+- **Virtualized** — only the visible rows (plus a small overscan) are in the DOM, via
+  [`@tanstack/lit-virtual`](https://tanstack.com/virtual). The tree is its own scroll container, so
+  give it a `height` or `max-height`. The focused row stays rendered while scrolled away, so
+  keyboard focus is never lost. Add `no-virtualization` to render every row instead.
+- **Custom row content** — `renderItemLeading` / `renderItemLabel` / `renderItemTrailing` return a
+  Lit template (or any renderable value) for each row. The tree keeps ownership of the chevron,
+  checkbox and ARIA attributes.
+- **Selection** — single-select by default. `multiSelect` enables MUI-style selection: a plain
+  click replaces the selection, Ctrl/Cmd+click toggles one item, Shift+click (or Shift+↑/↓) merges
+  a contiguous range from the last clicked item. `checkboxSelection` adds a checkbox per row that
+  cascades through a branch's subtree (a branch is checked when its whole subtree is).
+  `disableSelection` turns selection off.
+- **Async loading** — set `.dataSource` (`{ getTreeItems, getChildrenCount }`) to load the tree
+  lazily, with shimmer or spinner rows while loading and live-region announcements.
+- **Reordering** — the `reordering` attribute enables drag-and-drop and `Alt+↑`/`Alt+↓` moves.
+  The tree moves the item in its own model and fires a cancelable event; your `.items` arrays are
+  never mutated.
 
 ```js
+import { html } from "lit";
 import "@symblight/tree-view";
-
-/** @param {{ key: PropertyKey, label: string, children?: object[] }} data */
-function buildItem({ key, label, children = [] }) {
-  const item = document.createElement("tvx-tree-item");
-  item.key = key;
-  item.label = label;
-  if (children.length) {
-    const subTree = document.createElement("tvx-item-sub-tree");
-    subTree.append(...children.map(buildItem));
-    item.append(subTree);
-  }
-  return item;
-}
 
 const tree = document.querySelector("tvx-tree-view");
 tree.items = [
-  buildItem({ key: "src", label: "src/", children: [{ key: "index", label: "index.js" }] }),
-  buildItem({ key: "readme", label: "README.md" }),
+  { id: "src", label: "src/", children: [{ id: "index", label: "index.js" }] },
+  { id: "readme", label: "README.md" },
 ];
+tree.renderItemLeading = (item, { expanded }) =>
+  item.children
+    ? html`<tvx-tree-directory-icon ?expanded=${expanded}></tvx-tree-directory-icon>`
+    : undefined;
 tree.addEventListener("tvx-selection-change", (event) => {
   console.log(event.detail.selectedItems); // Set<PropertyKey>
 });
 ```
 
-## Events
+```html
+<tvx-tree-view style="height: 480px"></tvx-tree-view>
+```
 
-| Event | Detail | Notes |
-| --- | --- | --- |
-| `tvx-selection-change` | `{ selectedItems: Set<PropertyKey> }` | Whole-tree snapshot, fires on any selection change. |
-| `tvx-expansion-change` | `{ expandedItems: Set<PropertyKey> }` | Whole-tree snapshot, fires on any expand/collapse. |
-| `tvx-expand-change` | `{ key, expanded }` | Per-item, fires when a single item's expansion toggles. |
-| `tvx-item-position-change` | `{ key, oldPosition, newPosition }` | Fires when reordering moves an item (drag-and-drop or `Alt+↑`/`Alt+↓`). **Cancelable** — fires *before* the move, `preventDefault()` blocks it. A position is `{ parentId: PropertyKey \| null, index: number }`, `parentId` is `null` for a root-level item. |
-| `tvx-load-error` | `{ key, node, error }` | Fires when `dataSource.getTreeItems()` rejects — root load (`key`/`node` both `null`) or a branch's children on expand. |
+## API
+
+### Properties
+
+| Property                                                       | Attribute            | Default                     | Description                                                                                                                                                                                               |
+| -------------------------------------------------------------- | -------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `items`                                                        | —                    | `undefined`                 | Tree data — any objects.                                                                                                                                                                                  |
+| `getItemId`                                                    | —                    | `(item) => item.id`         | Unique id (`PropertyKey`) of an item.                                                                                                                                                                     |
+| `getItemLabel`                                                 | —                    | `(item) => item.label`      | Row text; also used by typeahead.                                                                                                                                                                         |
+| `getItemChildren`                                              | —                    | `(item) => item.children`   | Child items, or `undefined` for a leaf.                                                                                                                                                                   |
+| `isItemDisabled`                                               | —                    | `(item) => !!item.disabled` | Disabled rows can be focused but not selected, activated or dragged.                                                                                                                                      |
+| `renderItemLeading` / `renderItemLabel` / `renderItemTrailing` | —                    | `undefined`                 | `(item, state) => unknown` — content for the row's leading slot, label (replaces the plain text) and trailing slot. `state` is `{ id, level, expanded, selected, indeterminate, disabled, hasChildren }`. |
+| `noVirtualization`                                             | `no-virtualization`  | `false`                     | Render every row instead of only the visible ones.                                                                                                                                                        |
+| `multiSelect`                                                  | `multi-select`       | `false`                     | Ctrl/Cmd+click and Shift+click/Shift+↑/↓ selection.                                                                                                                                                       |
+| `checkboxSelection`                                            | `checkbox-selection` | `false`                     | A checkbox per row; checking a branch checks its subtree. Row clicks then only toggle expansion.                                                                                                          |
+| `disableSelection`                                             | `disable-selection`  | `false`                     | No selection at all; rows still focus and branches still toggle.                                                                                                                                          |
+| `dataSource`                                                   | —                    | `undefined`                 | Lazy loader, see [Async loading](#async-loading).                                                                                                                                                         |
+| `reordering`                                                   | `reordering`         | `false`                     | Drag-and-drop and `Alt+↑`/`Alt+↓` reordering.                                                                                                                                                             |
+| `isItemReorderable`                                            | —                    | `undefined`                 | `(item) => boolean` — vetoes picking an item up; it can still be a drop target.                                                                                                                           |
+| `getHref`                                                      | —                    | `undefined`                 | `(item) => string \| undefined` — URL opened by middle-click / Ctrl+Enter.                                                                                                                                |
+| `defaultExpandedItems` / `defaultSelectedItems`                | —                    | `undefined`                 | Ids applied once, when the first items exist.                                                                                                                                                             |
+| `expandedItems` / `selectedItems`                              | —                    | —                           | Live `Set<PropertyKey>` snapshots; assigning a new set replaces the state.                                                                                                                                |
+
+### Methods
+
+| Method                               | Description                                                   |
+| ------------------------------------ | ------------------------------------------------------------- |
+| `setItemExpansion({ id, expand })`   | Expands or collapses one branch.                              |
+| `isItemExpanded(id)`                 | `false` for unknown ids and leaves.                           |
+| `expandAll()` / `collapseAll()`      | Every loaded branch; lazily loaded children arrive collapsed. |
+| `setItemSelection({ id, selected })` | Selects or deselects one item, no cascade.                    |
+| `getItem(id)`                        | The data item for an id, or `null`.                           |
+| `focusItem(id)`                      | Scrolls a row into view and focuses it.                       |
+| `focusedKey`                         | Id of the row holding the Tab stop.                           |
+
+### Events
+
+| Event                      | Detail                                | Notes                                                                                                                                                                            |
+| -------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `tvx-selection-change`     | `{ selectedItems: Set<PropertyKey> }` | Whole-tree snapshot after any selection change.                                                                                                                                  |
+| `tvx-expansion-change`     | `{ expandedItems: Set<PropertyKey> }` | Whole-tree snapshot after any expand/collapse.                                                                                                                                   |
+| `tvx-expand-change`        | `{ key, expanded }`                   | One item's expansion toggled.                                                                                                                                                    |
+| `tvx-item-position-change` | `{ key, oldPosition, newPosition }`   | **Cancelable**, fires before a reorder moves an item; `preventDefault()` blocks it. A position is `{ parentId: PropertyKey \| null, index }` (`parentId` is `null` at the root). |
+| `tvx-children-loaded`      | `{ key, node, items }`                | A `dataSource` batch landed; `key`/`node` are `null` for the root.                                                                                                               |
+| `tvx-load-error`           | `{ key, node, error }`                | `dataSource.getTreeItems()` rejected.                                                                                                                                            |
+| `tvx-open`                 | `{ key, node, newTab: true }`         | **Cancelable**; middle-click / Ctrl+Enter on an item `getHref` didn't give a URL for.                                                                                            |
+
+### Keyboard
+
+| Key                   | Action                                                                                |
+| --------------------- | ------------------------------------------------------------------------------------- |
+| `↓` / `↑`             | Next / previous visible row. With Shift in `multiSelect`: extend the range selection. |
+| `→`                   | Expand a collapsed branch, or move into an expanded branch's first child.             |
+| `←`                   | Collapse an expanded branch, or move to the parent.                                   |
+| `Home` / `End`        | First / last visible row.                                                             |
+| `PageUp` / `PageDown` | Jump by a viewport of rows.                                                           |
+| `Backspace`           | Move to the parent.                                                                   |
+| `Enter`               | Toggle a branch. With Ctrl/Cmd: open in a new tab (see `getHref`).                    |
+| `Space`               | Select the row (with `checkboxSelection`: toggle its checkbox).                       |
+| `Alt+↑` / `Alt+↓`     | Move the row among its siblings (with `reordering`).                                  |
+| printable characters  | Typeahead: focus the next row whose label starts with what was typed.                 |
+
+## Async loading
 
 ```js
-tree.reordering = true;
-tree.addEventListener("tvx-item-position-change", (event) => {
-  const { key, oldPosition, newPosition } = event.detail;
-  console.log(`${key} moved from`, oldPosition, "to", newPosition);
-  // event.preventDefault(); // veto this specific move
-});
+tree.dataSource = {
+  // `parent` is undefined for the root batch
+  getTreeItems: (parent) => fetch(`/api/tree?parent=${parent?.id ?? ""}`).then((r) => r.json()),
+  // 0 = leaf, a number = branch with a known count, undefined = branch with an unknown count
+  getChildrenCount: (item) => item.childCount,
+};
 ```
+
+- Without `.items`, the root is fetched with `getTreeItems()`. If `.items` is already set, it is
+  used as the root batch.
+- A branch's children are fetched the first time it expands. A known count shows up to 8 shimmer
+  rows while loading; an unknown count shows one spinner row.
+- A branch that loads empty becomes a leaf ("{label} is empty." is announced).
+- A failed load fires `tvx-load-error`; the next expand tries again.
+- `getChildrenCount` is called once per item, when the item is added.
 
 ## Install
 
@@ -84,7 +142,8 @@ tree.addEventListener("tvx-item-position-change", (event) => {
 npm install @symblight/tree-view lit
 ```
 
-`lit` is a peer dependency. [`@symblight/wc-material`](https://www.npmjs.com/package/@symblight/wc-material) installs automatically.
+`lit` is a peer dependency. [`@symblight/wc-material`](https://www.npmjs.com/package/@symblight/wc-material),
+`@tanstack/lit-virtual` and `@atlaskit/pragmatic-drag-and-drop` install automatically.
 
 ## Theming
 
@@ -108,71 +167,65 @@ npx md-colors --sourceColor="#6750A4" --scheme=light --output=./theme.css
    ↓ fallback
 --tvx-tree-view-*   tree-wide theme: typography, color roles, shape
    ↓ default
---tvx-<component>-* one component: --tvx-tree-item-*, --tvx-item-sub-tree-*, --tvx-tree-skeleton-*
+--tvx-tree-item-*   row tokens
 ```
 
-- **`--tvx-tree-view-*`** retunes every tree component at once. Set it on `tvx-tree-view` or any
-  ancestor, and it reaches every item however deep it's nested. No component ever declares one, so
-  your value always wins. Each falls back to the matching `--md-sys-*` token, or to a built-in
-  default where MD3 has no equivalent.
-- **`--tvx-<component>-*`** retunes one component. Its defaults come from the tree tier. Each
-  element declares its own defaults, so set these on the element itself (`tvx-tree-item { … }`),
-  not on the tree.
+- **`--tvx-tree-view-*`** retunes the whole tree. Set it on `tvx-tree-view` or any ancestor. No
+  component declares one, so your value always wins. Each falls back to the matching `--md-sys-*`
+  token, or to a built-in default where MD3 has no equivalent.
+- **`--tvx-tree-item-*`** retunes the rows. Their defaults are declared on `tvx-tree-view`, so set
+  them on the `tvx-tree-view` element itself.
 - To recolor the `md-*` controls inside the tree as well (checkbox, spinner, skeleton), set
   `--md-sys-color-*` on `tvx-tree-view` instead of `--tvx-tree-view-color-*`.
+- Rows expose parts for anything else: `::part(row | chevron | checkbox | leading | label |
+trailing | placeholder)`.
 
 ```css
 tvx-tree-view {
   --tvx-tree-view-font-family: "Inter", sans-serif;
   --tvx-tree-view-color-secondary-container: #d8e6ff; /* selected row */
-  --tvx-tree-view-row-gap: 0; /* space between root rows */
-}
-
-tvx-tree-item {
   --tvx-tree-item-row-height: 2rem;
   --tvx-tree-item-shape: 0.25rem;
 }
 
-tvx-item-sub-tree {
-  --tvx-item-sub-tree-guide-color: var(--md-sys-color-outline-variant);
+tvx-tree-view::part(label) {
+  letter-spacing: 0.01em;
 }
 ```
 
 ### `--tvx-tree-view-*` reference
 
-| Token | Default | Used by |
-| --- | --- | --- |
-| `--tvx-tree-view-font-family` | `--md-sys-typescale-font-family` | every component |
-| `--tvx-tree-view-font-weight-regular` / `-medium` | `400` / `500` | item label |
-| `--tvx-tree-view-body-medium-font-size` / `-line-height` | `0.875rem` / `1.25rem` | item label |
-| `--tvx-tree-view-color-<role>` | `--md-sys-color-<role>` | `on-surface` (row text), `on-surface-variant` (chevron, loading row), `surface-container-high` (hover), `secondary-container` / `on-secondary-container` (selected row, drop target), `primary` (focus ring, drop indicator) |
-| `--tvx-tree-view-shape-corner-extra-small` / `-small` / `-medium` / `-large` / `-full` | `--md-sys-shape-corner-*` | row shape (`-full`) |
-| `--tvx-tree-view-row-gap` | `0.125rem` | space between root-level rows |
+| Token                                                                                  | Default                          | Used by                                                                                                                                                                                                                      |
+| -------------------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--tvx-tree-view-font-family`                                                          | `--md-sys-typescale-font-family` | every component                                                                                                                                                                                                              |
+| `--tvx-tree-view-font-weight-regular` / `-medium`                                      | `400` / `500`                    | row label                                                                                                                                                                                                                    |
+| `--tvx-tree-view-body-medium-font-size` / `-line-height`                               | `0.875rem` / `1.25rem`           | row label                                                                                                                                                                                                                    |
+| `--tvx-tree-view-color-<role>`                                                         | `--md-sys-color-<role>`          | `on-surface` (row text), `on-surface-variant` (chevron, loading row), `surface-container-high` (hover), `secondary-container` / `on-secondary-container` (selected row, drop target), `primary` (focus ring, drop indicator) |
+| `--tvx-tree-view-shape-corner-extra-small` / `-small` / `-medium` / `-large` / `-full` | `--md-sys-shape-corner-*`        | row shape (`-full`)                                                                                                                                                                                                          |
+| `--tvx-tree-view-row-gap`                                                              | `0.125rem`                       | space between rows                                                                                                                                                                                                           |
 
-### Component tokens
+### Row tokens
 
-| Token | Default |
-| --- | --- |
-| `--tvx-tree-item-row-height` / `-padding` / `-gap` | `2.25rem` / `0.5rem` / `0.2rem` |
-| `--tvx-tree-item-shape` | `shape-corner-full` |
-| `--tvx-tree-item-color` | `on-surface` |
-| `--tvx-tree-item-hover-background-color` | `surface-container-high` |
-| `--tvx-tree-item-selected-background-color` / `-selected-color` | `secondary-container` / `on-secondary-container` |
-| `--tvx-tree-item-focus-outline-color` | `primary` |
-| `--tvx-tree-item-chevron-color` / `-loading-color` | `on-surface-variant` |
-| `--tvx-tree-item-label-font` | body-medium, `font` shorthand |
-| `--tvx-tree-item-drop-target-background-color` / `-drop-indicator-color` | `secondary-container` / `primary` |
-| `--tvx-item-sub-tree-indent` | the parent row's padding + half a chevron |
-| `--tvx-item-sub-tree-guide-color` / `-guide-width` | `transparent` / `1px` |
-| `--tvx-tree-skeleton-row-height` / `-padding` | the enclosing item's row height / padding |
-| `--tvx-tree-skeleton-bar-height` | `1em` |
+| Token                                                                    | Default                                             |
+| ------------------------------------------------------------------------ | --------------------------------------------------- |
+| `--tvx-tree-item-row-height` / `-padding` / `-gap`                       | `2.25rem` / `0.5rem` / `0.2rem`                     |
+| `--tvx-tree-item-indent`                                                 | per nesting level: the row padding + half a chevron |
+| `--tvx-tree-item-shape`                                                  | `shape-corner-full`                                 |
+| `--tvx-tree-item-color`                                                  | `on-surface`                                        |
+| `--tvx-tree-item-hover-background-color`                                 | `surface-container-high`                            |
+| `--tvx-tree-item-selected-background-color` / `-selected-color`          | `secondary-container` / `on-secondary-container`    |
+| `--tvx-tree-item-focus-outline-color`                                    | `primary`                                           |
+| `--tvx-tree-item-chevron-color` / `-loading-color`                       | `on-surface-variant`                                |
+| `--tvx-tree-item-label-font`                                             | body-medium, `font` shorthand                       |
+| `--tvx-tree-item-drop-target-background-color` / `-drop-indicator-color` | `secondary-container` / `primary`                   |
+| `--tvx-tree-skeleton-bar-height`                                         | `1em`                                               |
 
 ### Using the tokens in your own components
 
-`@symblight/tree-view/tokens.css` is the same token layer every tree component loads first. Add it
-to your own component's shadow root, for example custom `slot="leading"` content, and it resolves
-`--tvx-tree-view-*` exactly like the built-in components do. Your styles then read the resolved
-values, `--_tvx-*`: `--_tvx-color-on-surface`, `--_tvx-body-medium-font-size`,
+`@symblight/tree-view/tokens.css` is the same token layer the tree loads first. Add it to your own
+component's shadow root, for example custom content returned from `renderItemLeading`, and it
+resolves `--tvx-tree-view-*` exactly like the tree does. Your styles then read the resolved values,
+`--_tvx-*`: `--_tvx-color-on-surface`, `--_tvx-body-medium-font-size`,
 `--_tvx-shape-corner-full`, and so on.
 
 ```js

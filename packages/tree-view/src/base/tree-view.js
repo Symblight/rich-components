@@ -1,58 +1,92 @@
-import { html, LitElement } from "lit";
+import { html, LitElement, nothing } from "lit";
 import { customElement } from "lit/decorators.js";
+import { classMap } from "lit/directives/class-map.js";
+import { repeat } from "lit/directives/repeat.js";
+import { styleMap } from "lit/directives/style-map.js";
 import { createRef, ref } from "lit/directives/ref.js";
-import { ContextProvider } from "@lit/context";
 
-import "../components/tree-item/tree-item.js";
-import "../components/tree-skeleton/tree-skeleton.js";
+import "@symblight/wc-material/checkbox";
+import "@symblight/wc-material/progress-circular";
+import "@symblight/wc-material/skeleton";
 
-import { treeViewContext } from "./tree-view-context.js";
-import { buildIndexTree } from "../core/index-tree.js";
-import { ExpansionController } from "../controllers/expansion-controller.js";
-import { SelectionController } from "../controllers/selection-controller.js";
-import { RovingFocusController } from "../controllers/roving-focus-controller.js";
-import { KeyboardNavController } from "../controllers/keyboard-nav-controller.js";
-import { TypeaheadController } from "../controllers/typeahead-controller.js";
-import { OpenController } from "../controllers/open-controller.js";
+import { TreeModelController } from "../controllers/tree-model-controller.js";
 import { DataSourceController } from "../controllers/data-source-controller.js";
+import { SelectionController } from "../controllers/selection-controller.js";
+import { VirtualizationController } from "../controllers/virtualization-controller.js";
+import { KeyboardNavController } from "../controllers/keyboard-nav-controller.js";
+import { OpenController } from "../controllers/open-controller.js";
 import { ReorderController } from "../controllers/reorder-controller.js";
 import tokens from "../styles/tokens.css?inline";
 import styles from "./tree-view.css?inline";
 
 /**
- * @typedef {import("../components/tree-item/tree-item.js").TvxTreeItem} TvxTreeItem
+ * Any consumer object; read through `getItemId`/`getItemLabel`/`getItemChildren`/`isItemDisabled`.
+ * @typedef {any} TvxTreeItemData
  */
 
 /**
- * Lazy loader: `getChildrenCount` decides which items are branches, `getTreeItems` fetches a
- * batch (the root when called with no parent).
+ * What the `renderItem*` callbacks receive alongside the item.
+ * @typedef {object} TvxTreeItemState
+ * @property {PropertyKey} id
+ * @property {number} level 1-indexed depth
+ * @property {boolean} expanded
+ * @property {boolean} selected
+ * @property {boolean} indeterminate
+ * @property {boolean} disabled
+ * @property {boolean} hasChildren
+ */
+
+/** @typedef {(item: TvxTreeItemData, state: TvxTreeItemState) => unknown} TvxTreeItemRenderer */
+
+/**
+ * Lazy loader: `getChildrenCount` decides which items are branches (`0` = leaf, `undefined` =
+ * unknown branch), `getTreeItems` fetches a batch (the root when called with no parent).
  * @typedef {object} TvxTreeDataSource
- * @property {(parent?: TvxTreeItem) => Promise<TvxTreeItem[]>} getTreeItems
- * @property {(item: TvxTreeItem) => number | undefined} getChildrenCount
+ * @property {(parent?: TvxTreeItemData) => Promise<TvxTreeItemData[]>} getTreeItems
+ * @property {(item: TvxTreeItemData) => number | undefined} getChildrenCount
  */
 
-/**
- * @typedef {{ parentId: PropertyKey | null, index: number }} TvxTreeItemPosition
- */
+/** @typedef {{ parentId: PropertyKey | null, index: number }} TvxTreeItemPosition */
+
+/** @typedef {import("../controllers/tree-model-controller.js").TreeRow} TreeRow */
+
+const SKELETON_WIDTHS = ["60%", "45%", "72%"];
 
 /**
  * @tag tvx-tree-view
- * @summary A WAI-ARIA `tree`; composition root for expansion, selection, focus, keyboard nav,
+ * @summary A virtualized WAI-ARIA `tree` rendered from data: expansion, selection, keyboard nav,
  * typeahead, reordering and async loading.
+ *
+ * @csspart tree - Row container.
+ * @csspart row - A row's visible line.
+ * @csspart chevron - Expand/collapse chevron.
+ * @csspart checkbox - Checkbox wrapper (under `checkboxSelection`).
+ * @csspart leading - `renderItemLeading` output.
+ * @csspart label - Label (or `renderItemLabel` output).
+ * @csspart trailing - `renderItemTrailing` output.
+ * @csspart placeholder - A loading/skeleton row.
  *
  * @fires {CustomEvent<{ selectedItems: Set<PropertyKey> }>} tvx-selection-change - Whole-tree snapshot after any selection change.
  * @fires {CustomEvent<{ expandedItems: Set<PropertyKey> }>} tvx-expansion-change - Whole-tree snapshot after any expand/collapse.
  * @fires {CustomEvent<{ key: PropertyKey, expanded: boolean }>} tvx-expand-change - One item's expansion toggled.
  * @fires {CustomEvent<{ key: PropertyKey, oldPosition: TvxTreeItemPosition, newPosition: TvxTreeItemPosition }>} tvx-item-position-change - Cancelable; fires before a reorder moves an item.
- * @fires {CustomEvent<{ key: PropertyKey | null, node: TvxTreeItem | null, items: TvxTreeItem[] }>} tvx-children-loaded - A `dataSource` batch landed (`key`/`node` null for the root).
- * @fires {CustomEvent<{ key: PropertyKey | null, node: TvxTreeItem | null, error: unknown }>} tvx-load-error - `dataSource.getTreeItems()` rejected.
- * @fires {CustomEvent<{ key: PropertyKey, node: TvxTreeItem, newTab: true }>} tvx-open - Cancelable; middle-click / Ctrl+Enter on an item `getHref` didn't resolve.
+ * @fires {CustomEvent<{ key: PropertyKey | null, node: TvxTreeItemData | null, items: TvxTreeItemData[] }>} tvx-children-loaded - A `dataSource` batch landed (`key`/`node` null for the root).
+ * @fires {CustomEvent<{ key: PropertyKey | null, node: TvxTreeItemData | null, error: unknown }>} tvx-load-error - `dataSource.getTreeItems()` rejected.
+ * @fires {CustomEvent<{ key: PropertyKey, node: TvxTreeItemData, newTab: true }>} tvx-open - Cancelable; middle-click / Ctrl+Enter on an item `getHref` didn't resolve.
  */
 @customElement("tvx-tree-view")
 export class TvxTreeView extends LitElement {
   /** @type {import("lit").PropertyDeclarations} */
   static properties = {
     items: { attribute: false },
+    getItemId: { attribute: false },
+    getItemLabel: { attribute: false },
+    getItemChildren: { attribute: false },
+    isItemDisabled: { attribute: false },
+    renderItemLeading: { attribute: false },
+    renderItemLabel: { attribute: false },
+    renderItemTrailing: { attribute: false },
+    noVirtualization: { type: Boolean, reflect: true, attribute: "no-virtualization" },
     multiSelect: { type: Boolean, reflect: true, attribute: "multi-select" },
     disableSelection: { type: Boolean, reflect: true, attribute: "disable-selection" },
     checkboxSelection: { type: Boolean, reflect: true, attribute: "checkbox-selection" },
@@ -69,93 +103,68 @@ export class TvxTreeView extends LitElement {
     return [tokens, styles];
   }
 
-  /** @type {TvxTreeItem[] | undefined} */
-  #items;
+  #model = new TreeModelController(this, (id) => this.#dataSource.loadChildren(id));
+  #dataSource = new DataSourceController(this, this.#model);
+  #selection = new SelectionController(this, this.#model);
+  #reorder = new ReorderController(this, this.#model);
+  #open = new OpenController(this, this.#model);
+  #keyboard = new KeyboardNavController(
+    this,
+    this.#model,
+    this.#selection,
+    this.#reorder,
+    this.#open,
+  );
+  #virtualization = new VirtualizationController(
+    this,
+    () => this.#model.rows,
+    () => (this.#focusedId === null ? -1 : this.#model.indexOf(this.#focusedId)),
+  );
+
+  /** Row that last had focus; it keeps the Tab stop (roving tabindex). @type {PropertyKey | null} */
+  #focusedId = null;
   #defaultsApplied = false;
-  /** @type {import("../controllers/roving-focus-controller.js").RovingFocusController} */
-  #focus;
-  /** @type {import("../controllers/data-source-controller.js").DataSourceController} */
-  #dataSource;
-  /** @type {import("../controllers/expansion-controller.js").ExpansionController} */
-  #expansion;
-  /** @type {import("../controllers/selection-controller.js").SelectionController} */
-  #selection;
-  /** @type {import("../controllers/typeahead-controller.js").TypeaheadController} */
-  #typeahead;
-  /** @type {import("../controllers/open-controller.js").OpenController} */
-  #open;
-  /** @type {import("../controllers/reorder-controller.js").ReorderController} */
-  #reorder;
-  /** @type {import("../controllers/keyboard-nav-controller.js").KeyboardNavController} */
-  #keyboardNav;
   /** @type {import("lit/directives/ref.js").Ref<HTMLElement>} */
-  #liveRegionRef = createRef();
-  /** @type {number | null} */
-  #pendingScrollFrame = null;
-  /** @type {import("@lit/context").ContextProvider<typeof treeViewContext>} */
-  #contextProvider;
+  #liveRegion = createRef();
 
   constructor() {
     super();
-
-    /** Opt into ctrl/cmd+click (toggle) and shift+click/shift+arrow (contiguous range) multi-select.
-     * Off by default — a plain click then selects exactly one item.
-     * @type {boolean} */
+    /** Tree data — any shape, read through the `getItem*` accessors below. @type {TvxTreeItemData[] | undefined} */
+    this.items = undefined;
+    /** @type {(item: TvxTreeItemData) => PropertyKey} */
+    this.getItemId = (item) => item.id;
+    /** @type {(item: TvxTreeItemData) => string} */
+    this.getItemLabel = (item) => item.label;
+    /** @type {(item: TvxTreeItemData) => TvxTreeItemData[] | undefined} */
+    this.getItemChildren = (item) => item.children;
+    /** @type {(item: TvxTreeItemData) => boolean} */
+    this.isItemDisabled = (item) => !!item.disabled;
+    /** @type {TvxTreeItemRenderer | undefined} */
+    this.renderItemLeading = undefined;
+    /** Replaces the plain-text label. @type {TvxTreeItemRenderer | undefined} */
+    this.renderItemLabel = undefined;
+    /** @type {TvxTreeItemRenderer | undefined} */
+    this.renderItemTrailing = undefined;
+    /** Renders every row instead of only the visible ones. @type {boolean} */
+    this.noVirtualization = false;
+    /** Ctrl/Cmd+click toggles, Shift+click/Shift+arrow selects a range. @type {boolean} */
     this.multiSelect = false;
-    /** Disables selection entirely; rows still focus and a branch still toggles expand/collapse on click.
-     * @type {boolean} */
+    /** Turns selection off; rows still focus and branches still toggle. @type {boolean} */
     this.disableSelection = false;
-    /** Renders a checkbox per row (single- or multi-select); clicking it toggles just that item,
-     * independent of the ctrl/shift-click modifiers a plain row click uses in multi-select mode.
-     * @type {boolean} */
+    /** A checkbox per row; checking a branch checks its whole subtree. @type {boolean} */
     this.checkboxSelection = false;
-    /** @type {((node: TvxTreeItem) => string | undefined) | undefined} */
+    /** @type {((item: TvxTreeItemData) => string | undefined) | undefined} */
     this.getHref = undefined;
     /** @type {TvxTreeDataSource | undefined} */
     this.dataSource = undefined;
     /** Enables drag-and-drop and Alt+↑/↓ reordering. @type {boolean} */
     this.reordering = false;
-    /** @type {((item: TvxTreeItem) => boolean) | undefined} */
+    /** @type {((item: TvxTreeItemData) => boolean) | undefined} */
     this.isItemReorderable = undefined;
-    /** Uncontrolled initial value, applied once the root batch of items exists — unlike `expandedItems`, later writes have no effect.
-     * @type {Iterable<PropertyKey> | undefined} */
+    /** Applied once, when the first items exist. @type {Iterable<PropertyKey> | undefined} */
     this.defaultExpandedItems = undefined;
-    /** @see defaultExpandedItems
-     * @type {Iterable<PropertyKey> | undefined} */
+    /** Applied once, when the first items exist. @type {Iterable<PropertyKey> | undefined} */
     this.defaultSelectedItems = undefined;
-
-    this.#focus = new RovingFocusController(this);
-    this.#dataSource = new DataSourceController(this, this.#focus);
-    this.#expansion = new ExpansionController(this, this.#dataSource);
-    this.#selection = new SelectionController(this);
-    this.#typeahead = new TypeaheadController(this, this.#focus);
-    this.#open = new OpenController(this);
-    this.#reorder = new ReorderController(this);
-    this.#keyboardNav = new KeyboardNavController(this, {
-      expansion: this.#expansion,
-      focus: this.#focus,
-      selection: this.#selection,
-      typeahead: this.#typeahead,
-      open: this.#open,
-      reorder: this.#reorder,
-    });
-
-    this.#contextProvider = new ContextProvider(this, {
-      context: treeViewContext,
-      initialValue: this.#contextValue(),
-    });
-
-    this.addEventListener("keydown", (event) => this.#keyboardNav.onKeydown(event));
-    this.addEventListener("auxclick", (event) => this.#open.handleAuxClick(event));
-    this.addEventListener("tvx-tree-item-toggle", (event) =>
-      this.#onItemToggle(/** @type {CustomEvent} */ (event)),
-    );
-    this.addEventListener("tvx-tree-item-activate", (event) =>
-      this.#onItemActivate(/** @type {CustomEvent} */ (event)),
-    );
-    this.addEventListener("tvx-tree-item-reorder-drop", (event) =>
-      this.#reorder.handleDrop(/** @type {CustomEvent} */ (event).detail),
-    );
   }
 
   connectedCallback() {
@@ -166,288 +175,339 @@ export class TvxTreeView extends LitElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     this.#dataSource.dispose();
-    if (this.#pendingScrollFrame !== null) {
-      cancelAnimationFrame(this.#pendingScrollFrame);
-      this.#pendingScrollFrame = null;
-    }
   }
 
-  firstUpdated() {
-    this.#focus.ensureInitialFocusable();
-    // Covers declarative markup and a dataSource resolving its own root fetch (which itself
-    // assigns `.items`, see below) — `.items` being assigned *after* connection (e.g. a framework
-    // wrapper setting properties post-mount) is the other case, covered by the `items` setter below.
-    this.#dataSource.loadRoot().then(() => this.#applyDefaultsOnce());
-  }
-
-  /** Applies `defaultExpandedItems`/`defaultSelectedItems` exactly once, the first time the root
-   * batch of items actually exists — whichever of `firstUpdated()` or the `items` setter gets there
-   * first. A call that finds no items yet, or runs before connection (a disconnected item's own
-   * `hasChildren` isn't computed yet — see `TvxTreeItem#claimSubTree()` — so `defaultExpandedItems`
-   * would silently no-op on it), defers rather than consuming the one shot. */
-  #applyDefaultsOnce() {
-    if (this.#defaultsApplied || !this.isConnected || this.allItems().next().done) return;
-    this.#defaultsApplied = true;
-    if (this.defaultExpandedItems) this.#expansion.syncFromExternal(this.defaultExpandedItems);
-    if (this.defaultSelectedItems) this.#selection.syncFromExternal(this.defaultSelectedItems);
-  }
-
-  /** @param {import("lit").PropertyValues} changed */
-  updated(changed) {
-    if (changed.has("dataSource")) this.#dataSource.handleDataSourceChange();
-
+  /** @param {import("lit").PropertyValues<this>} changed */
+  willUpdate(changed) {
+    // dataSource too: each node asks it for its child count once, when added
     if (
-      changed.has("multiSelect") ||
-      changed.has("disableSelection") ||
-      changed.has("checkboxSelection") ||
-      changed.has("getHref") ||
-      changed.has("reordering") ||
-      changed.has("isItemReorderable")
+      changed.has("items") ||
+      changed.has("getItemId") ||
+      changed.has("getItemChildren") ||
+      changed.has("dataSource")
     ) {
-      this.#contextProvider.setValue(this.#contextValue());
+      this.#model.setItems(this.items ?? []);
+      this.#applyDefaultsOnce();
     }
+    if (changed.has("multiSelect")) this.toggleAttribute("aria-multiselectable", this.multiSelect);
+    this.#virtualization.sync(this.#model.rows);
   }
 
-  /** @returns {import("./tree-view-context.js").TreeViewContextValue} */
-  #contextValue() {
-    return {
-      multiSelect: this.multiSelect,
-      disableSelection: this.disableSelection,
-      checkboxSelection: this.checkboxSelection,
-      getHref: this.getHref,
-      reordering: this.reordering,
-      isItemReorderable: this.isItemReorderable,
-    };
+  /** @param {import("lit").PropertyValues<this>} changed */
+  updated(changed) {
+    if (changed.has("dataSource")) this.#dataSource.reset();
+    this.#virtualization.measure(this.renderRoot.querySelectorAll("[data-index]"));
   }
 
-  /** Real `<tvx-tree-item>` elements; setting this is a `replaceChildren()` convenience.
-   * @returns {TvxTreeItem[] | undefined} */
-  get items() {
-    return this.#items;
+  #applyDefaultsOnce() {
+    if (this.#defaultsApplied || this.#model.rootIds.length === 0) return;
+    this.#defaultsApplied = true;
+    if (this.defaultExpandedItems) this.#model.setExpandedItems(this.defaultExpandedItems);
+    if (this.defaultSelectedItems) this.#selection.setSelectedItems(this.defaultSelectedItems);
   }
 
-  /** @param {TvxTreeItem[] | undefined} value */
-  set items(value) {
-    this.#items = value;
-    if (value) this.replaceChildren(...value);
-    this.#focus.ensureInitialFocusable();
-    this.requestUpdate("items");
-    this.#applyDefaultsOnce();
-  }
+  // ─── public API ───
 
-  /** Live snapshot of selected keys; assigning a new Set re-syncs internal selection state to match
-   * (uncontrolled-with-sync, like `items`) — the tree still manages selection on its own, this is optional.
-   * @returns {Set<PropertyKey>} */
+  /** Selected ids; assigning replaces the selection. @returns {Set<PropertyKey>} */
   get selectedItems() {
     return new Set(this.#selection.selected);
   }
 
-  /** @param {Iterable<PropertyKey>} value */
-  set selectedItems(value) {
-    this.#selection.syncFromExternal(value);
-    this.requestUpdate("selectedItems");
+  /** @param {Iterable<PropertyKey>} ids */
+  set selectedItems(ids) {
+    this.#selection.setSelectedItems(ids);
   }
 
-  /** Live snapshot of expanded keys; assigning a new Set re-syncs internal expansion state to match.
-   * @returns {Set<PropertyKey>} */
+  /** Expanded ids; assigning replaces the expansion. @returns {Set<PropertyKey>} */
   get expandedItems() {
-    return this.#expansion.getExpandedKeys();
+    return new Set(this.#model.expanded);
   }
 
-  /** @param {Iterable<PropertyKey>} value */
-  set expandedItems(value) {
-    this.#expansion.syncFromExternal(value);
-    this.requestUpdate("expandedItems");
-  }
-
-  /** Every `tvx-tree-item` in the tree, regardless of expand state.
-   * @param {Element} root
-   * @returns {IterableIterator<TvxTreeItem>} */
-  *allItems(root = this) {
-    for (const child of root.children) {
-      if (child.tagName === "TVX-TREE-ITEM") {
-        yield /** @type {TvxTreeItem} */ (child);
-        yield* this.allItems(child);
-      } else if (child.tagName === "TVX-ITEM-SUB-TREE") {
-        yield* this.allItems(child);
-      }
-    }
-  }
-
-  /** Pre-order DFS that stops descending into a collapsed node's children.
-   * @param {Element} root
-   * @returns {IterableIterator<TvxTreeItem>} */
-  *visibleItems(root = this) {
-    for (const child of root.children) {
-      if (child.tagName === "TVX-TREE-ITEM") {
-        const item = /** @type {TvxTreeItem} */ (child);
-        yield item;
-        if (item.expanded) yield* this.visibleItems(item);
-      } else if (child.tagName === "TVX-ITEM-SUB-TREE") {
-        yield* this.visibleItems(child);
-      }
-    }
-  }
-
-  /** @returns {TvxTreeItem | null} */
-  firstVisibleItem() {
-    return this.visibleItems().next().value ?? null;
-  }
-
-  /** @returns {TvxTreeItem | null} */
-  lastVisibleItem() {
-    let last = null;
-    for (const item of this.visibleItems()) last = item;
-    return last;
-  }
-
-  /**
-   * @param {Element} item
-   * @returns {TvxTreeItem | null}
-   */
-  firstChildItem(item) {
-    for (const child of item.children) {
-      if (child.tagName === "TVX-TREE-ITEM") {
-        return /** @type {TvxTreeItem} */ (child);
-      }
-      if (child.tagName === "TVX-ITEM-SUB-TREE") return this.firstChildItem(child);
-    }
-    return null;
-  }
-
-  /** Linear scan of every mounted item, collapsed branches included.
-   * @param {PropertyKey} key
-   * @returns {TvxTreeItem | null} */
-  getItemByKey(key) {
-    for (const item of this.allItems()) if (item.key === key) return item;
-    return null;
-  }
-
-  /** Sets a single item's expansion state; no-ops if `id` isn't a currently-mounted item.
-   * @param {{ id: PropertyKey, expand: boolean }} options */
-  setItemExpansion({ id, expand }) {
-    const item = this.getItemByKey(id);
-    if (!item) return;
-    if (expand) this.#expansion.expand(item);
-    else this.#expansion.collapse(item);
+  /** @param {Iterable<PropertyKey>} ids */
+  set expandedItems(ids) {
+    this.#model.setExpandedItems(ids);
   }
 
   /** @param {PropertyKey} id
-   * @returns {boolean} `false` for an unknown or not-yet-mounted id. */
-  isItemExpanded(id) {
-    return this.getItemByKey(id)?.expanded ?? false;
+   * @returns {TvxTreeItemData | null} */
+  getItem(id) {
+    return this.#model.item(id) ?? null;
   }
 
-  /** Sets a single item's selection state; no-ops if `id` isn't a currently-mounted item. Only
-   * touches `id` itself — no cascade to descendants/ancestors, even when `multiSelect` is on.
-   * @param {{ id: PropertyKey, selected: boolean }} options */
+  /** @param {{ id: PropertyKey, expand: boolean }} options */
+  setItemExpansion({ id, expand }) {
+    if (expand) this.#model.expand(id);
+    else this.#model.collapse(id);
+  }
+
+  /** @param {PropertyKey} id */
+  isItemExpanded(id) {
+    return this.#model.isExpanded(id);
+  }
+
+  /** Selects or deselects one item (no cascade). @param {{ id: PropertyKey, selected: boolean }} options */
   setItemSelection({ id, selected }) {
-    const item = this.getItemByKey(id);
-    if (!item) return;
-    this.#selection.setSelected(item, selected);
+    this.#selection.setSelected(id, selected);
   }
 
   expandAll() {
-    this.#expansion.expandAll();
+    this.#model.expandAll();
   }
 
   collapseAll() {
-    this.#expansion.collapseAll();
+    this.#model.collapseAll();
   }
 
-  /** Direct child `tvx-tree-item`s of `root`, resolving through `tvx-item-sub-tree` wrappers.
-   * @param {Element} root
-   * @returns {IterableIterator<TvxTreeItem>} */
-  *directChildItems(root = this) {
-    for (const child of root.children) {
-      if (child.tagName === "TVX-TREE-ITEM") {
-        yield /** @type {TvxTreeItem} */ (child);
-      } else if (child.tagName === "TVX-ITEM-SUB-TREE") {
-        yield* this.directChildItems(child);
-      }
-    }
+  /** @returns {PropertyKey | null} */
+  get focusedKey() {
+    return this.#focusedId;
   }
 
-  /** A fresh `IndexTree` snapshot of the live DOM, keyed by `item.key`, built on demand (never cached).
-   * @returns {import("../core/index-tree.js").IndexTree<TvxTreeItem>} */
-  buildIndexTree() {
-    return buildIndexTree([...this.directChildItems()], {
-      getKey: (item) => item.key,
-      getChildren: (item) => [...this.directChildItems(item)],
-    });
+  /** Gives `id` the Tab stop, focuses its row and scrolls it into view.
+   * @param {PropertyKey | null} id */
+  async focusItem(id) {
+    if (id === null) return;
+    this.#focusedId = id;
+    this.requestUpdate();
+    await this.updateComplete; // the focused row is always rendered, even when off-screen
+    const index = this.#model.indexOf(id);
+    if (index === -1) return;
+    this.rowElement(index)?.focus({ preventScroll: true });
+    this.#virtualization.scrollToIndex(index);
   }
 
-  /** Writes an announcement into the visually-hidden live region, clearing it first so repeated identical strings still get announced.
+  /** The rendered row at `index`, if it's in the DOM. @param {number} index
+   * @returns {HTMLElement | null} */
+  rowElement(index) {
+    return this.renderRoot.querySelector(`[data-index="${index}"]`);
+  }
+
+  /** Screen-reader announcement; cleared first so a repeated message is announced again.
    * @param {string} message */
   announce(message) {
-    const region = this.#liveRegionRef.value;
+    const region = this.#liveRegion.value;
     if (!region) return;
     region.textContent = "";
-    requestAnimationFrame(() => {
-      region.textContent = message;
-    });
+    requestAnimationFrame(() => (region.textContent = message));
   }
 
-  /** Coalesces scroll-into-view requests into one `requestAnimationFrame` per frame.
-   * @param {Element | null | undefined} element */
-  scrollElementIntoView(element) {
-    if (!element) return;
-    if (this.#pendingScrollFrame !== null) cancelAnimationFrame(this.#pendingScrollFrame);
-    this.#pendingScrollFrame = requestAnimationFrame(() => {
-      this.#pendingScrollFrame = null;
-      if (!element.isConnected) return;
-      element.scrollIntoView({ block: "nearest", inline: "nearest" });
-    });
+  // ─── events ───
+
+  /** Id of the item row an event came from. @param {Event} event */
+  #rowId(event) {
+    const row = event
+      .composedPath()
+      .find((node) => node instanceof HTMLElement && node.classList.contains("tree-view__item"));
+    return row ? this.#model.idAt(Number(/** @type {HTMLElement} */ (row).dataset.index)) : null;
   }
 
-  /** Moves the tree's Tab stop to `item` and focuses it — the one piece of focus API a controller
-   * outside this file (`ReorderController`, after a keyboard-driven move) needs to reach.
-   * @param {TvxTreeItem | null} item */
-  focusItem(item) {
-    this.#focus.focusNode(item);
+  /** @param {KeyboardEvent} event */
+  #onKeydown = (event) => {
+    const id = this.#rowId(event);
+    if (id !== null) this.#keyboard.onKeydown(event, id);
+  };
+
+  /** Focus that arrived by mouse or Tab moves the Tab stop too. */
+  #onFocusIn = (/** @type {FocusEvent} */ event) => {
+    const id = this.#rowId(event);
+    if (id === null || id === this.#focusedId) return;
+    this.#focusedId = id;
+    this.requestUpdate();
+  };
+
+  /** Middle-click = open in new tab. */
+  #onAuxClick = (/** @type {MouseEvent} */ event) => {
+    const id = this.#rowId(event);
+    if (id === null || event.button !== 1 || this.#model.isDisabled(id)) return;
+    event.preventDefault();
+    this.#open.activate(id);
+  };
+
+  /** Clicking a row toggles a branch and — unless checkboxes do the selecting — selects it.
+   * @param {MouseEvent} event
+   * @param {PropertyKey} id */
+  #onRowClick(event, id) {
+    if (this.#model.hasChildren(id)) this.#model.toggle(id);
+    if (!this.checkboxSelection) this.#selection.activate(id, event);
   }
 
-  /** The key of the item currently holding the tree's Tab stop.
-   * @returns {PropertyKey | null} */
-  get focusedKey() {
-    return this.#focus.focusedKey;
-  }
-
-  /** Re-syncs selection state onto the DOM after a tree-shape change (e.g. a reorder) without
-   * changing which keys are selected. */
-  refreshSelection() {
-    this.#selection.refresh();
-  }
-
-  /** @param {CustomEvent<{ item: TvxTreeItem }>} event */
-  #onItemToggle(event) {
-    this.#expansion.toggle(event.detail.item);
-    this.#focus.focusNode(event.detail.item);
-  }
-
-  /** @param {CustomEvent<{ item: TvxTreeItem, ctrlKey: boolean, metaKey: boolean, shiftKey: boolean, checkbox: boolean }>} event */
-  #onItemActivate(event) {
-    const { item, ctrlKey, metaKey, shiftKey, checkbox } = event.detail;
-    // A checkbox click always bypasses the ctrl/shift-click modifier semantics a plain row click
-    // uses in multi-select mode, and always cascades (see `SelectionController
-    // .selectCascading()`) — a leaf's "subtree" is just itself, but the upward half still runs, so
-    // checking every leaf under a branch individually ends up selecting that branch too.
-    if (checkbox) this.#selection.selectCascading(item, this.buildIndexTree());
-    else this.#selection.activate(item, { ctrlKey, metaKey, shiftKey });
-    this.#focus.focusNode(item);
-  }
+  // ─── render ───
 
   render() {
+    const rows = this.#model.rows;
+    const virtual = this.#virtualization.enabled;
+    const visible = virtual
+      ? this.#virtualization.visibleRows()
+      : rows.map((_, index) => ({ index, start: 0 }));
+    // the Tab stop: the focused row if it's still visible, otherwise the first row
+    const tabStopId =
+      this.#focusedId !== null && this.#model.indexOf(this.#focusedId) !== -1
+        ? this.#focusedId
+        : this.#model.itemFrom(0, 1);
+
     return html`
-      <div class="tree-view" part="tree">
-        <slot></slot>
+      <div
+        class=${classMap({ "tree-view": true, "tree-view_virtualized": virtual })}
+        part="tree"
+        style=${virtual ? `block-size: ${this.#virtualization.totalSize()}px` : nothing}
+        @keydown=${this.#onKeydown}
+        @focusin=${this.#onFocusIn}
+        @auxclick=${this.#onAuxClick}
+      >
+        ${repeat(
+          visible,
+          ({ index }) => rows[index].key,
+          ({ index, start }) => {
+            const row = rows[index];
+            const top = virtual ? start : null;
+            return row.kind === "item"
+              ? this.#renderItem(row, index, top, row.id === tabStopId)
+              : this.#renderPlaceholder(row, index, top);
+          },
+        )}
       </div>
       <div
         class="tree-view__live-region"
         aria-live="polite"
         aria-atomic="true"
-        ${ref(this.#liveRegionRef)}
+        ${ref(this.#liveRegion)}
       ></div>
     `;
   }
+
+  /** Indent level + (when virtualized) the row's vertical position.
+   * @param {number} level
+   * @param {number | null} top */
+  #rowStyle(level, top) {
+    return styleMap({
+      "--_tvx-level": String(level),
+      transform: top === null ? undefined : `translateY(${top}px)`,
+    });
+  }
+
+  /**
+   * @param {TreeRow} row
+   * @param {number} index
+   * @param {number | null} top
+   * @param {boolean} isTabStop
+   */
+  #renderItem(row, index, top, isTabStop) {
+    const { id, level } = row;
+    const item = this.#model.item(id);
+    const hasChildren = this.#model.hasChildren(id);
+    const expanded = this.#model.isExpanded(id);
+    const disabled = this.#model.isDisabled(id);
+    const { selected, indeterminate } = this.#selection.stateOf(id);
+    /** @type {TvxTreeItemState} */
+    const state = { id, level, expanded, selected, indeterminate, disabled, hasChildren };
+    const labelId = `tvx-label-${index}`;
+
+    return html`
+      <div
+        class=${classMap({
+          "tree-view__item": true,
+          "tree-view__item_expanded": expanded,
+          "tree-view__item_selected": selected,
+          "tree-view__item_disabled": disabled,
+        })}
+        role="treeitem"
+        data-index=${index}
+        tabindex=${isTabStop ? "0" : "-1"}
+        aria-level=${level}
+        aria-setsize=${row.setsize}
+        aria-posinset=${row.posinset}
+        aria-expanded=${hasChildren ? String(expanded) : nothing}
+        aria-selected=${String(selected)}
+        aria-disabled=${disabled ? "true" : nothing}
+        aria-current=${!this.multiSelect && selected ? "true" : nothing}
+        aria-labelledby=${labelId}
+        style=${this.#rowStyle(level, top)}
+        @click=${(/** @type {MouseEvent} */ event) => this.#onRowClick(event, id)}
+      >
+        <div class="tree-view__row" part="row">
+          <span
+            class="tree-view__chevron"
+            part="chevron"
+            aria-hidden="true"
+            @click=${(/** @type {Event} */ event) => {
+              if (!hasChildren) return;
+              event.stopPropagation(); // toggle only, don't select
+              this.#model.toggle(id);
+            }}
+          >
+            ${hasChildren ? chevronIcon : nothing}
+          </span>
+          ${
+            this.checkboxSelection && !this.disableSelection
+              ? html`
+                  <span
+                    class="tree-view__checkbox"
+                    part="checkbox"
+                    @click=${(/** @type {Event} */ event) => {
+                      event.stopPropagation(); // checkbox only, don't toggle expansion
+                      this.#selection.toggleCascading(id);
+                    }}
+                  >
+                    <md-checkbox
+                      class="tree-view__checkbox-control"
+                      .checked=${selected}
+                      .indeterminate=${indeterminate}
+                      ?disabled=${disabled}
+                      tabindex="-1"
+                    ></md-checkbox>
+                  </span>
+                `
+              : nothing
+          }
+          <span class="tree-view__leading" part="leading" aria-hidden="true"
+            >${this.renderItemLeading?.(item, state) ?? nothing}</span
+          >
+          <span class="tree-view__label" part="label" id=${labelId}
+            >${this.renderItemLabel ? this.renderItemLabel(item, state) : this.#model.label(id)}</span
+          >
+          <span class="tree-view__trailing" part="trailing"
+            >${this.renderItemTrailing?.(item, state) ?? nothing}</span
+          >
+        </div>
+      </div>
+    `;
+  }
+
+  /** A spinner row (unknown child count) or a shimmer bar (known count) while a branch loads.
+   * @param {TreeRow} row
+   * @param {number} index
+   * @param {number | null} top */
+  #renderPlaceholder(row, index, top) {
+    const isSpinner = row.kind === "loading";
+    return html`
+      <div
+        class="tree-view__placeholder"
+        role=${isSpinner ? "treeitem" : "none"}
+        aria-disabled=${isSpinner ? "true" : nothing}
+        aria-level=${row.level}
+        data-index=${index}
+        style=${this.#rowStyle(row.level, top)}
+      >
+        <div class="tree-view__row tree-view__row_placeholder" part="placeholder">
+          ${
+            isSpinner
+              ? html`
+                  <span class="tree-view__spinner" aria-hidden="true">
+                    <md-progress-circular></md-progress-circular>
+                  </span>
+                  <span class="tree-view__label">Loading…</span>
+                `
+              : html`<md-skeleton
+                  class="tree-view__skeleton"
+                  style="inline-size: ${SKELETON_WIDTHS[(row.posinset - 1) % SKELETON_WIDTHS.length]}"
+                ></md-skeleton>`
+          }
+        </div>
+      </div>
+    `;
+  }
 }
+
+const chevronIcon = html`<svg class="tree-view__chevron-icon" viewBox="0 0 24 24">
+  <path d="M10 6 8.59 7.41 13.17 12l-4.58 4.59L10 18l6-6-6-6z" />
+</svg>`;

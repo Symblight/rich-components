@@ -3,1502 +3,945 @@ import { expect, fixture, html, aTimeout } from "@open-wc/testing";
 import "../index.js";
 
 /** @import { TvxTreeView } from "../base/tree-view.js" */
-/** @import { TvxTreeItem } from "../components/tree-item/tree-item.js" */
 
-/** Builds a fresh `<tvx-tree-item>` subtree from a plain description; each fixture needs its own instances.
- * @param {{ id: string, label: string, children?: object[], hasChildren?: boolean, childCount?: number }} data
- * @returns {TvxTreeItem} */
-function buildItem({ id, label, children = [], hasChildren, childCount }) {
-  const item = /** @type {TvxTreeItem} */ (document.createElement("tvx-tree-item"));
-  item.key = id;
-  item.label = label;
-  if (hasChildren) item.hasChildren = true;
-  if (typeof childCount === "number") item.childCount = childCount;
-  // A branch's children live in their own `<tvx-item-sub-tree>` sibling, not straight in the
-  // item's own default slot (see the spec's "Data model") — no `slot="..."` needed, it auto-slots.
-  if (children.length > 0) {
-    const subTree = document.createElement("tvx-item-sub-tree");
-    subTree.append(...children.map(buildItem));
-    item.append(subTree);
-  }
-  return item;
-}
+// ─── helpers ───
 
-function buildSampleItems() {
+/** @typedef {{ id: string, label: string, children?: TestItem[], disabled?: boolean }} TestItem */
+
+/** @returns {TestItem[]} */
+function sampleItems() {
   return [
-    buildItem({
-      id: "src",
-      label: "src/",
-      children: [{ id: "index", label: "index.js" }],
-    }),
-    buildItem({ id: "readme", label: "README.md" }),
+    { id: "src", label: "src/", children: [{ id: "index", label: "index.js" }] },
+    { id: "readme", label: "README.md" },
   ];
 }
 
-function buildTwoChildItems() {
+/** @returns {TestItem[]} */
+function twoParents() {
   return [
-    buildItem({
-      id: "src",
-      label: "src/",
-      children: [
-        { id: "index", label: "index.js" },
-        { id: "utils", label: "utils.js" },
-      ],
-    }),
-  ];
-}
-
-function buildTwoParentsWithChildren() {
-  return [
-    buildItem({
+    {
       id: "a",
       label: "a/",
       children: [
         { id: "a1", label: "a1.js" },
         { id: "a2", label: "a2.js" },
       ],
-    }),
-    buildItem({
-      id: "b",
-      label: "b/",
-      children: [{ id: "b1", label: "b1.js" }],
-    }),
+    },
+    { id: "b", label: "b/", children: [{ id: "b1", label: "b1.js" }] },
   ];
 }
 
-/**
- * `ReorderController` defers the actual DOM move from a drag-triggered drop to the next animation
- * frame (see its own comment on `handleDrop()` for why) — tests asserting on the post-move DOM
- * need to wait one frame past the internal `tvx-tree-item-reorder-drop` dispatch before checking.
- */
+/** @param {number} count */
+function flatItems(count) {
+  return Array.from({ length: count }, (_, i) => ({ id: `i${i}`, label: `item-${i}` }));
+}
+
 function nextFrame() {
   return new Promise((resolve) => requestAnimationFrame(resolve));
 }
 
+/** Waits for a render, the frame after it (virtualizer measurement / rAF work), and a re-render.
+ * @param {TvxTreeView} el */
+async function settle(el) {
+  await el.updateComplete;
+  await nextFrame();
+  await el.updateComplete;
+}
+
 /**
- * @param {TvxTreeItem[]} items
+ * @param {object[]} items
+ * @param {Partial<TvxTreeView>} [props]
  * @returns {Promise<TvxTreeView>}
  */
-async function treeFixture(items) {
-  const el = /** @type {TvxTreeView} */ (await fixture(html`<tvx-tree-view></tvx-tree-view>`));
+async function treeFixture(items, props = {}) {
+  const el = /** @type {TvxTreeView} */ (
+    await fixture(html`<tvx-tree-view style="height: 400px"></tvx-tree-view>`)
+  );
+  Object.assign(el, props);
   el.items = items;
-  await el.updateComplete;
+  await settle(el);
   return el;
 }
 
-describe("tvx-tree-view — .items rendering", () => {
-  it("sets role=tree and renders a tvx-tree-item per item, recursively nested", async () => {
-    const el = await treeFixture(buildSampleItems());
+/** Rendered item rows (placeholders excluded). @param {TvxTreeView} el */
+function rows(el) {
+  return /** @type {HTMLElement[]} */ ([
+    ...(el.shadowRoot?.querySelectorAll(".tree-view__item") ?? []),
+  ]);
+}
+
+/** @param {Element} rowEl */
+function labelOf(rowEl) {
+  return rowEl.querySelector(".tree-view__label")?.textContent?.trim();
+}
+
+/** @param {TvxTreeView} el */
+function labels(el) {
+  return rows(el).map(labelOf);
+}
+
+/** @param {TvxTreeView} el
+ * @param {string} label */
+function row(el, label) {
+  const found = rows(el).find((r) => labelOf(r) === label);
+  if (!found) throw new Error(`no rendered row "${label}"`);
+  return found;
+}
+
+/** @param {TvxTreeView} el */
+function focusedLabel(el) {
+  const active = el.shadowRoot?.activeElement;
+  return active ? labelOf(active) : undefined;
+}
+
+/** @param {TvxTreeView} el
+ * @param {string} label */
+async function focusRow(el, label) {
+  row(el, label).focus();
+  await settle(el);
+}
+
+/** Keydown on the focused row (or the first row).
+ * @param {TvxTreeView} el
+ * @param {string} key
+ * @param {KeyboardEventInit} [init] */
+async function press(el, key, init = {}) {
+  const target = el.shadowRoot?.activeElement ?? rows(el)[0];
+  target.dispatchEvent(
+    new KeyboardEvent("keydown", { key, bubbles: true, composed: true, cancelable: true, ...init }),
+  );
+  await settle(el);
+}
+
+/** @param {TvxTreeView} el
+ * @param {string} label
+ * @param {MouseEventInit} [init] */
+async function click(el, label, init = {}) {
+  row(el, label)
+    .querySelector(".tree-view__row")
+    ?.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true, ...init }));
+  await settle(el);
+}
+
+/** @param {TvxTreeView} el
+ * @param {string} label
+ * @param {".tree-view__chevron" | ".tree-view__checkbox"} part */
+async function clickPart(el, label, part) {
+  /** @type {HTMLElement} */ (row(el, label).querySelector(part)).click();
+  await settle(el);
+}
+
+/** @param {HTMLElement} target
+ * @param {string} type */
+function onceEvent(target, type) {
+  /** @type {any[]} */
+  const details = [];
+  target.addEventListener(type, (event) => details.push(/** @type {CustomEvent} */ (event).detail));
+  return details;
+}
+
+// ─── rendering ───
+
+describe("tvx-tree-view — rendering", () => {
+  it("sets role=tree and renders one treeitem row per visible item", async () => {
+    const el = await treeFixture(sampleItems());
     expect(el.getAttribute("role")).to.equal("tree");
-    // pre-order DFS: "src" is visited, then its own subtree, before "readme"
-    expect([...el.allItems()].map((item) => item.key)).to.deep.equal(["src", "index", "readme"]);
-    const src = el.getItemByKey("src");
-    const index = el.getItemByKey("index");
-    // `index`'s direct parent is `src`'s `<tvx-item-sub-tree>`, not `src` itself — see the spec's
-    // "Data model".
-    expect(index.parentElement.parentElement).to.equal(src);
+    expect(labels(el)).to.deep.equal(["src/", "README.md"]);
+    expect(rows(el).every((r) => r.getAttribute("role") === "treeitem")).to.equal(true);
   });
 
-  it("collapsed children are excluded from visibleItems() until expanded", async () => {
-    const el = await treeFixture(buildSampleItems());
-    expect([...el.visibleItems()].map((item) => item.key)).to.deep.equal(["src", "readme"]);
+  it("renders a collapsed branch's children only once it's expanded", async () => {
+    const el = await treeFixture(sampleItems());
     el.setItemExpansion({ id: "src", expand: true });
-    await el.updateComplete;
-    expect([...el.visibleItems()].map((item) => item.key)).to.deep.equal([
-      "src",
-      "index",
-      "readme",
-    ]);
+    await settle(el);
+    expect(labels(el)).to.deep.equal(["src/", "index.js", "README.md"]);
   });
 
-  it("is equivalent to declaring the same elements as markup", async () => {
-    const el = /** @type {TvxTreeView} */ (
-      await fixture(html`
-        <tvx-tree-view>
-          <tvx-tree-item key="src" label="src/">
-            <tvx-item-sub-tree>
-              <tvx-tree-item key="index" label="index.js"></tvx-tree-item>
-            </tvx-item-sub-tree>
-          </tvx-tree-item>
-          <tvx-tree-item key="readme" label="README.md"></tvx-tree-item>
-        </tvx-tree-view>
-      `)
+  it("sets aria-level/setsize/posinset/expanded on every row", async () => {
+    const el = await treeFixture(sampleItems(), { defaultExpandedItems: ["src"] });
+    const src = row(el, "src/");
+    const index = row(el, "index.js");
+    expect(src.getAttribute("aria-level")).to.equal("1");
+    expect(src.getAttribute("aria-setsize")).to.equal("2");
+    expect(src.getAttribute("aria-posinset")).to.equal("1");
+    expect(src.getAttribute("aria-expanded")).to.equal("true");
+    expect(index.getAttribute("aria-level")).to.equal("2");
+    expect(index.hasAttribute("aria-expanded")).to.equal(false);
+    expect(row(el, "README.md").getAttribute("aria-posinset")).to.equal("2");
+  });
+
+  it("labels each row through aria-labelledby", async () => {
+    const el = await treeFixture(sampleItems());
+    const src = row(el, "src/");
+    const label = el.shadowRoot?.getElementById(
+      /** @type {string} */ (src.getAttribute("aria-labelledby")),
     );
-    await el.updateComplete;
-    expect([...el.allItems()].map((item) => item.key)).to.deep.equal(["src", "index", "readme"]);
+    expect(label?.textContent?.trim()).to.equal("src/");
+  });
+
+  it("reads any data shape through the getItem* accessors", async () => {
+    const el = await treeFixture(
+      [{ uuid: "1", name: "Inbox", entries: [{ uuid: "2", name: "Invoices" }], locked: true }],
+      {
+        getItemId: (item) => item.uuid,
+        getItemLabel: (item) => item.name,
+        getItemChildren: (item) => item.entries,
+        isItemDisabled: (item) => !!item.locked,
+        defaultExpandedItems: ["1"],
+      },
+    );
+    expect(labels(el)).to.deep.equal(["Inbox", "Invoices"]);
+    expect(row(el, "Inbox").getAttribute("aria-disabled")).to.equal("true");
+    expect(el.getItem("2")).to.deep.equal({ uuid: "2", name: "Invoices" });
+  });
+
+  it("passes the item and its state to renderItemLeading/Label/Trailing", async () => {
+    /** @type {any[]} */
+    const states = [];
+    const el = await treeFixture(sampleItems(), {
+      renderItemLeading: (item, state) => {
+        states.push(state);
+        return html`<i class="lead">${item.id}</i>`;
+      },
+      renderItemLabel: (item) => html`<b>${item.label}!</b>`,
+      renderItemTrailing: (_item, { expanded }) => (expanded ? "open" : "closed"),
+    });
+    const src = row(el, "src/!");
+    expect(src.querySelector(".lead")?.textContent).to.equal("src");
+    expect(src.querySelector(".tree-view__trailing")?.textContent?.trim()).to.equal("closed");
+    expect(states.find((s) => s.id === "src")).to.include({
+      level: 1,
+      expanded: false,
+      hasChildren: true,
+      selected: false,
+    });
+  });
+
+  it("keeps expansion and selection by id when .items is reassigned", async () => {
+    const el = await treeFixture(sampleItems(), { defaultExpandedItems: ["src"] });
+    await click(el, "README.md");
+    el.items = sampleItems();
+    await settle(el);
+    expect(labels(el)).to.deep.equal(["src/", "index.js", "README.md"]);
+    expect(row(el, "README.md").getAttribute("aria-selected")).to.equal("true");
+  });
+
+  it("tvx-tree-directory-icon swaps its glyph with `expanded`", async () => {
+    const icon = /** @type {any} */ (
+      await fixture(html`<tvx-tree-directory-icon></tvx-tree-directory-icon>`)
+    );
+    const closed = icon.shadowRoot.querySelector("path").getAttribute("d");
+    icon.expanded = true;
+    await icon.updateComplete;
+    expect(icon.shadowRoot.querySelector("path").getAttribute("d")).not.to.equal(closed);
   });
 });
 
+// ─── virtualization ───
+
+describe("tvx-tree-view — virtualization", () => {
+  it("renders only the visible window of a long list", async () => {
+    const el = await treeFixture(flatItems(1000));
+    const count = rows(el).length;
+    expect(count).to.be.greaterThan(5);
+    expect(count).to.be.lessThan(100);
+  });
+
+  it("renders every row with no-virtualization", async () => {
+    const el = await treeFixture(flatItems(300), { noVirtualization: true });
+    expect(rows(el).length).to.equal(300);
+    expect(el.hasAttribute("no-virtualization")).to.equal(true);
+  });
+
+  it("focusItem() scrolls a far-away row into view and focuses it", async () => {
+    const el = await treeFixture(flatItems(1000));
+    await el.focusItem("i700");
+    await settle(el);
+    expect(focusedLabel(el)).to.equal("item-700");
+    expect(el.focusedKey).to.equal("i700");
+    expect(el.scrollTop).to.be.greaterThan(0);
+  });
+
+  it("keeps the focused row mounted while it's scrolled out of view", async () => {
+    const el = await treeFixture(flatItems(1000));
+    await focusRow(el, "item-0");
+    el.scrollTop = 20000;
+    await settle(el);
+    await settle(el);
+    expect(labels(el)).to.include("item-0");
+    expect(focusedLabel(el)).to.equal("item-0");
+  });
+});
+
+// ─── expansion ───
+
 describe("tvx-tree-view — expansion", () => {
-  it("toggling the chevron fires tvx-expand-change with the new state", async () => {
-    const el = await treeFixture(buildSampleItems());
-    const src = el.getItemByKey("src");
-    await src.updateComplete;
-    let detail;
-    el.addEventListener("tvx-expand-change", (event) => (detail = event.detail));
-    src.shadowRoot.querySelector(".tree-item__chevron").click();
-    await el.updateComplete;
-    expect(src.expanded).to.equal(true);
-    expect(detail).to.deep.equal({ key: "src", expanded: true });
+  it("clicking the chevron toggles and fires tvx-expand-change + tvx-expansion-change", async () => {
+    const el = await treeFixture(sampleItems());
+    const one = onceEvent(el, "tvx-expand-change");
+    const all = onceEvent(el, "tvx-expansion-change");
+    await clickPart(el, "src/", ".tree-view__chevron");
+    expect(one).to.deep.equal([{ key: "src", expanded: true }]);
+    expect([...all[0].expandedItems]).to.deep.equal(["src"]);
+    expect(el.isItemExpanded("src")).to.equal(true);
+  });
+
+  it("clicking the chevron doesn't select the row", async () => {
+    const el = await treeFixture(sampleItems());
+    await clickPart(el, "src/", ".tree-view__chevron");
+    expect(el.selectedItems.size).to.equal(0);
   });
 
   it("expandAll/collapseAll toggle every branch", async () => {
-    const el = await treeFixture(buildSampleItems());
+    const el = await treeFixture(twoParents());
     el.expandAll();
-    await el.updateComplete;
-    expect(el.getItemByKey("src").expanded).to.equal(true);
+    await settle(el);
+    expect(labels(el)).to.deep.equal(["a/", "a1.js", "a2.js", "b/", "b1.js"]);
     el.collapseAll();
-    await el.updateComplete;
-    expect(el.getItemByKey("src").expanded).to.equal(false);
+    await settle(el);
+    expect(labels(el)).to.deep.equal(["a/", "b/"]);
+  });
+
+  it("setItemExpansion expands and collapses; isItemExpanded is false for unknown ids and leaves", async () => {
+    const el = await treeFixture(sampleItems());
+    el.setItemExpansion({ id: "src", expand: true });
+    expect(el.isItemExpanded("src")).to.equal(true);
+    el.setItemExpansion({ id: "src", expand: false });
+    expect(el.isItemExpanded("src")).to.equal(false);
+    expect(el.isItemExpanded("nope")).to.equal(false);
+    el.setItemExpansion({ id: "readme", expand: true });
+    expect(el.isItemExpanded("readme")).to.equal(false);
+  });
+
+  it("assigning expandedItems replaces the expansion", async () => {
+    const el = await treeFixture(twoParents());
+    el.expandedItems = new Set(["a"]);
+    await settle(el);
+    expect([...el.expandedItems]).to.deep.equal(["a"]);
+    el.expandedItems = new Set(["b"]);
+    await settle(el);
+    expect(labels(el)).to.deep.equal(["a/", "b/", "b1.js"]);
   });
 });
 
 describe("tvx-tree-view — defaultExpandedItems/defaultSelectedItems", () => {
-  it("applies both once the root items exist, when items are assigned before connecting", async () => {
-    const el = /** @type {TvxTreeView} */ (document.createElement("tvx-tree-view"));
-    el.defaultExpandedItems = new Set(["src"]);
-    el.defaultSelectedItems = new Set(["readme"]);
-    el.items = buildSampleItems();
-    document.body.append(el);
-    await el.updateComplete;
-    expect(el.getItemByKey("src").expanded).to.equal(true);
-    expect(el.getItemByKey("readme").selected).to.equal(true);
-    el.remove();
+  it("apply once the first items exist", async () => {
+    const el = await treeFixture(sampleItems(), {
+      defaultExpandedItems: ["src"],
+      defaultSelectedItems: ["readme"],
+    });
+    expect(el.isItemExpanded("src")).to.equal(true);
+    expect([...el.selectedItems]).to.deep.equal(["readme"]);
   });
 
-  it("applies both once the root items exist, when items are assigned after connecting", async () => {
-    // Matches `treeFixture()`'s own sequencing — connect first, assign `.items` after — the
-    // ordering that motivated deferring rather than consuming the one shot in `firstUpdated()`.
-    const el = await treeFixture([]);
-    el.defaultExpandedItems = new Set(["src"]);
-    el.defaultSelectedItems = new Set(["readme"]);
-    el.items = buildSampleItems();
-    await el.updateComplete;
-    expect(el.getItemByKey("src").expanded).to.equal(true);
-    expect(el.getItemByKey("readme").selected).to.equal(true);
+  it("apply when items are assigned after connecting", async () => {
+    const el = await treeFixture([], { defaultExpandedItems: ["src"] });
+    el.items = sampleItems();
+    await settle(el);
+    expect(el.isItemExpanded("src")).to.equal(true);
   });
 
-  it("only applies once — setting defaultExpandedItems after the tree already has items is too late", async () => {
-    // treeFixture()'s own `.items` assignment already trips the one-shot (with no defaults set at
-    // that point), so this later assignment — and the items replacement after it — has no effect.
-    const el = await treeFixture(buildSampleItems());
-    el.defaultExpandedItems = new Set(["src"]);
-    el.items = buildTwoChildItems();
-    await el.updateComplete;
-    expect(el.getItemByKey("src").expanded).to.equal(false);
+  it("only apply once — later writes have no effect", async () => {
+    const el = await treeFixture(sampleItems());
+    el.defaultExpandedItems = ["src"];
+    el.items = sampleItems();
+    await settle(el);
+    expect(el.isItemExpanded("src")).to.equal(false);
   });
 });
+
+// ─── selection ───
 
 describe("tvx-tree-view — single selection (default)", () => {
   it("clicking a row selects it, sets aria-current, and fires tvx-selection-change", async () => {
-    const el = await treeFixture(buildSampleItems());
-    const readme = el.getItemByKey("readme");
-    await readme.updateComplete;
-    let detail;
-    el.addEventListener("tvx-selection-change", (event) => (detail = event.detail));
-    readme.shadowRoot.querySelector(".tree-item__row").click();
-    await el.updateComplete;
-    expect(readme.selected).to.equal(true);
-    expect(readme.getAttribute("aria-current")).to.equal("true");
-    expect(detail.selectedItems).to.deep.equal(new Set(["readme"]));
+    const el = await treeFixture(sampleItems());
+    const events = onceEvent(el, "tvx-selection-change");
+    await click(el, "README.md");
+    expect([...events[0].selectedItems]).to.deep.equal(["readme"]);
+    expect(row(el, "README.md").getAttribute("aria-selected")).to.equal("true");
+    expect(row(el, "README.md").getAttribute("aria-current")).to.equal("true");
   });
 
-  it("selecting a nested node does not select its ancestors in single-select mode", async () => {
-    const el = await treeFixture(buildSampleItems());
-    el.setItemExpansion({ id: "src", expand: true });
-    await el.updateComplete;
-    const src = el.getItemByKey("src");
-    const index = el.getItemByKey("index");
-    await index.updateComplete;
-    index.shadowRoot.querySelector(".tree-item__row").click();
-    await el.updateComplete;
-    expect(index.selected).to.equal(true);
-    expect(src.selected).to.equal(false);
+  it("selecting a second row replaces the first", async () => {
+    const el = await treeFixture(sampleItems());
+    await click(el, "README.md");
+    await click(el, "src/");
+    expect([...el.selectedItems]).to.deep.equal(["src"]);
+    expect(row(el, "README.md").getAttribute("aria-selected")).to.equal("false");
   });
 
-  it("selecting a second row replaces the first selection", async () => {
-    const el = await treeFixture(buildSampleItems());
-    const src = el.getItemByKey("src");
-    const readme = el.getItemByKey("readme");
-    await src.updateComplete;
-    await readme.updateComplete;
-    src.shadowRoot.querySelector(".tree-item__row").click();
-    await el.updateComplete;
-    readme.shadowRoot.querySelector(".tree-item__row").click();
-    await el.updateComplete;
-    expect(src.selected).to.equal(false);
-    expect(readme.selected).to.equal(true);
-    expect(el.selectedItems).to.deep.equal(new Set(["readme"]));
+  it("selecting a nested row doesn't select its ancestors", async () => {
+    const el = await treeFixture(sampleItems(), { defaultExpandedItems: ["src"] });
+    await click(el, "index.js");
+    expect([...el.selectedItems]).to.deep.equal(["index"]);
+  });
+
+  it("modifier keys are ignored outside multi-select", async () => {
+    const el = await treeFixture(sampleItems());
+    await click(el, "README.md");
+    await click(el, "src/", { ctrlKey: true });
+    expect([...el.selectedItems]).to.deep.equal(["src"]);
+  });
+
+  it("setItemSelection selects and deselects; deselecting an unselected id is a no-op", async () => {
+    const el = await treeFixture(sampleItems());
+    el.setItemSelection({ id: "readme", selected: true });
+    const events = onceEvent(el, "tvx-selection-change");
+    el.setItemSelection({ id: "src", selected: false });
+    expect(events).to.have.length(0);
+    expect([...el.selectedItems]).to.deep.equal(["readme"]);
+    el.setItemSelection({ id: "readme", selected: false });
+    expect(el.selectedItems.size).to.equal(0);
+  });
+
+  it("disableSelection: clicks still toggle branches but never select", async () => {
+    const el = await treeFixture(sampleItems(), { disableSelection: true });
+    const events = onceEvent(el, "tvx-selection-change");
+    await click(el, "src/");
+    expect(el.isItemExpanded("src")).to.equal(true);
+    expect(events).to.have.length(0);
   });
 });
 
-describe("tvx-tree-view — multi-select (ctrl/cmd+click, shift+click)", () => {
-  /** @param {Element} row @param {Partial<MouseEventInit>} init */
-  function clickRow(row, init = {}) {
-    row.dispatchEvent(new MouseEvent("click", { bubbles: true, composed: true, ...init }));
-  }
+describe("tvx-tree-view — multi-select", () => {
+  /** A..E, flat. */
+  /** @returns {TestItem[]} */
+  const letters = () =>
+    ["Alpha", "Beta", "Cherry", "Delta", "Echo"].map((label) => ({ id: label[0], label }));
 
-  it("a plain click replaces the whole selection with just that item, same as single-select", async () => {
-    const el = await treeFixture(buildTwoChildItems());
-    el.multiSelect = true;
-    el.setItemExpansion({ id: "src", expand: true });
-    await el.updateComplete;
-    const index = el.getItemByKey("index");
-    const utils = el.getItemByKey("utils");
-    await index.updateComplete;
-    await utils.updateComplete;
-
-    clickRow(index.shadowRoot.querySelector(".tree-item__row"));
-    await el.updateComplete;
-    clickRow(utils.shadowRoot.querySelector(".tree-item__row"));
-    await el.updateComplete;
-
-    expect(index.selected).to.equal(false);
-    expect(utils.selected).to.equal(true);
-    expect(el.selectedItems).to.deep.equal(new Set(["utils"]));
+  it("sets aria-multiselectable", async () => {
+    const el = await treeFixture(letters(), { multiSelect: true });
+    expect(el.getAttribute("aria-multiselectable")).to.not.equal(null);
   });
 
-  it("ctrl/cmd+click toggles one item without touching the rest of the selection", async () => {
-    const el = await treeFixture(buildTwoChildItems());
-    el.multiSelect = true;
-    el.setItemExpansion({ id: "src", expand: true });
-    await el.updateComplete;
-    const index = el.getItemByKey("index");
-    const utils = el.getItemByKey("utils");
-    await index.updateComplete;
-    await utils.updateComplete;
-
-    clickRow(index.shadowRoot.querySelector(".tree-item__row"));
-    await el.updateComplete;
-    clickRow(utils.shadowRoot.querySelector(".tree-item__row"), { ctrlKey: true });
-    await el.updateComplete;
-
-    expect(index.selected).to.equal(true);
-    expect(utils.selected).to.equal(true);
-    expect(el.selectedItems).to.deep.equal(new Set(["index", "utils"]));
-
-    clickRow(index.shadowRoot.querySelector(".tree-item__row"), { metaKey: true });
-    await el.updateComplete;
-
-    expect(index.selected).to.equal(false);
-    expect(utils.selected).to.equal(true);
+  it("a plain click replaces the whole selection", async () => {
+    const el = await treeFixture(letters(), { multiSelect: true });
+    await click(el, "Alpha");
+    await click(el, "Beta", { ctrlKey: true });
+    await click(el, "Cherry");
+    expect([...el.selectedItems]).to.deep.equal(["C"]);
   });
 
-  it("shift+click selects the contiguous visible range from the last selection anchor", async () => {
-    const el = await treeFixture([
-      buildItem({ id: "a", label: "Alpha" }),
-      buildItem({ id: "b", label: "Beta" }),
-      buildItem({ id: "c", label: "Cherry" }),
-      buildItem({ id: "d", label: "Delta" }),
-    ]);
-    el.multiSelect = true;
-    await el.updateComplete;
-    const a = el.getItemByKey("a");
-    const c = el.getItemByKey("c");
-    const d = el.getItemByKey("d");
-    await a.updateComplete;
-    await d.updateComplete;
-
-    clickRow(a.shadowRoot.querySelector(".tree-item__row"));
-    await el.updateComplete;
-    clickRow(c.shadowRoot.querySelector(".tree-item__row"), { shiftKey: true });
-    await el.updateComplete;
-
-    expect(el.selectedItems).to.deep.equal(new Set(["a", "b", "c"]));
-
-    // The anchor advances to "c" after that shift+click, so this one extends from "c" to "d" — it
-    // just happens to produce the same total here since both ranges only ever grow.
-    clickRow(d.shadowRoot.querySelector(".tree-item__row"), { shiftKey: true });
-    await el.updateComplete;
-    expect(el.selectedItems).to.deep.equal(new Set(["a", "b", "c", "d"]));
+  it("ctrl/cmd+click toggles one item without touching the rest", async () => {
+    const el = await treeFixture(letters(), { multiSelect: true });
+    await click(el, "Alpha");
+    await click(el, "Cherry", { ctrlKey: true });
+    await click(el, "Delta", { metaKey: true });
+    expect([...el.selectedItems].sort()).to.deep.equal(["A", "C", "D"]);
+    await click(el, "Cherry", { ctrlKey: true });
+    expect([...el.selectedItems].sort()).to.deep.equal(["A", "D"]);
   });
 
-  it("a shift+click merges into the existing selection instead of replacing it", async () => {
-    const el = await treeFixture([
-      buildItem({ id: "a", label: "Alpha" }),
-      buildItem({ id: "b", label: "Beta" }),
-      buildItem({ id: "c", label: "Cherry" }),
-      buildItem({ id: "d", label: "Delta" }),
-    ]);
-    el.multiSelect = true;
-    await el.updateComplete;
-    const a = el.getItemByKey("a");
-    const c = el.getItemByKey("c");
-    const d = el.getItemByKey("d");
-
-    // A ctrl+click far from the eventual range must survive the shift+click below — a plain click
-    // would have replaced the whole selection instead, so both of these use ctrl+click.
-    clickRow(a.shadowRoot.querySelector(".tree-item__row"), { ctrlKey: true });
-    await el.updateComplete;
-    clickRow(d.shadowRoot.querySelector(".tree-item__row"), { ctrlKey: true });
-    await el.updateComplete;
-    clickRow(c.shadowRoot.querySelector(".tree-item__row"), { shiftKey: true });
-    await el.updateComplete;
-
-    expect(el.selectedItems).to.deep.equal(new Set(["a", "c", "d"]));
+  it("shift+click selects the visible range from the anchor", async () => {
+    const el = await treeFixture(letters(), { multiSelect: true });
+    await click(el, "Beta");
+    await click(el, "Delta", { shiftKey: true });
+    expect([...el.selectedItems].sort()).to.deep.equal(["B", "C", "D"]);
   });
 
-  it("shift+click shrinks an already-selected range from the far end, without deselecting the clicked item", async () => {
-    const el = await treeFixture([
-      buildItem({ id: "a", label: "Alpha" }),
-      buildItem({ id: "b", label: "Beta" }),
-      buildItem({ id: "c", label: "Cherry" }),
-      buildItem({ id: "d", label: "Delta" }),
-    ]);
-    el.multiSelect = true;
-    await el.updateComplete;
-    const a = el.getItemByKey("a");
-    const b = el.getItemByKey("b");
-    const d = el.getItemByKey("d");
-
-    clickRow(a.shadowRoot.querySelector(".tree-item__row"));
-    await el.updateComplete;
-    clickRow(d.shadowRoot.querySelector(".tree-item__row"), { shiftKey: true });
-    await el.updateComplete;
-    expect(el.selectedItems).to.deep.equal(new Set(["a", "b", "c", "d"]));
-
-    // "b" is already selected, so this shift+click shrinks — it removes everything strictly
-    // between "b" and the anchor ("d"), i.e. "c" and "d" itself, and moves the anchor to "b".
-    clickRow(b.shadowRoot.querySelector(".tree-item__row"), { shiftKey: true });
-    await el.updateComplete;
-    expect(el.selectedItems).to.deep.equal(new Set(["a", "b"]));
-
-    // Shift+clicking "b" again is now shift+clicking the anchor itself — nothing left to back
-    // off, so it's a no-op.
-    clickRow(b.shadowRoot.querySelector(".tree-item__row"), { shiftKey: true });
-    await el.updateComplete;
-    expect(el.selectedItems).to.deep.equal(new Set(["a", "b"]));
+  it("shift+click merges into the existing selection", async () => {
+    const el = await treeFixture(letters(), { multiSelect: true });
+    await click(el, "Alpha");
+    await click(el, "Delta", { ctrlKey: true });
+    await click(el, "Echo", { shiftKey: true });
+    expect([...el.selectedItems].sort()).to.deep.equal(["A", "D", "E"]);
   });
 
-  it("disabled items are excluded from a shift+click range", async () => {
-    const el = await treeFixture([
-      buildItem({ id: "a", label: "Alpha" }),
-      buildItem({ id: "b", label: "Beta" }),
-      buildItem({ id: "c", label: "Cherry" }),
-    ]);
-    el.multiSelect = true;
-    await el.updateComplete;
-    const a = el.getItemByKey("a");
-    const b = el.getItemByKey("b");
-    const c = el.getItemByKey("c");
-    b.disabled = true;
-    await el.updateComplete;
+  it("shift+click on a selected item shrinks the range but keeps that item", async () => {
+    const el = await treeFixture(letters(), { multiSelect: true });
+    await click(el, "Alpha");
+    await click(el, "Echo", { shiftKey: true });
+    await click(el, "Cherry", { shiftKey: true });
+    expect([...el.selectedItems].sort()).to.deep.equal(["A", "B", "C"]);
+  });
 
-    clickRow(a.shadowRoot.querySelector(".tree-item__row"));
-    await el.updateComplete;
-    clickRow(c.shadowRoot.querySelector(".tree-item__row"), { shiftKey: true });
-    await el.updateComplete;
-
-    expect(el.selectedItems).to.deep.equal(new Set(["a", "c"]));
+  it("disabled items are skipped by clicks and shift ranges", async () => {
+    const items = letters();
+    items[2] = { ...items[2], disabled: true };
+    const el = await treeFixture(items, { multiSelect: true });
+    await click(el, "Alpha");
+    await click(el, "Echo", { shiftKey: true });
+    expect([...el.selectedItems].sort()).to.deep.equal(["A", "B", "D", "E"]);
+    el.setItemSelection({ id: "C", selected: true });
+    expect(el.selectedItems.has("C")).to.equal(false);
   });
 });
 
 describe("tvx-tree-view — checkboxSelection", () => {
-  it("renders a checkbox per row when checkboxSelection is set, checked to match .selected", async () => {
-    const el = await treeFixture(buildSampleItems());
-    el.checkboxSelection = true;
-    await el.updateComplete;
-    const readme = el.getItemByKey("readme");
-    await readme.updateComplete;
-
-    const checkbox = readme.shadowRoot.querySelector("md-checkbox");
-    expect(checkbox).to.exist;
-    expect(checkbox.checked).to.equal(false);
-
-    readme.selected = true;
-    await readme.updateComplete;
+  it("renders a checkbox per row, checked to match the selection", async () => {
+    const el = await treeFixture(sampleItems(), {
+      checkboxSelection: true,
+      defaultSelectedItems: ["readme"],
+    });
+    const checkbox = /** @type {any} */ (row(el, "README.md").querySelector("md-checkbox"));
+    expect(rows(el).every((r) => r.querySelector("md-checkbox"))).to.equal(true);
     expect(checkbox.checked).to.equal(true);
   });
 
-  it("clicking the checkbox in single-select mode selects that item", async () => {
-    const el = await treeFixture(buildSampleItems());
-    el.checkboxSelection = true;
-    await el.updateComplete;
-    const readme = el.getItemByKey("readme");
-    await readme.updateComplete;
-
-    readme.shadowRoot.querySelector("md-checkbox").click();
-    await el.updateComplete;
-
-    expect(readme.selected).to.equal(true);
-    expect(el.selectedItems).to.deep.equal(new Set(["readme"]));
+  it("renders no checkbox with disableSelection", async () => {
+    const el = await treeFixture(sampleItems(), {
+      checkboxSelection: true,
+      disableSelection: true,
+    });
+    expect(el.shadowRoot?.querySelector("md-checkbox")).to.equal(null);
   });
 
-  it("clicking a checkbox in multi-select mode toggles just that item, leaving unrelated selection untouched", async () => {
-    // Two children per parent, only one checked in each — so neither parent's cascade fires,
-    // isolating the "unrelated subtree untouched" behavior from cascade's own upward propagation
-    // (covered separately below).
-    const el = await treeFixture([
-      buildItem({
-        id: "a",
-        label: "a/",
-        children: [
-          { id: "a1", label: "a1.js" },
-          { id: "a2", label: "a2.js" },
-        ],
-      }),
-      buildItem({
-        id: "b",
-        label: "b/",
-        children: [
-          { id: "b1", label: "b1.js" },
-          { id: "b2", label: "b2.js" },
-        ],
-      }),
-    ]);
-    el.multiSelect = true;
-    el.checkboxSelection = true;
-    el.setItemExpansion({ id: "a", expand: true });
-    el.setItemExpansion({ id: "b", expand: true });
-    await el.updateComplete;
-    const a1 = el.getItemByKey("a1");
-    const b1 = el.getItemByKey("b1");
-    await a1.updateComplete;
-    await b1.updateComplete;
-
-    a1.shadowRoot.querySelector("md-checkbox").click();
-    await el.updateComplete;
-    b1.shadowRoot.querySelector("md-checkbox").click();
-    await el.updateComplete;
-
-    expect(el.selectedItems).to.deep.equal(new Set(["a1", "b1"]));
-
-    a1.shadowRoot.querySelector("md-checkbox").click();
-    await el.updateComplete;
-    expect(el.selectedItems).to.deep.equal(new Set(["b1"]));
-  });
-
-  it("no checkbox renders when disableSelection is set, even with checkboxSelection on", async () => {
-    const el = await treeFixture(buildSampleItems());
-    el.checkboxSelection = true;
-    el.disableSelection = true;
-    await el.updateComplete;
-    const readme = el.getItemByKey("readme");
-    await readme.updateComplete;
-
-    expect(readme.shadowRoot.querySelector("md-checkbox")).to.equal(null);
-  });
-
-  it("clicking a row does not select when checkboxSelection is on — only the checkbox does", async () => {
-    const el = await treeFixture(buildSampleItems());
-    el.checkboxSelection = true;
-    await el.updateComplete;
-    const readme = el.getItemByKey("readme");
-    await readme.updateComplete;
-
-    readme.shadowRoot.querySelector(".tree-item__row").click();
-    await el.updateComplete;
-    expect(readme.selected).to.equal(false);
-    expect(el.selectedItems).to.deep.equal(new Set());
-  });
-
-  it("clicking a branch row with checkboxSelection on still toggles expansion, just not selection", async () => {
-    const el = await treeFixture(buildSampleItems());
-    el.checkboxSelection = true;
-    await el.updateComplete;
-    const src = el.getItemByKey("src");
-    await src.updateComplete;
-
-    src.shadowRoot.querySelector(".tree-item__row").click();
-    await el.updateComplete;
-    expect(src.expanded).to.equal(true);
-    expect(src.selected).to.equal(false);
-  });
-
-  it("checking every child individually (never the parent's own checkbox) selects the parent, not just indeterminate", async () => {
-    const el = await treeFixture(buildTwoChildItems());
-    el.multiSelect = true;
-    el.checkboxSelection = true;
-    el.setItemExpansion({ id: "src", expand: true });
-    await el.updateComplete;
-    const src = el.getItemByKey("src");
-    const index = el.getItemByKey("index");
-    const utils = el.getItemByKey("utils");
-    await src.updateComplete;
-    await index.updateComplete;
-    await utils.updateComplete;
-
-    index.shadowRoot.querySelector("md-checkbox").click();
-    await el.updateComplete;
-    expect(src.selected).to.equal(false);
-    expect(src.indeterminate).to.equal(true);
-
-    utils.shadowRoot.querySelector("md-checkbox").click();
-    await el.updateComplete;
-    expect(src.selected).to.equal(true);
-    expect(src.indeterminate).to.equal(false);
-  });
-
-  it("clicking a branch's own checkbox cascades select/deselect to its whole subtree", async () => {
-    const el = await treeFixture(buildTwoChildItems());
-    el.multiSelect = true;
-    el.checkboxSelection = true;
-    el.setItemExpansion({ id: "src", expand: true });
-    await el.updateComplete;
-    const src = el.getItemByKey("src");
-    const index = el.getItemByKey("index");
-    const utils = el.getItemByKey("utils");
-    await src.updateComplete;
-
-    src.shadowRoot.querySelector("md-checkbox").click();
-    await el.updateComplete;
-    expect(el.selectedItems).to.deep.equal(new Set(["src", "index", "utils"]));
-    expect(index.selected).to.equal(true);
-    expect(utils.selected).to.equal(true);
-    expect(src.indeterminate).to.equal(false);
-
-    src.shadowRoot.querySelector("md-checkbox").click();
-    await el.updateComplete;
-    expect(el.selectedItems).to.deep.equal(new Set());
-    expect(index.selected).to.equal(false);
-    expect(utils.selected).to.equal(false);
-  });
-
-  it("Space cascades like a checkbox click when checkboxSelection is on, even focused on a branch", async () => {
-    const el = await treeFixture(buildTwoChildItems());
-    el.multiSelect = true;
-    el.checkboxSelection = true;
-    el.setItemExpansion({ id: "src", expand: true });
-    await el.updateComplete;
-    const src = el.getItemByKey("src");
-    const index = el.getItemByKey("index");
-    const utils = el.getItemByKey("utils");
-    el.focusItem(src);
-
-    src.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, composed: true }));
-    await el.updateComplete;
-    expect(el.selectedItems).to.deep.equal(new Set(["src", "index", "utils"]));
-    expect(index.selected).to.equal(true);
-    expect(utils.selected).to.equal(true);
-    expect(src.selected).to.equal(true);
-    expect(src.indeterminate).to.equal(false);
-
-    src.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, composed: true }));
-    await el.updateComplete;
-    expect(el.selectedItems).to.deep.equal(new Set());
-  });
-});
-
-describe("tvx-tree-view — roving tabindex & keyboard nav", () => {
-  it("ArrowDown/ArrowUp move the roving tab stop between visible items", async () => {
-    const el = await treeFixture(buildSampleItems());
-    const src = el.getItemByKey("src");
-    const readme = el.getItemByKey("readme");
-    el.focusItem(src);
-
-    src.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, composed: true }),
-    );
-    expect(el.focusedKey).to.equal("readme");
-    expect(readme.tabIndex).to.equal(0);
-    expect(src.tabIndex).to.equal(-1);
-
-    readme.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "ArrowUp", bubbles: true, composed: true }),
-    );
-    expect(el.focusedKey).to.equal("src");
-  });
-
-  it("Home/End jump to the first/last visible item", async () => {
-    const el = await treeFixture(buildSampleItems());
-    const src = el.getItemByKey("src");
-    const readme = el.getItemByKey("readme");
-    el.focusItem(src);
-
-    src.dispatchEvent(new KeyboardEvent("keydown", { key: "End", bubbles: true, composed: true }));
-    expect(el.focusedKey).to.equal("readme");
-
-    readme.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Home", bubbles: true, composed: true }),
-    );
-    expect(el.focusedKey).to.equal("src");
-  });
-
-  it("ArrowRight expands a collapsed branch without moving focus, then moves into its first child", async () => {
-    const el = await treeFixture(buildSampleItems());
-    const src = el.getItemByKey("src");
-    el.focusItem(src);
-
-    src.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, composed: true }),
-    );
-    await el.updateComplete;
-    expect(src.expanded).to.equal(true);
-    expect(el.focusedKey).to.equal("src");
-
-    src.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "ArrowRight", bubbles: true, composed: true }),
-    );
-    expect(el.focusedKey).to.equal("index");
-  });
-
-  it("ArrowLeft collapses an expanded branch without moving focus, then moves focus to the parent", async () => {
-    const el = await treeFixture(buildSampleItems());
-    el.setItemExpansion({ id: "src", expand: true });
-    await el.updateComplete;
-    const src = el.getItemByKey("src");
-    const index = el.getItemByKey("index");
-
-    el.focusItem(src);
-    src.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, composed: true }),
-    );
-    expect(src.expanded).to.equal(false);
-    expect(el.focusedKey).to.equal("src");
-
-    el.setItemExpansion({ id: "src", expand: true });
-    await el.updateComplete;
-    el.focusItem(index);
-    index.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "ArrowLeft", bubbles: true, composed: true }),
-    );
-    expect(el.focusedKey).to.equal("src");
-  });
-
-  it("typeahead jumps focus to the next visible item whose label starts with the typed text", async () => {
-    const el = await treeFixture([
-      buildItem({ id: "a", label: "Alpha" }),
-      buildItem({ id: "b", label: "Beta" }),
-      buildItem({ id: "c", label: "Cherry" }),
-    ]);
-    const alpha = el.getItemByKey("a");
-    el.focusItem(alpha);
-
-    alpha.dispatchEvent(new KeyboardEvent("keydown", { key: "c", bubbles: true, composed: true }));
-    expect(el.focusedKey).to.equal("c");
-  });
-
-  it("Enter toggles a branch's expansion rather than selecting it", async () => {
-    const el = await treeFixture(buildSampleItems());
-    const src = el.getItemByKey("src");
-    el.focusItem(src);
-
-    src.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Enter", bubbles: true, composed: true }),
-    );
-    expect(src.expanded).to.equal(true);
-    expect(src.selected).to.equal(false);
-
-    src.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Enter", bubbles: true, composed: true }),
-    );
-    expect(src.expanded).to.equal(false);
-  });
-
-  it("Enter is a no-op on a leaf item (nothing to expand)", async () => {
-    const el = await treeFixture(buildSampleItems());
-    const readme = el.getItemByKey("readme");
-    el.focusItem(readme);
-
-    readme.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Enter", bubbles: true, composed: true }),
-    );
-    expect(readme.selected).to.equal(false);
-  });
-
-  it("Space activates in single-select mode too (previously gated to multiSelect)", async () => {
-    const el = await treeFixture(buildSampleItems());
-    const readme = el.getItemByKey("readme");
-    el.focusItem(readme);
-
-    readme.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, composed: true }));
-    expect(readme.selected).to.equal(true);
-  });
-
-  it("Space selects a branch without touching its expansion", async () => {
-    const el = await treeFixture(buildSampleItems());
-    const src = el.getItemByKey("src");
-    el.focusItem(src);
-
-    src.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, composed: true }));
-    expect(src.selected).to.equal(true);
-    expect(src.expanded).to.equal(false);
-  });
-
-  it("Enter/Space are no-ops for selection/expansion respectively when disableSelection is set", async () => {
-    const el = await treeFixture(buildSampleItems());
-    el.disableSelection = true;
-    await el.updateComplete;
-    const src = el.getItemByKey("src");
-    el.focusItem(src);
-
-    src.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Enter", bubbles: true, composed: true }),
-    );
-    expect(src.expanded).to.equal(true);
-
-    src.dispatchEvent(new KeyboardEvent("keydown", { key: " ", bubbles: true, composed: true }));
-    expect(src.expanded).to.equal(true);
-    expect(src.selected).to.equal(false);
-  });
-
-  it("clicking a row toggles instead of selecting when disableSelection is set", async () => {
-    const el = await treeFixture(buildSampleItems());
-    el.disableSelection = true;
-    await el.updateComplete;
-    const src = el.getItemByKey("src");
-    await src.updateComplete;
-
-    src.shadowRoot.querySelector(".tree-item__row").click();
-    await el.updateComplete;
-    expect(src.expanded).to.equal(true);
-  });
-
-  it("Backspace moves focus to the parent item", async () => {
-    const el = await treeFixture(buildSampleItems());
-    el.setItemExpansion({ id: "src", expand: true });
-    await el.updateComplete;
-    const index = el.getItemByKey("index");
-    el.focusItem(index);
-
-    index.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "Backspace", bubbles: true, composed: true }),
-    );
-    expect(el.focusedKey).to.equal("src");
-  });
-
-  it("PageDown/PageUp jump by an estimated page within the nearest scroll container", async () => {
-    const el = /** @type {TvxTreeView} */ (document.createElement("tvx-tree-view"));
-    el.items = Array.from({ length: 20 }, (_, i) => buildItem({ id: `n${i}`, label: `Node ${i}` }));
-    const container = /** @type {HTMLElement} */ (
-      await fixture(html`<div style="height: 150px; overflow: auto;"></div>`)
-    );
-    container.append(el);
-    await el.updateComplete;
-
-    const first = el.getItemByKey("n0");
-    el.focusItem(first);
-
-    first.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "PageDown", bubbles: true, composed: true }),
-    );
-    const afterPageDown = el.focusedKey;
-    // A 150px container can't fit all 20 rows — PageDown should land short of the end.
-    expect(afterPageDown).to.not.equal("n0");
-    expect(afterPageDown).to.not.equal("n19");
-
-    const landed = /** @type {TvxTreeItem} */ (
-      el.getItemByKey(/** @type {string} */ (afterPageDown))
-    );
-    landed.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "PageUp", bubbles: true, composed: true }),
-    );
-    expect(el.focusedKey).to.equal("n0");
-  });
-
-  it("focusNode coalesces scroll-into-view onto the most recently focused item", async () => {
-    const el = await treeFixture(buildSampleItems());
-    const src = el.getItemByKey("src");
-    const readme = el.getItemByKey("readme");
-    let srcCalls = 0;
-    let readmeCalls = 0;
-    src.scrollIntoView = () => {
-      srcCalls++;
-    };
-    readme.scrollIntoView = () => {
-      readmeCalls++;
-    };
-
-    el.focusItem(src);
-    el.focusItem(readme);
-    el.focusItem(readme);
-
-    await new Promise((resolve) => requestAnimationFrame(resolve));
-    expect(srcCalls).to.equal(0);
-    expect(readmeCalls).to.equal(1);
-  });
-});
-
-describe("tvx-tree-view — Shift+ArrowUp/Down range selection (multi-select)", () => {
-  it("Shift+ArrowDown extends the range selection from the last focused item, same as shift+click", async () => {
-    const el = await treeFixture([
-      buildItem({ id: "a", label: "Alpha" }),
-      buildItem({ id: "b", label: "Beta" }),
-      buildItem({ id: "c", label: "Cherry" }),
-    ]);
-    el.multiSelect = true;
-    await el.updateComplete;
-    const a = el.getItemByKey("a");
-    const b = el.getItemByKey("b");
-
-    a.shadowRoot.querySelector(".tree-item__row").click();
-    await el.updateComplete;
-    el.focusItem(a);
-
-    a.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "ArrowDown", shiftKey: true, bubbles: true, composed: true }),
-    );
-    await el.updateComplete;
-    expect(el.focusedKey).to.equal("b");
-    expect(el.selectedItems).to.deep.equal(new Set(["a", "b"]));
-
-    b.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "ArrowDown", shiftKey: true, bubbles: true, composed: true }),
-    );
-    await el.updateComplete;
-    expect(el.focusedKey).to.equal("c");
-    expect(el.selectedItems).to.deep.equal(new Set(["a", "b", "c"]));
-  });
-
-  it("a plain ArrowDown (no Shift) only moves focus — it never changes the selection", async () => {
-    const el = await treeFixture([
-      buildItem({ id: "a", label: "Alpha" }),
-      buildItem({ id: "b", label: "Beta" }),
-    ]);
-    el.multiSelect = true;
-    await el.updateComplete;
-    const a = el.getItemByKey("a");
-
-    a.shadowRoot.querySelector(".tree-item__row").click();
-    await el.updateComplete;
-    el.focusItem(a);
-
-    a.dispatchEvent(
-      new KeyboardEvent("keydown", { key: "ArrowDown", bubbles: true, composed: true }),
-    );
-    await el.updateComplete;
-    expect(el.focusedKey).to.equal("b");
-    expect(el.selectedItems).to.deep.equal(new Set(["a"]));
-  });
-});
-
-describe("tvx-tree-view — async loading (dataSource)", () => {
-  // dataSource: { getTreeItems: async (parent?) => TvxTreeItem[], getChildrenCount: (item) => number }.
-  // getTreeItems(undefined) fetches the root; getTreeItems(item) fetches a branch's children on
-  // expand. getChildrenCount runs once per item, eagerly, on whatever batch it just arrived in —
-  // a count > 0 makes that item a group (chevron), 0 leaves it a leaf. .items is ignored once
-  // dataSource is set, except as `initialItems` (see below).
-
-  it("with no .items set, fetches the root via getTreeItems(undefined) behind a whole-tree placeholder, then applies getChildrenCount to mark which root items are groups", async () => {
-    const el = /** @type {TvxTreeView} */ (await fixture(html`<tvx-tree-view></tvx-tree-view>`));
-    /** @type {(value: unknown) => void} */
-    let resolveRoot = () => {};
-    el.dataSource = {
-      getTreeItems: () => new Promise((resolve) => (resolveRoot = resolve)),
-      getChildrenCount: (item) => (item.key === "src" ? 2 : 0),
-    };
-    await el.updateComplete;
-
-    const placeholder = /** @type {TvxTreeItem} */ (el.querySelector("[loading]"));
-    expect(placeholder).to.exist;
-    const region = el.shadowRoot.querySelector(".tree-view__live-region");
-    await aTimeout(20);
-    expect(region.textContent).to.equal("Loading…");
-
-    resolveRoot([
-      buildItem({ id: "src", label: "src/" }),
-      buildItem({ id: "readme", label: "README.md" }),
-    ]);
-    await aTimeout(20);
-    await el.updateComplete;
-
-    expect(el.querySelector("[loading]")).to.equal(null);
-    expect(el.getItemByKey("src").hasChildren).to.equal(true);
-    expect(el.getItemByKey("src").childCount).to.equal(2);
-    expect(el.getItemByKey("readme").hasChildren).to.equal(false);
-  });
-
-  it("with .items set, treats it as initialItems: skips the root getTreeItems() call entirely but still runs getChildrenCount on it", async () => {
-    const el = /** @type {TvxTreeView} */ (await fixture(html`<tvx-tree-view></tvx-tree-view>`));
-    let rootCalled = false;
-    el.items = [
-      buildItem({ id: "src", label: "src/" }),
-      buildItem({ id: "readme", label: "README.md" }),
-    ];
-    el.dataSource = {
-      getTreeItems: (parent) => {
-        if (!parent) rootCalled = true;
-        return Promise.resolve([]);
-      },
-      getChildrenCount: (item) => (item.key === "src" ? 2 : 0),
-    };
-    await el.updateComplete;
-    await aTimeout(20);
-
-    expect(rootCalled).to.equal(false);
-    expect(el.getItemByKey("src").hasChildren).to.equal(true);
-    expect(el.getItemByKey("src").childCount).to.equal(2);
-  });
-
-  it("fires tvx-children-loaded with key/node: null once the root batch lands", async () => {
-    const el = /** @type {TvxTreeView} */ (await fixture(html`<tvx-tree-view></tvx-tree-view>`));
-    /** @type {any} */
-    let detail;
-    el.addEventListener("tvx-children-loaded", (event) => (detail = event.detail));
-    el.dataSource = {
-      getTreeItems: async () => [buildItem({ id: "readme", label: "README.md" })],
-      getChildrenCount: () => 0,
-    };
-    await el.updateComplete;
-    await aTimeout(20);
-    await el.updateComplete;
-
-    expect(detail.key).to.equal(null);
-    expect(detail.node).to.equal(null);
-    expect(detail.items.map((item) => item.key)).to.deep.equal(["readme"]);
-  });
-
-  it("expanding a group with a known childCount shows tvx-tree-skeleton (not the generic placeholder), announces the count, then appends real children", async () => {
-    const el = /** @type {TvxTreeView} */ (await fixture(html`<tvx-tree-view></tvx-tree-view>`));
-    /** @type {(value: unknown) => void} */
-    let resolveLoad = () => {};
-    el.items = [buildItem({ id: "src", label: "src/" })];
-    el.dataSource = {
-      getTreeItems: (parent) =>
-        parent ? new Promise((resolve) => (resolveLoad = resolve)) : Promise.resolve([]),
-      getChildrenCount: (item) => (item.key === "src" ? 2 : 0),
-    };
-    await el.updateComplete;
-    await aTimeout(20); // let the initialItems getChildrenCount pass land
-
-    const src = el.getItemByKey("src");
-    el.setItemExpansion({ id: "src", expand: true });
-    await el.updateComplete;
-
-    const skeleton = src.querySelector("tvx-tree-skeleton");
-    expect(skeleton).to.exist;
-    expect(skeleton.count).to.equal(2);
-    // A known count never renders the generic spinner+text placeholder row.
-    expect(src.querySelector("[loading]")).to.equal(null);
-
-    const region = el.shadowRoot.querySelector(".tree-view__live-region");
-    await aTimeout(20);
-    expect(region.textContent).to.equal("Loading 2 items.");
-
-    // getTreeItems returns real elements, built the same way .items is (see the spec's "Data
-    // model") — not plain data for the tree to convert.
-    resolveLoad([buildItem({ id: "a", label: "a.js" }), buildItem({ id: "b", label: "b.js" })]);
-    await aTimeout(20);
-    await el.updateComplete;
-
-    expect(src.querySelector("tvx-tree-skeleton")).to.equal(null);
-    expect(el.getItemByKey("a")).to.exist;
-    expect(el.getItemByKey("b")).to.exist;
-
-    // Regression: lazily-appended children must land inside the branch's `<tvx-item-sub-tree>`,
-    // not its unnamed (label) slot — an unslotted append here previously replaced the branch's own
-    // visible label with the new item's row instead of adding it underneath.
-    const a = el.getItemByKey("a");
-    expect(a.parentElement).to.equal(src._subTreeEl);
-    expect(src._subTreeEl.getAttribute("slot")).to.equal("sub-tree");
-    await src.updateComplete;
-    expect(src.label).to.equal("src/");
-    expect(src.shadowRoot.querySelector(".tree-item__label").textContent.trim()).to.equal("src/");
-  });
-
-  it("caps tvx-tree-skeleton at 8 rows even when childCount reports a much larger number", async () => {
-    const el = /** @type {TvxTreeView} */ (await fixture(html`<tvx-tree-view></tvx-tree-view>`));
-    el.items = [buildItem({ id: "src", label: "src/" })];
-    el.dataSource = {
-      getTreeItems: () => new Promise(() => {}), // never resolves — only the placeholder matters here
-      getChildrenCount: (item) => (item.key === "src" ? 500 : 0),
-    };
-    await el.updateComplete;
-    await aTimeout(20);
-
-    el.setItemExpansion({ id: "src", expand: true });
-    await el.updateComplete;
-
-    const skeleton = /** @type {any} */ (el.getItemByKey("src").querySelector("tvx-tree-skeleton"));
-    expect(skeleton.count).to.equal(500);
-    await skeleton.updateComplete;
-    expect(skeleton.shadowRoot.querySelectorAll(".tree-skeleton__row").length).to.equal(8);
-  });
-
-  it("with an unknown count, the generic placeholder stays focusable — focus moves to it, then hands off to the first real child once loaded", async () => {
-    const el = /** @type {TvxTreeView} */ (await fixture(html`<tvx-tree-view></tvx-tree-view>`));
-    /** @type {(value: unknown) => void} */
-    let resolveLoad = () => {};
-    el.items = [buildItem({ id: "src", label: "src/" })];
-    el.dataSource = {
-      getTreeItems: (parent) =>
-        parent ? new Promise((resolve) => (resolveLoad = resolve)) : Promise.resolve([]),
-      // undefined, not a number — the branch is still a group, but with no known count.
-      getChildrenCount: (item) => (item.key === "src" ? undefined : 0),
-    };
-    await el.updateComplete;
-    await aTimeout(20);
-
-    const src = el.getItemByKey("src");
-    el.setItemExpansion({ id: "src", expand: true });
-    await el.updateComplete;
-
-    const placeholder = /** @type {TvxTreeItem} */ (src.querySelector("[loading]"));
-    expect(placeholder).to.exist;
-    expect(src.querySelector("tvx-tree-skeleton")).to.equal(null);
-    el.focusItem(placeholder);
-
-    resolveLoad([buildItem({ id: "a", label: "a.js" })]);
-    await aTimeout(20);
-    await el.updateComplete;
-
-    expect(src.querySelector("[loading]")).to.equal(null);
-    expect(el.focusedKey).to.equal("a");
-  });
-
-  it("applies getChildrenCount to a branch's newly-loaded children too, so a nested group gets its chevron before it's ever expanded", async () => {
-    const el = /** @type {TvxTreeView} */ (await fixture(html`<tvx-tree-view></tvx-tree-view>`));
-    el.items = [buildItem({ id: "src", label: "src/" })];
-    el.dataSource = {
-      getTreeItems: async (parent) => (parent ? [buildItem({ id: "utils", label: "utils/" })] : []),
-      getChildrenCount: (item) => (item.key === "src" || item.key === "utils" ? 1 : 0),
-    };
-    await el.updateComplete;
-    await aTimeout(20);
-
-    el.setItemExpansion({ id: "src", expand: true });
-    await el.updateComplete;
-    await aTimeout(20);
-    await el.updateComplete;
-
-    const utils = el.getItemByKey("utils");
-    expect(utils.hasChildren).to.equal(true);
-    expect(utils.childCount).to.equal(1);
-  });
-
-  it("fires tvx-children-loaded once a branch's new items are actually in the DOM, for consumers that decorate items post-load", async () => {
-    const el = /** @type {TvxTreeView} */ (await fixture(html`<tvx-tree-view></tvx-tree-view>`));
-    /** @type {(value: unknown) => void} */
-    let resolveLoad = () => {};
-    el.items = [buildItem({ id: "src", label: "src/" })];
-    el.dataSource = {
-      getTreeItems: (parent) =>
-        parent ? new Promise((resolve) => (resolveLoad = resolve)) : Promise.resolve([]),
-      getChildrenCount: (item) => (item.key === "src" ? 1 : 0),
-    };
-    await el.updateComplete;
-    await aTimeout(20);
-
-    /** @type {any} */
-    let detail;
-    el.addEventListener("tvx-children-loaded", (event) => (detail = event.detail));
-    el.setItemExpansion({ id: "src", expand: true });
-    await el.updateComplete;
-
-    // Not yet — the fetch hasn't resolved, nothing has actually landed in the DOM yet.
-    expect(detail).to.equal(undefined);
-
-    resolveLoad([buildItem({ id: "a", label: "a.js" })]);
-    await aTimeout(20);
-    await el.updateComplete;
-
-    expect(detail.key).to.equal("src");
-    expect(detail.node).to.equal(el.getItemByKey("src"));
-    expect(detail.items.map((item) => item.key)).to.deep.equal(["a"]);
-    // The event only fires once the item is actually appended, so a listener can safely decorate
-    // it immediately without waiting another tick.
-    expect(detail.items[0].isConnected).to.equal(true);
-  });
-
-  it("announces '{label} is empty.' and returns focus to the branch, removing aria-expanded, when getTreeItems resolves empty despite getChildrenCount having said otherwise", async () => {
-    const el = /** @type {TvxTreeView} */ (await fixture(html`<tvx-tree-view></tvx-tree-view>`));
-    el.items = [buildItem({ id: "empty", label: "empty/" })];
-    el.dataSource = {
-      getTreeItems: async (parent) => (parent ? [] : []),
-      getChildrenCount: (item) => (item.key === "empty" ? 3 : 0),
-    };
-    await el.updateComplete;
-    await aTimeout(20);
-
-    const branch = el.getItemByKey("empty");
-    el.setItemExpansion({ id: "empty", expand: true });
-    await el.updateComplete;
-    const placeholder = /** @type {TvxTreeItem} */ (branch.querySelector("[loading]"));
-    el.focusItem(placeholder);
-
-    await aTimeout(20);
-    await el.updateComplete;
-
-    const region = el.shadowRoot.querySelector(".tree-view__live-region");
-    expect(region.textContent).to.equal("empty/ is empty.");
-    expect(branch.hasChildren).to.equal(false);
-    expect(branch.hasAttribute("aria-expanded")).to.equal(false);
-    expect(el.focusedKey).to.equal("empty");
-  });
-
-  it("a leaf item (getChildrenCount returned 0) never calls getTreeItems on expand", async () => {
-    const el = /** @type {TvxTreeView} */ (await fixture(html`<tvx-tree-view></tvx-tree-view>`));
-    let branchCalled = false;
-    el.items = [buildItem({ id: "leaf", label: "leaf" })];
-    el.dataSource = {
-      getTreeItems: async (parent) => {
-        if (parent) branchCalled = true;
-        return [];
-      },
-      getChildrenCount: () => 0,
-    };
-    await el.updateComplete;
-    await aTimeout(20);
-
-    el.setItemExpansion({ id: "leaf", expand: true });
-    await el.updateComplete;
-    expect(branchCalled).to.equal(false);
-  });
-
-  it("a rejected getTreeItems leaves the item stuck — no retry on a later expand attempt", async () => {
-    const el = /** @type {TvxTreeView} */ (await fixture(html`<tvx-tree-view></tvx-tree-view>`));
-    let callCount = 0;
-    el.items = [buildItem({ id: "src", label: "src/" })];
-    el.dataSource = {
-      getTreeItems: async (parent) => {
-        if (!parent) return [];
-        callCount++;
-        throw new Error("network error");
-      },
-      getChildrenCount: (item) => (item.key === "src" ? 1 : 0),
-    };
-    await el.updateComplete;
-    await aTimeout(20);
-
-    el.setItemExpansion({ id: "src", expand: true });
-    await el.updateComplete;
-    await aTimeout(20);
-    expect(callCount).to.equal(1);
-    expect(el.getItemByKey("src").querySelector("[loading]")).to.equal(null);
-
-    el.setItemExpansion({ id: "src", expand: false });
-    el.setItemExpansion({ id: "src", expand: true });
-    await el.updateComplete;
-    await aTimeout(20);
-    expect(callCount).to.equal(1);
-  });
-
-  it("getChildrenCount returning undefined marks a group with an unknown count — a generic 'Loading…' placeholder on expand, and an empty getTreeItems result still runs the 'is empty' flow instead of being treated as never-a-group", async () => {
-    const el = /** @type {TvxTreeView} */ (await fixture(html`<tvx-tree-view></tvx-tree-view>`));
-    /** @type {(value: unknown) => void} */
-    let resolveLoad = () => {};
-    el.items = [buildItem({ id: "node_modules", label: "node_modules/" })];
-    el.dataSource = {
-      getTreeItems: (parent) =>
-        parent ? new Promise((resolve) => (resolveLoad = resolve)) : Promise.resolve([]),
-      // undefined, not 0 — a known-empty directory is still a group, unlike an actual leaf.
-      getChildrenCount: () => undefined,
-    };
-    await el.updateComplete;
-    await aTimeout(20);
-
-    const branch = el.getItemByKey("node_modules");
-    expect(branch.hasChildren).to.equal(true);
-    expect(branch.childCount).to.equal(undefined);
-
-    el.setItemExpansion({ id: "node_modules", expand: true });
-    await el.updateComplete;
-    const placeholder = /** @type {TvxTreeItem} */ (branch.querySelector("[loading]"));
-    expect(placeholder).to.exist;
-    el.focusItem(placeholder);
-
-    const region = el.shadowRoot.querySelector(".tree-view__live-region");
-    await aTimeout(20);
-    expect(region.textContent).to.equal("Loading…");
-
-    resolveLoad([]);
-    await aTimeout(20);
-    await el.updateComplete;
-    expect(region.textContent).to.equal("node_modules/ is empty.");
-    expect(branch.hasChildren).to.equal(false);
-  });
-});
-
-describe("tvx-tree-view — open in new tab", () => {
-  it("Ctrl+Enter dispatches tvx-open with newTab when getHref returns nothing", async () => {
-    const el = await treeFixture(buildSampleItems());
-    const readme = el.getItemByKey("readme");
-    let detail;
-    el.addEventListener("tvx-open", (event) => (detail = event.detail));
-    readme.dispatchEvent(
-      new KeyboardEvent("keydown", {
-        key: "Enter",
-        ctrlKey: true,
-        bubbles: true,
-        composed: true,
-      }),
-    );
-    expect(detail).to.deep.equal({ key: "readme", node: readme, newTab: true });
-  });
-
-  it("Ctrl+Enter opens getHref's URL directly instead of dispatching tvx-open", async () => {
-    const el = await treeFixture(buildSampleItems());
-    el.getHref = (item) => (item.key === "readme" ? "/files/readme" : undefined);
-    const readme = el.getItemByKey("readme");
-    let dispatched = false;
-    let openedUrl;
-    const originalOpen = window.open;
-    window.open = (url) => (openedUrl = url);
-    el.addEventListener("tvx-open", () => (dispatched = true));
-
-    readme.dispatchEvent(
-      new KeyboardEvent("keydown", {
-        key: "Enter",
-        ctrlKey: true,
-        bubbles: true,
-        composed: true,
-      }),
-    );
-
-    window.open = originalOpen;
-    expect(openedUrl).to.equal("/files/readme");
-    expect(dispatched).to.equal(false);
-  });
-});
-
-describe("tvx-tree-view — setItemExpansion", () => {
-  it("expands a collapsed branch and collapses an expanded one", async () => {
-    const el = await treeFixture(buildSampleItems());
-    el.setItemExpansion({ id: "src", expand: true });
-    await el.updateComplete;
+  it("a row click only toggles expansion — the checkbox does the selecting", async () => {
+    const el = await treeFixture(sampleItems(), { checkboxSelection: true });
+    await click(el, "src/");
     expect(el.isItemExpanded("src")).to.equal(true);
-    el.setItemExpansion({ id: "src", expand: false });
-    await el.updateComplete;
+    expect(el.selectedItems.size).to.equal(0);
+    await clickPart(el, "README.md", ".tree-view__checkbox");
+    expect([...el.selectedItems]).to.deep.equal(["readme"]);
+  });
+
+  it("checking a branch cascades to its whole subtree, and unchecking clears it", async () => {
+    const el = await treeFixture(twoParents(), { checkboxSelection: true, multiSelect: true });
+    await clickPart(el, "a/", ".tree-view__checkbox");
+    expect([...el.selectedItems].sort()).to.deep.equal(["a", "a1", "a2"]);
+    await clickPart(el, "a/", ".tree-view__checkbox");
+    expect(el.selectedItems.size).to.equal(0);
+  });
+
+  it("checking every child checks the parent; checking some makes it indeterminate", async () => {
+    const el = await treeFixture(twoParents(), {
+      checkboxSelection: true,
+      multiSelect: true,
+      defaultExpandedItems: ["a"],
+    });
+    await clickPart(el, "a1.js", ".tree-view__checkbox");
+    const parent = /** @type {any} */ (row(el, "a/").querySelector("md-checkbox"));
+    expect(parent.indeterminate).to.equal(true);
+    expect(parent.checked).to.equal(false);
+
+    await clickPart(el, "a2.js", ".tree-view__checkbox");
+    expect(el.selectedItems.has("a")).to.equal(true);
+    const updated = /** @type {any} */ (row(el, "a/").querySelector("md-checkbox"));
+    expect(updated.checked).to.equal(true);
+    expect(updated.indeterminate).to.equal(false);
+  });
+
+  it("Space cascades like a checkbox click", async () => {
+    const el = await treeFixture(twoParents(), { checkboxSelection: true, multiSelect: true });
+    await focusRow(el, "b/");
+    await press(el, " ");
+    expect([...el.selectedItems].sort()).to.deep.equal(["b", "b1"]);
+    expect(el.isItemExpanded("b")).to.equal(false);
+  });
+});
+
+// ─── keyboard ───
+
+describe("tvx-tree-view — keyboard navigation", () => {
+  it("exactly one row is a Tab stop — the first one by default", async () => {
+    const el = await treeFixture(sampleItems());
+    const tabStops = rows(el).filter((r) => r.tabIndex === 0);
+    expect(tabStops.map(labelOf)).to.deep.equal(["src/"]);
+  });
+
+  it("ArrowDown/ArrowUp move focus and the Tab stop between visible rows", async () => {
+    const el = await treeFixture(sampleItems());
+    await focusRow(el, "src/");
+    await press(el, "ArrowDown");
+    expect(focusedLabel(el)).to.equal("README.md");
+    expect(
+      rows(el)
+        .filter((r) => r.tabIndex === 0)
+        .map(labelOf),
+    ).to.deep.equal(["README.md"]);
+    await press(el, "ArrowUp");
+    expect(focusedLabel(el)).to.equal("src/");
+  });
+
+  it("Home/End jump to the first/last visible row", async () => {
+    const el = await treeFixture(twoParents(), { defaultExpandedItems: ["b"] });
+    await focusRow(el, "a/");
+    await press(el, "End");
+    expect(focusedLabel(el)).to.equal("b1.js");
+    await press(el, "Home");
+    expect(focusedLabel(el)).to.equal("a/");
+  });
+
+  it("ArrowRight expands a collapsed branch, then moves into its first child", async () => {
+    const el = await treeFixture(sampleItems());
+    await focusRow(el, "src/");
+    await press(el, "ArrowRight");
+    expect(el.isItemExpanded("src")).to.equal(true);
+    expect(focusedLabel(el)).to.equal("src/");
+    await press(el, "ArrowRight");
+    expect(focusedLabel(el)).to.equal("index.js");
+  });
+
+  it("ArrowLeft collapses an expanded branch, then moves to the parent", async () => {
+    const el = await treeFixture(sampleItems(), { defaultExpandedItems: ["src"] });
+    await focusRow(el, "index.js");
+    await press(el, "ArrowLeft");
+    expect(focusedLabel(el)).to.equal("src/");
+    await press(el, "ArrowLeft");
     expect(el.isItemExpanded("src")).to.equal(false);
   });
 
-  it("isItemExpanded returns false for an unknown id", async () => {
-    const el = await treeFixture(buildSampleItems());
-    expect(el.isItemExpanded("does-not-exist")).to.equal(false);
+  it("Backspace moves focus to the parent", async () => {
+    const el = await treeFixture(sampleItems(), { defaultExpandedItems: ["src"] });
+    await focusRow(el, "index.js");
+    await press(el, "Backspace");
+    expect(focusedLabel(el)).to.equal("src/");
+  });
+
+  it("typeahead focuses the next row whose label starts with the typed text", async () => {
+    const el = await treeFixture(sampleItems());
+    await focusRow(el, "src/");
+    await press(el, "r");
+    expect(focusedLabel(el)).to.equal("README.md");
+  });
+
+  it("Enter toggles a branch without selecting it, and is a no-op on a leaf", async () => {
+    const el = await treeFixture(sampleItems());
+    await focusRow(el, "src/");
+    await press(el, "Enter");
+    expect(el.isItemExpanded("src")).to.equal(true);
+    expect(el.selectedItems.size).to.equal(0);
+    await focusRow(el, "README.md");
+    await press(el, "Enter");
+    expect(el.selectedItems.size).to.equal(0);
+  });
+
+  it("Space selects without touching expansion", async () => {
+    const el = await treeFixture(sampleItems());
+    await focusRow(el, "src/");
+    await press(el, " ");
+    expect([...el.selectedItems]).to.deep.equal(["src"]);
+    expect(el.isItemExpanded("src")).to.equal(false);
+  });
+
+  it("Space does nothing with disableSelection", async () => {
+    const el = await treeFixture(sampleItems(), { disableSelection: true });
+    await focusRow(el, "README.md");
+    await press(el, " ");
+    expect(el.selectedItems.size).to.equal(0);
+  });
+
+  it("focus can move past a disabled row, but Enter/Space there do nothing", async () => {
+    const items = sampleItems();
+    items[0] = { ...items[0], disabled: true };
+    const el = await treeFixture(items);
+    await el.focusItem("src");
+    await settle(el);
+    await press(el, " ");
+    await press(el, "Enter");
+    expect(el.selectedItems.size).to.equal(0);
+    expect(el.isItemExpanded("src")).to.equal(false);
+    await press(el, "ArrowDown");
+    expect(focusedLabel(el)).to.equal("README.md");
+  });
+
+  it("PageDown/PageUp jump by about a viewport of rows", async () => {
+    const el = await treeFixture(flatItems(200));
+    await focusRow(el, "item-0");
+    await press(el, "PageDown");
+    const afterDown = Number(focusedLabel(el)?.split("-")[1]);
+    expect(afterDown).to.be.greaterThan(3);
+    await press(el, "PageUp");
+    expect(focusedLabel(el)).to.equal("item-0");
+  });
+
+  it("Shift+ArrowDown extends the selection like shift+click; a plain ArrowDown doesn't select", async () => {
+    const el = await treeFixture(flatItems(5), { multiSelect: true });
+    await click(el, "item-0");
+    await focusRow(el, "item-0");
+    await press(el, "ArrowDown", { shiftKey: true });
+    await press(el, "ArrowDown", { shiftKey: true });
+    expect([...el.selectedItems].sort()).to.deep.equal(["i0", "i1", "i2"]);
+    await press(el, "ArrowDown");
+    expect([...el.selectedItems].sort()).to.deep.equal(["i0", "i1", "i2"]);
   });
 });
 
-describe("tvx-tree-view — reordering", () => {
-  it("registers neither drag nor drop by default (reordering off)", async () => {
-    const el = await treeFixture(buildSampleItems());
-    const readme = el.getItemByKey("readme");
-    await readme.updateComplete;
-    expect(readme._dragCleanup).to.equal(null);
-    expect(readme._dropCleanup).to.equal(null);
-  });
+// ─── async loading ───
 
-  it("registers drag+drop once reordering is turned on, and tears down when turned off", async () => {
-    const el = await treeFixture(buildSampleItems());
-    el.reordering = true;
-    await el.updateComplete;
-    const readme = el.getItemByKey("readme");
-    await readme.updateComplete;
-    expect(readme._dragCleanup).to.not.equal(null);
-    expect(readme._dropCleanup).to.not.equal(null);
-
-    el.reordering = false;
-    await el.updateComplete;
-    await readme.updateComplete;
-    expect(readme._dragCleanup).to.equal(null);
-    expect(readme._dropCleanup).to.equal(null);
-  });
-
-  it("isItemReorderable vetoes only dragging that item — it stays a valid drop target", async () => {
-    const el = await treeFixture(buildSampleItems());
-    el.reordering = true;
-    el.isItemReorderable = (item) => item.key !== "readme";
-    await el.updateComplete;
-    const readme = el.getItemByKey("readme");
-    await readme.updateComplete;
-    expect(readme._dragCleanup).to.equal(null); // can't be picked up
-    expect(readme._dropCleanup).to.not.equal(null); // siblings can still land on/around it
-  });
-
-  it("disabled items get neither drag nor drop registration", async () => {
-    const el = await treeFixture(buildSampleItems());
-    el.reordering = true;
-    await el.updateComplete;
-    const readme = el.getItemByKey("readme");
-    readme.disabled = true;
-    await readme.updateComplete;
-    expect(readme._dragCleanup).to.equal(null);
-    expect(readme._dropCleanup).to.equal(null);
-  });
-
-  it("Alt+ArrowDown/Up moves the focused item among its siblings and keeps focus on it", async () => {
-    const el = await treeFixture(buildSampleItems());
-    el.reordering = true;
-    await el.updateComplete;
-    const src = el.getItemByKey("src");
-    el.focusItem(src);
-
-    src.dispatchEvent(
-      new KeyboardEvent("keydown", {
-        key: "ArrowDown",
-        altKey: true,
-        bubbles: true,
-        composed: true,
-      }),
-    );
-    await el.updateComplete;
-
-    expect([...el.children].map((c) => c.key)).to.deep.equal(["readme", "src"]);
-    expect(el.focusedKey).to.equal("src");
-
-    // "src" is now second (index 1) in [readme, src] — Alt+ArrowUp on it swaps it back before
-    // "readme". Alt+ArrowUp on "readme" itself would be a no-op: it's already first, nothing to
-    // move up past.
-    src.dispatchEvent(
-      new KeyboardEvent("keydown", {
-        key: "ArrowUp",
-        altKey: true,
-        bubbles: true,
-        composed: true,
-      }),
-    );
-    await el.updateComplete;
-    expect([...el.children].map((c) => c.key)).to.deep.equal(["src", "readme"]);
-  });
-
-  it("Alt+Arrow does nothing when reordering is off", async () => {
-    const el = await treeFixture(buildSampleItems());
-    const src = el.getItemByKey("src");
-    el.focusItem(src);
-    src.dispatchEvent(
-      new KeyboardEvent("keydown", {
-        key: "ArrowDown",
-        altKey: true,
-        bubbles: true,
-        composed: true,
-      }),
-    );
-    await el.updateComplete;
-    expect([...el.children].map((c) => c.key)).to.deep.equal(["src", "readme"]);
-  });
-
-  it("a before/after drop fires a cancelable tvx-item-position-change then moves the element", async () => {
-    const el = await treeFixture(buildSampleItems());
-    el.reordering = true;
-    await el.updateComplete;
-    const readme = el.getItemByKey("readme");
-
-    let detail;
-    el.addEventListener("tvx-item-position-change", (event) => (detail = event.detail));
-    readme.dispatchEvent(
-      new CustomEvent("tvx-tree-item-reorder-drop", {
-        detail: { sourceKey: "readme", targetKey: "src", zone: "before" },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-    await nextFrame();
-    await el.updateComplete;
-
-    expect(detail).to.deep.equal({
-      key: "readme",
-      oldPosition: { parentId: null, index: 1 },
-      newPosition: { parentId: null, index: 0 },
+describe("tvx-tree-view — dataSource", () => {
+  it("fetches the root behind a loading row when no .items are set", async () => {
+    /** @type {(items: object[]) => void} */
+    let resolveRoot = () => {};
+    const el = await treeFixture([], {
+      dataSource: {
+        getTreeItems: () => new Promise((resolve) => (resolveRoot = resolve)),
+        getChildrenCount: (item) => (item.id === "src" ? 2 : 0),
+      },
     });
-    expect([...el.children].map((c) => c.key)).to.deep.equal(["readme", "src"]);
-  });
-
-  it("preventDefault() on tvx-item-position-change vetoes the move entirely", async () => {
-    const el = await treeFixture(buildSampleItems());
-    el.reordering = true;
-    await el.updateComplete;
-    const src = el.getItemByKey("src");
-
-    el.addEventListener("tvx-item-position-change", (event) => event.preventDefault());
-    src.dispatchEvent(
-      new CustomEvent("tvx-tree-item-reorder-drop", {
-        detail: { sourceKey: "readme", targetKey: "src", zone: "before" },
-        bubbles: true,
-        composed: true,
-      }),
+    el.items = undefined;
+    await settle(el);
+    expect(el.shadowRoot?.querySelector(".tree-view__placeholder")).to.exist;
+    await aTimeout(20);
+    expect(el.shadowRoot?.querySelector(".tree-view__live-region")?.textContent).to.equal(
+      "Loading…",
     );
-    await el.updateComplete;
 
-    expect([...el.children].map((c) => c.key)).to.deep.equal(["src", "readme"]);
+    const loaded = onceEvent(el, "tvx-children-loaded");
+    resolveRoot([
+      { id: "src", label: "src/" },
+      { id: "readme", label: "README.md" },
+    ]);
+    await aTimeout(0);
+    await settle(el);
+    expect(el.shadowRoot?.querySelector(".tree-view__placeholder")).to.equal(null);
+    expect(labels(el)).to.deep.equal(["src/", "README.md"]);
+    expect(row(el, "src/").getAttribute("aria-expanded")).to.equal("false");
+    expect(row(el, "README.md").hasAttribute("aria-expanded")).to.equal(false);
+    expect(loaded[0]).to.include({ key: null, node: null });
   });
 
-  it("an 'into' drop reparents the item into the target's tvx-item-sub-tree and recomputes level", async () => {
-    const el = await treeFixture(buildSampleItems());
-    el.reordering = true;
-    await el.updateComplete;
-    const src = el.getItemByKey("src");
-    const readme = el.getItemByKey("readme");
-
-    src.dispatchEvent(
-      new CustomEvent("tvx-tree-item-reorder-drop", {
-        detail: { sourceKey: "readme", targetKey: "src", zone: "into" },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-    await nextFrame();
-    await el.updateComplete;
-
-    expect(readme.parentElement).to.equal(src._subTreeEl);
-    expect(readme.hasAttribute("slot")).to.equal(false);
-    expect(readme.level).to.equal(2);
+  it("treats pre-set .items as the root batch — no root fetch", async () => {
+    let rootCalls = 0;
+    const el = await treeFixture([{ id: "src", label: "src/" }], {
+      dataSource: {
+        getTreeItems: (parent) => {
+          if (!parent) rootCalls++;
+          return Promise.resolve([]);
+        },
+        getChildrenCount: () => 2,
+      },
+    });
+    await aTimeout(20);
+    expect(rootCalls).to.equal(0);
+    expect(row(el, "src/").getAttribute("aria-expanded")).to.equal("false");
   });
 
-  it("refuses an 'into' drop onto a leaf (no hasChildren)", async () => {
-    const el = await treeFixture(buildSampleItems());
-    el.reordering = true;
-    await el.updateComplete;
-    const src = el.getItemByKey("src");
-    const readme = el.getItemByKey("readme"); // leaf, hasChildren === false
-
-    let fired = false;
-    el.addEventListener("tvx-item-position-change", () => (fired = true));
-    readme.dispatchEvent(
-      new CustomEvent("tvx-tree-item-reorder-drop", {
-        detail: { sourceKey: "src", targetKey: "readme", zone: "into" },
-        bubbles: true,
-        composed: true,
-      }),
-    );
-    await el.updateComplete;
-
-    expect(fired).to.equal(false);
-    expect(src.parentElement).to.equal(el);
-  });
-
-  it("refuses dropping an item onto its own descendant (would create a cycle)", async () => {
-    const el = await treeFixture(buildSampleItems());
-    el.reordering = true;
+  it("a known child count shows capped skeleton rows, announces it, then renders the children", async () => {
+    /** @type {(items: object[]) => void} */
+    let resolveChildren = () => {};
+    const el = await treeFixture([{ id: "src", label: "src/" }], {
+      dataSource: {
+        getTreeItems: () => new Promise((resolve) => (resolveChildren = resolve)),
+        getChildrenCount: (item) => (item.id === "src" ? 50 : 0),
+      },
+    });
+    const loaded = onceEvent(el, "tvx-children-loaded");
     el.setItemExpansion({ id: "src", expand: true });
-    await el.updateComplete;
-    const src = el.getItemByKey("src");
-    const index = el.getItemByKey("index");
-
-    let fired = false;
-    el.addEventListener("tvx-item-position-change", () => (fired = true));
-    index.dispatchEvent(
-      new CustomEvent("tvx-tree-item-reorder-drop", {
-        detail: { sourceKey: "src", targetKey: "index", zone: "before" },
-        bubbles: true,
-        composed: true,
-      }),
+    await settle(el);
+    expect(el.shadowRoot?.querySelectorAll("md-skeleton").length).to.equal(8);
+    await aTimeout(20);
+    expect(el.shadowRoot?.querySelector(".tree-view__live-region")?.textContent).to.equal(
+      "Loading 50 items.",
     );
-    await el.updateComplete;
 
-    expect(fired).to.equal(false);
-    expect(index.parentElement).to.equal(src._subTreeEl);
+    resolveChildren([{ id: "a", label: "a.js" }]);
+    await aTimeout(0);
+    await settle(el);
+    expect(el.shadowRoot?.querySelector("md-skeleton")).to.equal(null);
+    expect(labels(el)).to.deep.equal(["src/", "a.js"]);
+    expect(loaded[0].key).to.equal("src");
+    expect(loaded[0].items).to.deep.equal([{ id: "a", label: "a.js" }]);
   });
 
-  it("a selected item stays selected after a drag moves it to a new parent (selection doesn't cascade)", async () => {
-    const el = await treeFixture(buildTwoParentsWithChildren());
-    el.multiSelect = true;
-    el.reordering = true;
-    el.setItemExpansion({ id: "a", expand: true });
-    el.setItemExpansion({ id: "b", expand: true });
-    await el.updateComplete;
-    const a = el.getItemByKey("a");
-    const b = el.getItemByKey("b");
-    const a1 = el.getItemByKey("a1");
-    await a1.updateComplete;
+  it("an unknown child count shows a single spinner row", async () => {
+    const el = await treeFixture([{ id: "src", label: "src/" }], {
+      dataSource: {
+        getTreeItems: () => new Promise(() => {}),
+        getChildrenCount: () => undefined,
+      },
+    });
+    el.setItemExpansion({ id: "src", expand: true });
+    await settle(el);
+    expect(el.shadowRoot?.querySelectorAll(".tree-view__placeholder").length).to.equal(1);
+    expect(el.shadowRoot?.querySelector("md-progress-circular")).to.exist;
+  });
 
-    a1.shadowRoot.querySelector(".tree-item__row").click();
-    await el.updateComplete;
-    expect(a1.selected).to.equal(true);
-    expect(a.selected).to.equal(false);
-    expect(b.selected).to.equal(false);
-
-    b.dispatchEvent(
-      new CustomEvent("tvx-tree-item-reorder-drop", {
-        detail: { sourceKey: "a1", targetKey: "b", zone: "into" },
-        bubbles: true,
-        composed: true,
-      }),
+  it("an empty result turns the branch into a leaf and announces it", async () => {
+    const el = await treeFixture([{ id: "empty", label: "empty/" }], {
+      dataSource: { getTreeItems: async () => [], getChildrenCount: () => undefined },
+    });
+    el.setItemExpansion({ id: "empty", expand: true });
+    await aTimeout(20);
+    await settle(el);
+    expect(row(el, "empty/").hasAttribute("aria-expanded")).to.equal(false);
+    expect(el.expandedItems.has("empty")).to.equal(false);
+    expect(el.shadowRoot?.querySelector(".tree-view__live-region")?.textContent).to.equal(
+      "empty/ is empty.",
     );
-    await nextFrame();
-    await el.updateComplete;
+  });
 
-    expect(a1.parentElement).to.equal(b._subTreeEl);
-    expect(a1.selected).to.equal(true);
-    expect(a.selected).to.equal(false);
-    expect(b.selected).to.equal(false);
+  it("a leaf (child count 0) never fetches", async () => {
+    let calls = 0;
+    const el = await treeFixture([{ id: "leaf", label: "leaf" }], {
+      dataSource: {
+        getTreeItems: async () => {
+          calls++;
+          return [];
+        },
+        getChildrenCount: () => 0,
+      },
+    });
+    el.setItemExpansion({ id: "leaf", expand: true });
+    await aTimeout(20);
+    expect(calls).to.equal(0);
+  });
+
+  it("a rejected fetch fires tvx-load-error and is retried on the next expand", async () => {
+    let calls = 0;
+    const el = await treeFixture([{ id: "src", label: "src/" }], {
+      dataSource: {
+        getTreeItems: async () => {
+          calls++;
+          if (calls === 1) throw new Error("offline");
+          return [{ id: "a", label: "a.js" }];
+        },
+        getChildrenCount: () => 1,
+      },
+    });
+    const errors = onceEvent(el, "tvx-load-error");
+    el.setItemExpansion({ id: "src", expand: true });
+    await aTimeout(20);
+    expect(errors[0].key).to.equal("src");
+    expect(errors[0].error.message).to.equal("offline");
+
+    el.setItemExpansion({ id: "src", expand: false });
+    el.setItemExpansion({ id: "src", expand: true });
+    await aTimeout(20);
+    await settle(el);
+    expect(calls).to.equal(2);
+    expect(labels(el)).to.deep.equal(["src/", "a.js"]);
+  });
+
+  it("re-fetches expanded lazy branches after .items is reassigned", async () => {
+    let calls = 0;
+    const el = await treeFixture([{ id: "src", label: "src/" }], {
+      dataSource: {
+        getTreeItems: async () => {
+          calls++;
+          return [{ id: "a", label: "a.js" }];
+        },
+        getChildrenCount: () => 1,
+      },
+    });
+    el.setItemExpansion({ id: "src", expand: true });
+    await aTimeout(20);
+    el.items = [{ id: "src", label: "src/" }];
+    await aTimeout(20);
+    await settle(el);
+    expect(calls).to.equal(2);
+    expect(labels(el)).to.deep.equal(["src/", "a.js"]);
+  });
+});
+
+// ─── open in new tab ───
+
+describe("tvx-tree-view — open in new tab", () => {
+  it("Ctrl+Enter fires cancelable tvx-open when getHref returns nothing", async () => {
+    const el = await treeFixture(sampleItems());
+    const opened = onceEvent(el, "tvx-open");
+    await focusRow(el, "README.md");
+    await press(el, "Enter", { ctrlKey: true });
+    expect(opened).to.have.length(1);
+    expect(opened[0]).to.include({ key: "readme", newTab: true });
+    expect(opened[0].node).to.deep.equal({ id: "readme", label: "README.md" });
+  });
+
+  it("opens getHref's URL directly, and never a javascript: URL", async () => {
+    const original = window.open;
+    /** @type {string[]} */
+    const urls = [];
+    window.open = /** @type {any} */ ((/** @type {string} */ url) => urls.push(url));
+    try {
+      const el = await treeFixture(sampleItems(), {
+        getHref: (item) =>
+          item.id === "readme" ? "https://example.com/readme" : "javascript:alert(1)",
+      });
+      const opened = onceEvent(el, "tvx-open");
+      await focusRow(el, "README.md");
+      await press(el, "Enter", { metaKey: true });
+      await focusRow(el, "src/");
+      await press(el, "Enter", { ctrlKey: true });
+      expect(urls).to.deep.equal(["https://example.com/readme"]);
+      expect(opened.map((d) => d.key)).to.deep.equal(["src"]);
+    } finally {
+      window.open = original;
+    }
+  });
+
+  it("middle-click opens too", async () => {
+    const el = await treeFixture(sampleItems());
+    const opened = onceEvent(el, "tvx-open");
+    row(el, "README.md").dispatchEvent(
+      new MouseEvent("auxclick", { button: 1, bubbles: true, composed: true, cancelable: true }),
+    );
+    expect(opened.map((d) => d.key)).to.deep.equal(["readme"]);
+  });
+});
+
+// ─── reordering ───
+
+describe("tvx-tree-view — reordering", () => {
+  it("makes the tree a drag source only while reordering is on", async () => {
+    const el = await treeFixture(sampleItems());
+    expect(el.getAttribute("draggable")).to.equal(null);
+    el.reordering = true;
+    await settle(el);
+    expect(el.getAttribute("draggable")).to.equal("true");
+    el.reordering = false;
+    await settle(el);
+    expect(el.getAttribute("draggable")).to.equal(null);
+  });
+
+  it("Alt+ArrowDown/Up move the focused item among its siblings, keep focus, and fire the event", async () => {
+    const el = await treeFixture(sampleItems(), { reordering: true });
+    const moves = onceEvent(el, "tvx-item-position-change");
+    await focusRow(el, "src/");
+    await press(el, "ArrowDown", { altKey: true });
+    expect(labels(el)).to.deep.equal(["README.md", "src/"]);
+    expect(focusedLabel(el)).to.equal("src/");
+    expect(moves[0]).to.deep.equal({
+      key: "src",
+      oldPosition: { parentId: null, index: 0 },
+      newPosition: { parentId: null, index: 1 },
+    });
+    await press(el, "ArrowUp", { altKey: true });
+    expect(labels(el)).to.deep.equal(["src/", "README.md"]);
+  });
+
+  it("moves inside a branch report the parent id", async () => {
+    const el = await treeFixture(twoParents(), { reordering: true, defaultExpandedItems: ["a"] });
+    const moves = onceEvent(el, "tvx-item-position-change");
+    await focusRow(el, "a2.js");
+    await press(el, "ArrowUp", { altKey: true });
+    expect(labels(el)).to.deep.equal(["a/", "a2.js", "a1.js", "b/"]);
+    expect(moves[0].newPosition).to.deep.equal({ parentId: "a", index: 0 });
+  });
+
+  it("preventDefault() on tvx-item-position-change vetoes the move", async () => {
+    const el = await treeFixture(sampleItems(), { reordering: true });
+    el.addEventListener("tvx-item-position-change", (event) => event.preventDefault());
+    await focusRow(el, "src/");
+    await press(el, "ArrowDown", { altKey: true });
+    expect(labels(el)).to.deep.equal(["src/", "README.md"]);
+  });
+
+  it("Alt+Arrow does nothing when reordering is off, for non-reorderable items, or for disabled items", async () => {
+    const items = [...sampleItems(), { id: "locked", label: "locked", disabled: true }];
+    const el = await treeFixture(items);
+    await focusRow(el, "src/");
+    await press(el, "ArrowDown", { altKey: true });
+    expect(labels(el)).to.deep.equal(["src/", "README.md", "locked"]);
+
+    el.reordering = true;
+    el.isItemReorderable = (item) => item.id !== "src";
+    await settle(el);
+    await focusRow(el, "src/");
+    await press(el, "ArrowDown", { altKey: true });
+    expect(labels(el)).to.deep.equal(["src/", "README.md", "locked"]);
+
+    await el.focusItem("locked");
+    await settle(el);
+    await press(el, "ArrowUp", { altKey: true });
+    expect(labels(el)).to.deep.equal(["src/", "README.md", "locked"]);
+  });
+
+  it("keeps the selection on a moved item", async () => {
+    const el = await treeFixture(sampleItems(), { reordering: true });
+    await click(el, "src/");
+    await focusRow(el, "src/");
+    await press(el, "ArrowDown", { altKey: true });
+    expect([...el.selectedItems]).to.deep.equal(["src"]);
+    expect(row(el, "src/").getAttribute("aria-selected")).to.equal("true");
   });
 });

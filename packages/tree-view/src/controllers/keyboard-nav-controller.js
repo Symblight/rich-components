@@ -1,184 +1,119 @@
-import { closestTreeItemParent } from "../components/tree-item/tree-item.js";
+/** Typeahead buffer resets after this many ms without typing. */
+const TYPEAHEAD_RESET_MS = 500;
+/** Row height (px) used for PageUp/PageDown before a row has been measured. */
+const DEFAULT_ROW_HEIGHT = 38;
 
-/** Fallback row height (px) for PageUp/PageDown when an item hasn't laid out yet. */
-const DEFAULT_ROW_HEIGHT = 32;
-
-/** Interprets `keydown` per the spec's keyboard table, delegating to the other controllers. */
+/** The WAI-ARIA tree keyboard table, plus typeahead. Focus moves through `host.focusItem()`. */
 export class KeyboardNavController {
+  #typed = "";
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  #typedTimer;
+
   /**
    * @param {import("../base/tree-view.js").TvxTreeView} host
-   * @param {{
-   *   expansion: import("./expansion-controller.js").ExpansionController,
-   *   focus: import("./roving-focus-controller.js").RovingFocusController,
-   *   selection: import("./selection-controller.js").SelectionController,
-   *   typeahead: import("./typeahead-controller.js").TypeaheadController,
-   *   open: import("./open-controller.js").OpenController,
-   *   reorder: import("./reorder-controller.js").ReorderController,
-   * }} controllers
+   * @param {import("./tree-model-controller.js").TreeModelController} model
+   * @param {import("./selection-controller.js").SelectionController} selection
+   * @param {import("./reorder-controller.js").ReorderController} reorder
+   * @param {import("./open-controller.js").OpenController} open
    */
-  constructor(host, { expansion, focus, selection, typeahead, open, reorder }) {
+  constructor(host, model, selection, reorder, open) {
     this.host = host;
-    this.expansion = expansion;
-    this.focus = focus;
+    this.model = model;
     this.selection = selection;
-    this.typeahead = typeahead;
-    this.open = open;
     this.reorder = reorder;
+    this.open = open;
   }
 
-  /** @param {KeyboardEvent} event */
-  onKeydown(event) {
-    const target = /** @type {Element} */ (event.target);
-    const item = /** @type {import("../components/tree-item/tree-item.js").TvxTreeItem | null} */ (
-      target?.closest?.("tvx-tree-item")
-    );
-    if (!item || item.disabled) return;
+  /** @param {KeyboardEvent} event
+   * @param {PropertyKey} id the row the key was pressed on */
+  onKeydown(event, id) {
+    const { host, model } = this;
+    const index = model.indexOf(id);
+    const disabled = model.isDisabled(id);
+    const expanded = model.isExpanded(id);
+    /** @param {PropertyKey | null} target */
+    const focus = (target) => {
+      event.preventDefault();
+      host.focusItem(target);
+    };
 
     switch (event.key) {
-      case "ArrowDown": {
-        event.preventDefault();
-        // Alt+Arrow reordering, for parity with the drag-and-drop gesture.
-        if (event.altKey && this.host.reordering) this.reorder.moveBySibling(item, 1);
-        else this.#moveFocus(this.#step(item, 1), event.shiftKey);
-        return;
-      }
+      case "ArrowDown":
       case "ArrowUp": {
-        event.preventDefault();
-        if (event.altKey && this.host.reordering) this.reorder.moveBySibling(item, -1);
-        else this.#moveFocus(this.#step(item, -1), event.shiftKey);
-        return;
-      }
-      case "ArrowRight": {
-        event.preventDefault();
-        if (item.hasChildren && !item.expanded) this.expansion.expand(item);
-        else if (item.expanded) this.focus.focusNode(this.host.firstChildItem(item));
-        return;
-      }
-      case "ArrowLeft": {
-        event.preventDefault();
-        if (item.expanded) this.expansion.collapse(item);
-        else this.focus.focusNode(this.#parentItem(item));
-        return;
-      }
-      case "Home": {
-        event.preventDefault();
-        this.focus.focusNode(this.host.firstVisibleItem());
-        return;
-      }
-      case "End": {
-        event.preventDefault();
-        this.focus.focusNode(this.host.lastVisibleItem());
-        return;
-      }
-      case "PageUp": {
-        event.preventDefault();
-        this.focus.focusNode(this.#page(item, -1));
-        return;
-      }
-      case "PageDown": {
-        event.preventDefault();
-        this.focus.focusNode(this.#page(item, 1));
-        return;
-      }
-      case "Backspace": {
-        // Common "Backspace goes up a level" file-explorer convention.
-        event.preventDefault();
-        this.focus.focusNode(this.#parentItem(item));
-        return;
-      }
-      case "Enter": {
-        if (event.ctrlKey || event.metaKey) {
+        const step = event.key === "ArrowDown" ? 1 : -1;
+        if (event.altKey && host.reordering) {
           event.preventDefault();
-          this.open.activate(item);
+          if (!disabled) this.reorder.moveBySibling(id, step);
           return;
         }
-        event.preventDefault();
-        if (item.hasChildren) this.expansion.toggle(item);
+        const next = model.itemFrom(index + step, step);
+        focus(next);
+        if (next !== null && event.shiftKey) this.selection.activate(next, { shiftKey: true });
         return;
       }
-      case " ": {
-        // Space always selects, independent of expansion — Enter owns expand/collapse. Under
-        // checkboxSelection, selecting is exclusively the checkbox's job (row clicks don't select
-        // either — see tree-item's #onRowClick), so Space mirrors a checkbox click and cascades.
+      case "ArrowRight":
         event.preventDefault();
-        if (this.host.checkboxSelection)
-          this.selection.selectCascading(item, this.host.buildIndexTree());
-        else this.selection.activate(item);
+        if (!model.hasChildren(id)) return;
+        if (expanded) focus(model.childIds(id)[0] ?? null);
+        else model.expand(id);
         return;
+      case "ArrowLeft":
+        event.preventDefault();
+        if (expanded) model.collapse(id);
+        else focus(model.parentId(id));
+        return;
+      case "Backspace": // file-explorer convention: go up a level
+        return focus(model.parentId(id));
+      case "Home":
+        return focus(model.itemFrom(0, 1));
+      case "End":
+        return focus(model.itemFrom(model.rows.length - 1, -1));
+      case "PageDown":
+      case "PageUp": {
+        const step = event.key === "PageDown" ? 1 : -1;
+        const last = model.rows.length - 1;
+        const target = Math.min(Math.max(index + step * this.#pageSize(index), 0), last);
+        return focus(model.itemFrom(target, step === 1 ? -1 : 1));
       }
+      case "Enter":
+        event.preventDefault();
+        if (disabled) return;
+        if (event.ctrlKey || event.metaKey) this.open.activate(id);
+        else if (model.hasChildren(id)) model.toggle(id);
+        return;
+      case " ": // Space always selects; with checkboxes it behaves like a checkbox click
+        event.preventDefault();
+        if (host.checkboxSelection) this.selection.toggleCascading(id);
+        else this.selection.activate(id);
+        return;
       default:
-        this.typeahead.onKeydown(event, item);
+        this.#typeahead(event, index);
     }
   }
 
-  /** Moves the roving-tabindex focus to `next` and, with Shift held, extends/shrinks the range
-   * selection to it — same `activate({ shiftKey: true })` path shift+click uses, so a fresh
-   * Shift+Arrow press with no prior anchor just selects `next` alone (matching shift+click).
-   * @param {import("../components/tree-item/tree-item.js").TvxTreeItem | null} next
-   * @param {boolean} shiftKey */
-  #moveFocus(next, shiftKey) {
-    if (!next) return;
-    this.focus.focusNode(next);
-    if (shiftKey) this.selection.activate(next, { shiftKey: true });
-  }
+  /** Jumps to the next row (wrapping around) whose label starts with what was typed.
+   * @param {KeyboardEvent} event
+   * @param {number} index */
+  #typeahead(event, index) {
+    if (event.key.length !== 1 || event.altKey || event.ctrlKey || event.metaKey) return;
+    clearTimeout(this.#typedTimer);
+    this.#typed += event.key.toLowerCase();
+    this.#typedTimer = setTimeout(() => (this.#typed = ""), TYPEAHEAD_RESET_MS);
 
-  /**
-   * @param {import("../components/tree-item/tree-item.js").TvxTreeItem} item
-   * @param {1 | -1} direction
-   * @returns {import("../components/tree-item/tree-item.js").TvxTreeItem | null}
-   */
-  #step(item, direction) {
-    const visible = [...this.host.visibleItems()];
-    const index = visible.indexOf(item);
-    if (index === -1) return null;
-    return visible[index + direction] ?? null;
-  }
-
-  /** @param {import("../components/tree-item/tree-item.js").TvxTreeItem} item
-   * @returns {import("../components/tree-item/tree-item.js").TvxTreeItem | null} */
-  #parentItem(item) {
-    return closestTreeItemParent(item);
-  }
-
-  /**
-   * @param {import("../components/tree-item/tree-item.js").TvxTreeItem} item
-   * @param {1 | -1} direction
-   * @returns {import("../components/tree-item/tree-item.js").TvxTreeItem | null}
-   */
-  #page(item, direction) {
-    const visible = [...this.host.visibleItems()];
-    const index = visible.indexOf(item);
-    if (index === -1) return null;
-    const target = index + direction * this.#pageSize(item);
-    return visible[Math.min(Math.max(target, 0), visible.length - 1)] ?? null;
-  }
-
-  /**
-   * Rows-per-viewport estimate, from the item's own row height and the nearest scroll container.
-   * @param {import("../components/tree-item/tree-item.js").TvxTreeItem} item
-   * @returns {number}
-   */
-  #pageSize(item) {
-    const rowHeight = item.getBoundingClientRect().height || DEFAULT_ROW_HEIGHT;
-    const scrollContainer = this.#scrollContainer();
-    const availableHeight = scrollContainer?.clientHeight ?? window.innerHeight;
-    return Math.max(1, Math.floor(availableHeight / rowHeight));
-  }
-
-  /** Nearest scrollable ancestor of the tree host, if any — falls back to the viewport otherwise.
-   * @returns {HTMLElement | null} */
-  #scrollContainer() {
-    let node = this.host.parentElement;
-    while (node) {
-      const overflowY = getComputedStyle(node).overflowY;
-      if (
-        (overflowY === "auto" || overflowY === "scroll") &&
-        node.scrollHeight > node.clientHeight
-      ) {
-        return node;
+    const count = this.model.rows.length;
+    for (let step = 1; step <= count; step++) {
+      const id = this.model.idAt((index + step) % count);
+      if (id !== null && this.model.label(id).toLowerCase().startsWith(this.#typed)) {
+        this.host.focusItem(id);
+        return;
       }
-      node = node.parentElement;
     }
-    return null;
+  }
+
+  /** How many rows fit in the visible part of the tree. @param {number} index */
+  #pageSize(index) {
+    const rowHeight = this.host.rowElement(index)?.offsetHeight || DEFAULT_ROW_HEIGHT;
+    const viewport = Math.min(this.host.clientHeight || Infinity, window.innerHeight);
+    return Math.max(1, Math.floor(viewport / rowHeight));
   }
 }

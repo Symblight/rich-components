@@ -1,3 +1,6 @@
+import { html } from "lit";
+import { unsafeSVG } from "lit/directives/unsafe-svg.js";
+
 import "../index.js";
 import "@symblight/wc-material/icon";
 
@@ -5,93 +8,69 @@ import fileIcon from "@material-design-icons/svg/outlined/insert_drive_file.svg?
 
 export { fileIcon };
 
-/** @param {string} svg */
-export function icon(svg) {
-  const el = document.createElement("md-icon");
-  el.innerHTML = svg;
-  return el;
-}
-
 /**
  * @typedef {object} TreeNodeData
  * @property {string} id
  * @property {string} label
  * @property {TreeNodeData[]} [children]
- * @property {boolean} [hasChildren]
- * @property {number} [childCount]
- * @property {string} [icon]
  * @property {boolean} [directory]
  * @property {boolean} [disabled]
+ * @property {string} [trailingIcon] raw SVG
  */
 
-/** Builds a fresh `<tvx-tree-item>` subtree from a plain description; each story needs its own
- * instances — DOM elements can't be reused across two separately-rendered trees.
- * @param {TreeNodeData} data */
-export function buildItem({
-  id,
-  label,
-  children = [],
-  hasChildren,
-  childCount,
-  icon: iconSvg,
-  directory,
-  disabled,
-}) {
-  const item = document.createElement("tvx-tree-item");
-  item.key = id;
-  item.label = label;
-  if (hasChildren) item.hasChildren = true;
-  if (typeof childCount === "number") item.childCount = childCount;
-  if (disabled) item.disabled = true;
-  if (directory) {
-    const dirIcon = document.createElement("tvx-tree-directory-icon");
-    dirIcon.slot = "leading";
-    item.append(dirIcon);
-  } else if (iconSvg) {
-    const iconEl = icon(iconSvg);
-    iconEl.slot = "leading";
-    item.append(iconEl);
-  }
-  // A branch's children live in their own `<tvx-item-sub-tree>` sibling — no `slot="..."`
-  // needed, it auto-slots.
-  if (children.length > 0) {
-    const subTree = document.createElement("tvx-item-sub-tree");
-    subTree.append(...children.map(buildItem));
-    item.append(subTree);
-  }
-  return item;
+/** @param {string} svg */
+export function icon(svg) {
+  return html`<md-icon>${unsafeSVG(svg)}</md-icon>`;
 }
 
-/** A folder node — icon swaps open/closed via `tvx-tree-directory-icon`.
- * @param {TreeNodeData} data */
+/** @param {Omit<TreeNodeData, "directory">} data
+ * @returns {TreeNodeData} */
 export function folder(data) {
   return { ...data, directory: true };
 }
 
-/** A file node — same plain icon every leaf in these stories uses.
- * @param {TreeNodeData} data */
+/** @param {TreeNodeData} data */
 export function file(data) {
-  return { ...data, icon: fileIcon };
+  return data;
 }
 
+/** Folder icon that opens with the branch, file icon otherwise.
+ * @type {import("../base/tree-view.js").TvxTreeItemRenderer} */
+export const renderFileIcon = (item, { expanded }) =>
+  item.directory
+    ? html`<tvx-tree-directory-icon ?expanded=${expanded}></tvx-tree-directory-icon>`
+    : icon(fileIcon);
+
+/** @type {import("../base/tree-view.js").TvxTreeItemRenderer} */
+const renderTrailingIcon = (item) => (item.trailingIcon ? icon(item.trailingIcon) : undefined);
+
+/** A `tvx-tree-view` with the stories' shared file/folder icons, plus any extra properties.
+ * @param {Partial<import("../base/tree-view.js").TvxTreeView>} [props] */
+export function createTree(props = {}) {
+  const tree = document.createElement("tvx-tree-view");
+  tree.renderItemLeading = renderFileIcon;
+  tree.renderItemTrailing = renderTrailingIcon;
+  Object.assign(tree, props);
+  return tree;
+}
+
+/** @returns {TreeNodeData[]} */
 export function buildFileTree() {
   return [
-    buildItem(
-      folder({
-        id: "src",
-        label: "src/",
-        children: [
-          folder({
-            id: "components",
-            label: "components/",
-            children: [file({ id: "button", label: "button.js" })],
-          }),
-          file({ id: "index", label: "index.js" }),
-        ],
-      }),
-    ),
-    buildItem(file({ id: "gitignore", label: ".gitignore" })),
-    buildItem(file({ id: "readme", label: "README.md" })),
+    folder({
+      id: "src",
+      label: "src/",
+      children: [
+        folder({
+          id: "components",
+          label: "components/",
+          children: [file({ id: "button", label: "button.js" })],
+        }),
+        file({ id: "index", label: "index.js" }),
+      ],
+    }),
+    file({ id: "gitignore", label: ".gitignore" }),
+    file({ id: "readme", label: "README.md" }),
   ];
 }
 
@@ -111,6 +90,26 @@ export function hintText(text) {
   hint.style.margin = "0";
   hint.textContent = text;
   return hint;
+}
+
+/** @param {string} label
+ * @param {() => void} onClick */
+export function button(label, onClick) {
+  const el = document.createElement("button");
+  el.type = "button";
+  el.textContent = label;
+  el.addEventListener("click", onClick);
+  return el;
+}
+
+/** A wrapping row of controls. @param {...HTMLElement} children */
+export function controls(...children) {
+  const row = document.createElement("div");
+  row.style.display = "flex";
+  row.style.flexWrap = "wrap";
+  row.style.gap = "0.5rem";
+  row.append(...children);
+  return row;
 }
 
 /** A column wrapper — every multi-part story (hint/controls + tree + log) uses the same layout.

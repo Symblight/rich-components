@@ -1,9 +1,6 @@
-import "../index.js";
-import "@symblight/wc-material/icon";
-
 import openInNewIcon from "@material-design-icons/svg/outlined/open_in_new.svg?raw";
 
-import { buildItem, file, folder, hintText, icon, logPanel, stack } from "./shared.js";
+import { createTree, file, folder, hintText, logPanel, stack } from "./shared.js";
 
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
@@ -14,12 +11,9 @@ const meta = {
     docs: {
       description: {
         component:
-          "A tree item isn't inherently a link, so \"open in a new tab\" (middle-click, or " +
-          "Ctrl/Cmd+Enter) is handled separately from plain Enter/click activation: `getHref(node)` " +
-          "is an optional callback that returns a URL for a given node — if it does, the tree calls " +
-          "`window.open()` directly; if it returns `undefined` (or isn't set), a cancelable " +
-          "`tvx-open` event fires instead so the app can route itself. Plain Enter with no modifier " +
-          "never goes through this path at all — that's ordinary selection/activation.",
+          '"Open in a new tab" (middle-click, or Ctrl/Cmd+Enter) resolves `getHref(item)`: a safe ' +
+          "URL is opened with `window.open()`, otherwise a cancelable `tvx-open` fires so the app " +
+          "can route itself. Plain Enter/click never goes through this path.",
       },
     },
   },
@@ -28,30 +22,17 @@ export default meta;
 
 /** @typedef {import("@storybook/web-components").StoryObj} Story */
 
-// ─── getHref for files, tvx-open fallback for everything else ───────────────
-
 /** @type {Story} */
 export const GetHrefAndOpenEvent = {
   render: () => {
-    const tree = document.createElement("tvx-tree-view");
-
-    const readme = buildItem(file({ id: "readme", label: "README.md" }));
-    readme.append(Object.assign(icon(openInNewIcon), { slot: "trailing" }));
-
-    tree.items = [
-      buildItem(
-        folder({
-          id: "src",
-          label: "src/",
-          children: [file({ id: "index", label: "index.js" })],
-        }),
-      ),
-      readme,
-    ];
-
-    // Only files resolve to a real URL — a directory node has nothing to open, so getHref
-    // returning undefined for it falls through to the tvx-open event below instead.
-    tree.getHref = (node) => (node.hasChildren ? undefined : `/files/${String(node.key)}`);
+    const tree = createTree({
+      items: [
+        folder({ id: "src", label: "src/", children: [file({ id: "index", label: "index.js" })] }),
+        file({ id: "readme", label: "README.md", trailingIcon: openInNewIcon }),
+      ],
+      // only files resolve to a URL — directories fall through to tvx-open
+      getHref: (item) => (item.directory ? undefined : `/files/${item.id}`),
+    });
 
     const log = logPanel();
     tree.addEventListener("tvx-open", (event) => {
@@ -61,11 +42,8 @@ export const GetHrefAndOpenEvent = {
 
     return stack(
       hintText(
-        "Middle-click (or focus a row and press Ctrl/Cmd+Enter) on \"index.js\"/\"README.md\" — " +
-          "getHref resolves a URL for them, so the tree calls window.open() directly and nothing is " +
-          "logged. Do the same on \"src/\" — getHref returns undefined for a directory, so the " +
-          "cancelable tvx-open event fires instead, logged below. Plain Enter on any row just " +
-          "selects it, the same as always — it never touches this path.",
+        'Middle-click (or Ctrl/Cmd+Enter) a file to open it via getHref; do the same on "src/" to ' +
+          "get the tvx-open event instead.",
       ),
       tree,
       log,

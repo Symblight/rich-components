@@ -4,25 +4,70 @@
   /* the host is the virtualizer's scroll viewport — give it a height (or max-height) */
   overflow: auto;
   outline: none;
+  scrollbar-width: thin;
+  scrollbar-color: var(--_tvx-color-outline-variant) transparent;
 
-  --tvx-tree-item-gap: 0.2rem;
+  /* geometry — default density */
   --tvx-tree-item-row-height: 2.25rem;
-  --tvx-tree-item-padding: 0.5rem;
-  /* per-level indent; lines a child's chevron up under its parent's chevron centre */
-  --tvx-tree-item-indent: calc(var(--tvx-tree-item-padding) + 0.625rem);
+  /* gap between the row pill and the tree's edges */
+  --tvx-tree-item-inset: 0.5rem;
+  --tvx-tree-item-padding-start: 0.25rem;
+  --tvx-tree-item-padding-end: 0.625rem;
+  /* per nesting level; applied inside the pill, so selection edges stay aligned across levels */
+  --tvx-tree-item-indent: 1rem;
+  --tvx-tree-item-chevron-size: 1.5rem;
+  --tvx-tree-item-icon-size: 1.25rem;
+  --tvx-tree-item-checkbox-size: 2rem;
   --tvx-tree-item-shape: var(--_tvx-shape-corner-full);
-  --tvx-tree-item-color: var(--_tvx-color-on-surface);
-  --tvx-tree-item-hover-background-color: var(--_tvx-color-surface-container-high);
-  --tvx-tree-item-focus-outline-color: var(--_tvx-color-primary);
-  --tvx-tree-item-selected-background-color: var(--_tvx-color-secondary-container);
-  --tvx-tree-item-selected-color: var(--_tvx-color-on-secondary-container);
-  --tvx-tree-item-loading-color: var(--_tvx-color-on-surface-variant);
-  --tvx-tree-item-chevron-color: var(--_tvx-color-on-surface-variant);
   --tvx-tree-item-label-font: var(--_tvx-font-weight-regular) var(--_tvx-body-medium-font-size) /
     var(--_tvx-body-medium-line-height) var(--_tvx-font-family);
-  --tvx-tree-item-drop-target-background-color: var(--_tvx-color-secondary-container);
+
+  /* color */
+  --tvx-tree-item-color: var(--_tvx-color-on-surface);
+  --tvx-tree-item-icon-color: var(--_tvx-color-on-surface-variant);
+  --tvx-tree-item-chevron-color: var(--_tvx-color-on-surface-variant);
+  --tvx-tree-item-loading-color: var(--_tvx-color-on-surface-variant);
+  /* state layers, painted over the row's own fill */
+  --tvx-tree-item-hover-background-color: color-mix(
+    in srgb,
+    var(--_tvx-color-on-surface) 8%,
+    transparent
+  );
+  --tvx-tree-item-pressed-background-color: color-mix(
+    in srgb,
+    var(--_tvx-color-on-surface) 10%,
+    transparent
+  );
+  --tvx-tree-item-selected-background-color: var(--_tvx-color-secondary-container);
+  --tvx-tree-item-selected-color: var(--_tvx-color-on-secondary-container);
+  --tvx-tree-item-focus-outline-color: var(--_tvx-color-secondary);
+  --tvx-tree-item-drop-target-background-color: color-mix(
+    in srgb,
+    var(--_tvx-color-primary) 16%,
+    transparent
+  );
   --tvx-tree-item-drop-indicator-color: var(--_tvx-color-primary);
+  --tvx-tree-item-label-input-background-color: var(--_tvx-color-surface-container-lowest);
+  --tvx-tree-item-label-input-outline-color: var(--_tvx-color-primary);
+  --tvx-tree-item-label-input-shape: var(--_tvx-shape-corner-extra-small);
+  --tvx-tree-item-guide-color: var(--_tvx-color-outline-variant);
+  --tvx-tree-item-guide-active-color: color-mix(
+    in srgb,
+    var(--_tvx-color-on-surface-variant) 45%,
+    transparent
+  );
   --tvx-tree-skeleton-bar-height: 1em;
+}
+
+:host([compact]) {
+  --tvx-tree-item-row-height: 1.75rem;
+  --tvx-tree-item-inset: 0.375rem;
+  --tvx-tree-item-indent: 0.75rem;
+  --tvx-tree-item-chevron-size: 1.25rem;
+  --tvx-tree-item-icon-size: 1.125rem;
+  --tvx-tree-item-checkbox-size: 1.5rem;
+  --tvx-tree-item-label-font: var(--_tvx-font-weight-regular) 0.8125rem /
+    var(--_tvx-body-medium-line-height) var(--_tvx-font-family);
 }
 
 .tree-view {
@@ -32,7 +77,8 @@
 /* a row wrapper: the treeitem itself, carrying the gap so measured sizes include it */
 .tree-view__item,
 .tree-view__placeholder {
-  padding-block-end: var(--tvx-tree-view-row-gap, 0.125rem);
+  position: relative;
+  padding-block-end: var(--tvx-tree-view-row-gap, 0);
   outline: none;
 
   .tree-view_virtualized & {
@@ -48,34 +94,55 @@
 }
 
 .tree-view__row {
+  --_tvx-state-layer: transparent;
+
   position: relative;
   display: flex;
   align-items: center;
-  gap: var(--tvx-tree-item-gap);
   min-block-size: var(--tvx-tree-item-row-height);
-  margin-inline-start: calc((var(--_tvx-level, 1) - 1) * var(--tvx-tree-item-indent));
-  padding-inline: var(--tvx-tree-item-padding);
+  margin-inline: var(--tvx-tree-item-inset);
+  padding-inline: calc(
+      (var(--_tvx-level, 1) - 1) * var(--tvx-tree-item-indent) + var(--tvx-tree-item-padding-start)
+    )
+    var(--tvx-tree-item-padding-end);
   border-radius: var(--tvx-tree-item-shape);
+  background-image: linear-gradient(var(--_tvx-state-layer), var(--_tvx-state-layer));
   color: var(--tvx-tree-item-color);
   cursor: pointer;
 
   &:hover {
-    background-color: var(--tvx-tree-item-hover-background-color);
+    --_tvx-state-layer: var(--tvx-tree-item-hover-background-color);
   }
 
+  &:active {
+    --_tvx-state-layer: var(--tvx-tree-item-pressed-background-color);
+  }
+
+  /* keyboard focus only: a ring, no fill */
   .tree-view__item:focus-visible > & {
-    outline: 2px solid var(--tvx-tree-item-focus-outline-color);
-    outline-offset: -2px;
+    outline: 3px solid var(--tvx-tree-item-focus-outline-color);
+    outline-offset: -3px;
   }
 
-  .tree-view__item_selected > & {
+  /* under checkboxSelection the checkbox shows the state, so the row isn't filled */
+  :host(:not([checkbox-selection])) .tree-view__item_selected > & {
+    --tvx-tree-item-icon-color: var(--tvx-tree-item-selected-color);
+    --tvx-tree-item-chevron-color: var(--tvx-tree-item-selected-color);
+
     background-color: var(--tvx-tree-item-selected-background-color);
     color: var(--tvx-tree-item-selected-color);
+
+    & .tree-view__label {
+      font-weight: var(--_tvx-font-weight-medium);
+    }
   }
 
   /* drag state, set by ReorderController */
   .tree-view__item[data-drop-target] > & {
-    background-color: var(--tvx-tree-item-drop-target-background-color);
+    --_tvx-state-layer: var(--tvx-tree-item-drop-target-background-color);
+
+    outline: 2px dashed var(--tvx-tree-item-drop-indicator-color);
+    outline-offset: -2px;
   }
 
   .tree-view__item[data-drop-edge="top"] > &::before,
@@ -97,12 +164,45 @@
   }
 }
 
+.tree-view__guides {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+}
+
+/* on the item, not the row, so the line spans the row gap too */
+.tree-view__guide {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: calc(
+    var(--tvx-tree-item-inset) + var(--tvx-tree-item-padding-start) + var(--_tvx-guide-depth) *
+      var(--tvx-tree-item-indent) + var(--tvx-tree-item-chevron-size) / 2 - 0.5px
+  );
+  inline-size: 1px;
+  background-color: var(--tvx-tree-item-guide-color);
+  transition: opacity 0.2s;
+
+  /* at rest only the focused row's parent keeps its line */
+  :host(:not(:hover, :focus-within)) &:not(.tree-view__guide_active) {
+    opacity: 0;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    transition: none;
+  }
+}
+
+.tree-view__guide_active {
+  background-color: var(--tvx-tree-item-guide-active-color);
+}
+
 .tree-view__row_placeholder {
   cursor: default;
   color: var(--tvx-tree-item-loading-color);
 
-  &:hover {
-    background-color: transparent;
+  &:hover,
+  &:active {
+    --_tvx-state-layer: transparent;
   }
 }
 
@@ -110,11 +210,11 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  inline-size: 1.125rem;
-  block-size: 1.125rem;
+  inline-size: var(--tvx-tree-item-icon-size);
+  block-size: var(--tvx-tree-item-icon-size);
   flex: none;
-  margin-inline-end: var(--tvx-tree-item-gap);
-  font-size: 1.125rem;
+  margin-inline-end: 0.5rem;
+  font-size: var(--tvx-tree-item-icon-size);
 }
 
 .tree-view__skeleton {
@@ -125,8 +225,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  inline-size: 1.25rem;
-  block-size: 1.25rem;
+  inline-size: var(--tvx-tree-item-chevron-size);
+  block-size: var(--tvx-tree-item-chevron-size);
   flex: none;
   color: var(--tvx-tree-item-chevron-color);
   transition: transform 0.15s ease;
@@ -141,25 +241,31 @@
 }
 
 .tree-view__chevron-icon {
-  inline-size: 100%;
-  block-size: 100%;
+  inline-size: var(--tvx-tree-item-icon-size);
+  block-size: var(--tvx-tree-item-icon-size);
   fill: currentColor;
 }
 
 .tree-view__checkbox {
   display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: var(--tvx-tree-item-checkbox-size);
+  block-size: var(--tvx-tree-item-checkbox-size);
   flex: none;
 }
 
+/* the checkbox's own round state layer becomes the hit zone */
 .tree-view__checkbox-control {
-  inline-size: 1.02rem;
-  block-size: 1.02rem;
-  padding: 0.32rem;
+  padding: calc((var(--tvx-tree-item-checkbox-size) - 1.125rem) / 2);
 }
 
 .tree-view__leading {
   display: flex;
-  margin-inline-end: 0.25rem;
+  align-items: center;
+  margin-inline: 0.125rem 0.5rem;
+  color: var(--tvx-tree-item-icon-color);
+  font-size: var(--tvx-tree-item-icon-size);
 
   &:empty {
     display: none;
@@ -174,11 +280,40 @@
   font: var(--tvx-tree-item-label-font);
 }
 
+.tree-view__label_editing {
+  display: flex;
+  align-items: center;
+  overflow: visible;
+}
+
+.tree-view__label-input {
+  box-sizing: border-box;
+  flex: 1 1 auto;
+  inline-size: 100%;
+  min-inline-size: 0;
+  block-size: calc(var(--tvx-tree-item-row-height) - 0.5rem);
+  margin: 0;
+  padding-inline: 0.5rem;
+  border: 2px solid var(--tvx-tree-item-label-input-outline-color);
+  border-radius: var(--tvx-tree-item-label-input-shape);
+  outline: none;
+  background-color: var(--tvx-tree-item-label-input-background-color);
+  color: var(--tvx-tree-item-color);
+  font: var(--tvx-tree-item-label-font);
+  cursor: text;
+}
+
+/* a consumer's slot="edit" element fills the label's place */
+::slotted([slot="edit"]) {
+  flex: 1 1 auto;
+  min-inline-size: 0;
+}
+
 .tree-view__trailing {
   flex: none;
 
   &:not(:empty) {
-    margin-inline-start: 0.25rem;
+    margin-inline-start: 0.5rem;
   }
 }
 

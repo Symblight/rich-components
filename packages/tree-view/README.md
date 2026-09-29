@@ -59,36 +59,42 @@ tree.addEventListener("tvx-selection-change", (event) => {
 
 ### Properties
 
-| Property                                                       | Attribute            | Default                     | Description                                                                                                                                                                                               |
-| -------------------------------------------------------------- | -------------------- | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `items`                                                        | —                    | `undefined`                 | Tree data — any objects.                                                                                                                                                                                  |
-| `getItemId`                                                    | —                    | `(item) => item.id`         | Unique id (`PropertyKey`) of an item.                                                                                                                                                                     |
-| `getItemLabel`                                                 | —                    | `(item) => item.label`      | Row text; also used by typeahead.                                                                                                                                                                         |
-| `getItemChildren`                                              | —                    | `(item) => item.children`   | Child items, or `undefined` for a leaf.                                                                                                                                                                   |
-| `isItemDisabled`                                               | —                    | `(item) => !!item.disabled` | Disabled rows can be focused but not selected, activated or dragged.                                                                                                                                      |
-| `renderItemLeading` / `renderItemLabel` / `renderItemTrailing` | —                    | `undefined`                 | `(item, state) => unknown` — content for the row's leading slot, label (replaces the plain text) and trailing slot. `state` is `{ id, level, expanded, selected, indeterminate, disabled, hasChildren }`. |
-| `noVirtualization`                                             | `no-virtualization`  | `false`                     | Render every row instead of only the visible ones.                                                                                                                                                        |
-| `multiSelect`                                                  | `multi-select`       | `false`                     | Ctrl/Cmd+click and Shift+click/Shift+↑/↓ selection.                                                                                                                                                       |
-| `checkboxSelection`                                            | `checkbox-selection` | `false`                     | A checkbox per row; checking a branch checks its subtree. Row clicks then only toggle expansion.                                                                                                          |
-| `disableSelection`                                             | `disable-selection`  | `false`                     | No selection at all; rows still focus and branches still toggle.                                                                                                                                          |
-| `dataSource`                                                   | —                    | `undefined`                 | Lazy loader, see [Async loading](#async-loading).                                                                                                                                                         |
-| `reordering`                                                   | `reordering`         | `false`                     | Drag-and-drop and `Alt+↑`/`Alt+↓` reordering.                                                                                                                                                             |
-| `isItemReorderable`                                            | —                    | `undefined`                 | `(item) => boolean` — vetoes picking an item up; it can still be a drop target.                                                                                                                           |
-| `getHref`                                                      | —                    | `undefined`                 | `(item) => string \| undefined` — URL opened by middle-click / Ctrl+Enter.                                                                                                                                |
-| `defaultExpandedItems` / `defaultSelectedItems`                | —                    | `undefined`                 | Ids applied once, when the first items exist.                                                                                                                                                             |
-| `expandedItems` / `selectedItems`                              | —                    | —                           | Live `Set<PropertyKey>` snapshots; assigning a new set replaces the state.                                                                                                                                |
+| Property                                                       | Attribute            | Default                     | Description                                                                                                                                                                                                      |
+| -------------------------------------------------------------- | -------------------- | --------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `items`                                                        | —                    | `undefined`                 | Tree data — any objects.                                                                                                                                                                                         |
+| `getItemId`                                                    | —                    | `(item) => item.id`         | Unique id (`PropertyKey`) of an item.                                                                                                                                                                            |
+| `getItemLabel`                                                 | —                    | `(item) => item.label`      | Row text; also used by typeahead.                                                                                                                                                                                |
+| `getItemChildren`                                              | —                    | `(item) => item.children`   | Child items, or `undefined` for a leaf.                                                                                                                                                                          |
+| `isItemDisabled`                                               | —                    | `(item) => !!item.disabled` | Disabled rows can be focused but not selected, activated or dragged.                                                                                                                                             |
+| `renderItemLeading` / `renderItemLabel` / `renderItemTrailing` | —                    | `undefined`                 | `(item, state) => unknown` — content for the row's leading slot, label (replaces the plain text) and trailing slot. `state` is `{ id, label, level, expanded, selected, indeterminate, disabled, hasChildren }`. |
+| `noVirtualization`                                             | `no-virtualization`  | `false`                     | Render every row instead of only the visible ones.                                                                                                                                                               |
+| `multiSelect`                                                  | `multi-select`       | `false`                     | Ctrl/Cmd+click and Shift+click/Shift+↑/↓ selection.                                                                                                                                                              |
+| `checkboxSelection`                                            | `checkbox-selection` | `false`                     | A checkbox per row; checking a branch checks its subtree. Row clicks then only toggle expansion.                                                                                                                 |
+| `disableSelection`                                             | `disable-selection`  | `false`                     | No selection at all; rows still focus and branches still toggle.                                                                                                                                                 |
+| `dataSource`                                                   | —                    | `undefined`                 | Lazy loader, see [Async loading](#async-loading).                                                                                                                                                                |
+| `reordering`                                                   | `reordering`         | `false`                     | Drag-and-drop and `Alt+↑`/`Alt+↓` reordering.                                                                                                                                                                    |
+| `compact`                                                      | `compact`            | `false`                     | Dense rows: 28px instead of 36px, 18px icons, 13px text, 12px indent per level.                                                                                                                                  |
+| `indentGuides`                                                 | `indent-guides`      | `false`                     | A vertical line under each ancestor's chevron. All show while the tree is hovered or focused; at rest only the focused row's parent keeps its line.                                                              |
+| `isItemReorderable`                                            | —                    | `undefined`                 | `(item) => boolean` — vetoes picking an item up; it can still be a drop target.                                                                                                                                  |
+| `isItemEditable`                                               | —                    | `false`                     | `true`, or `(item) => boolean` — items `setEditedItem()` may edit. Disabled items never are.                                                                                                                     |
+| `getHref`                                                      | —                    | `undefined`                 | `(item) => string \| undefined` — URL opened by middle-click / Ctrl+Enter.                                                                                                                                       |
+| `defaultExpandedItems` / `defaultSelectedItems`                | —                    | `undefined`                 | Ids applied once, when the first items exist.                                                                                                                                                                    |
+| `expandedItems` / `selectedItems`                              | —                    | —                           | Live `Set<PropertyKey>` snapshots; assigning a new set replaces the state.                                                                                                                                       |
 
 ### Methods
 
-| Method                               | Description                                                   |
-| ------------------------------------ | ------------------------------------------------------------- |
-| `setItemExpansion({ id, expand })`   | Expands or collapses one branch.                              |
-| `isItemExpanded(id)`                 | `false` for unknown ids and leaves.                           |
-| `expandAll()` / `collapseAll()`      | Every loaded branch; lazily loaded children arrive collapsed. |
-| `setItemSelection({ id, selected })` | Selects or deselects one item, no cascade.                    |
-| `getItem(id)`                        | The data item for an id, or `null`.                           |
-| `focusItem(id)`                      | Scrolls a row into view and focuses it.                       |
-| `focusedKey`                         | Id of the row holding the Tab stop.                           |
+| Method                               | Description                                                                                                                                                                                                                                                                |
+| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `setItemExpansion({ id, expand })`   | Expands or collapses one branch.                                                                                                                                                                                                                                           |
+| `isItemExpanded(id)`                 | `false` for unknown ids and leaves.                                                                                                                                                                                                                                        |
+| `expandAll()` / `collapseAll()`      | Every loaded branch; lazily loaded children arrive collapsed.                                                                                                                                                                                                              |
+| `setItemSelection({ id, selected })` | Selects or deselects one item, no cascade.                                                                                                                                                                                                                                 |
+| `updateItemLabel({ id, label })`     | Relabels an item until the next `.items`; fires cancelable `tvx-item-label-change` first. Returns whether the label changed.                                                                                                                                               |
+| `setEditedItem(id \| null)`          | Swaps an editable item's label for a text input (or your `slot="edit"` element), focused with its text selected. Enter saves, Escape cancels, focus leaving it saves a non-empty value. `null` leaves without saving. Starting it (F2, double-click, a menu) is up to you. |
+| `editedItem`                         | Id of the item being edited, or `null`.                                                                                                                                                                                                                                    |
+| `getItem(id)`                        | The data item for an id, or `null`.                                                                                                                                                                                                                                        |
+| `focusItem(id)`                      | Scrolls a row into view and focuses it.                                                                                                                                                                                                                                    |
+| `focusedKey`                         | Id of the row holding the Tab stop.                                                                                                                                                                                                                                        |
 
 ### Events
 
@@ -98,6 +104,7 @@ tree.addEventListener("tvx-selection-change", (event) => {
 | `tvx-expansion-change`     | `{ expandedItems: Set<PropertyKey> }` | Whole-tree snapshot after any expand/collapse.                                                                                                                                   |
 | `tvx-expand-change`        | `{ key, expanded }`                   | One item's expansion toggled.                                                                                                                                                    |
 | `tvx-item-position-change` | `{ key, oldPosition, newPosition }`   | **Cancelable**, fires before a reorder moves an item; `preventDefault()` blocks it. A position is `{ parentId: PropertyKey \| null, index }` (`parentId` is `null` at the root). |
+| `tvx-item-label-change`    | `{ key, oldLabel, newLabel }`         | **Cancelable**, fires before `updateItemLabel()` changes a label; `preventDefault()` blocks it.                                                                                  |
 | `tvx-children-loaded`      | `{ key, node, items }`                | A `dataSource` batch landed; `key`/`node` are `null` for the root.                                                                                                               |
 | `tvx-load-error`           | `{ key, node, error }`                | `dataSource.getTreeItems()` rejected.                                                                                                                                            |
 | `tvx-open`                 | `{ key, node, newTab: true }`         | **Cancelable**; middle-click / Ctrl+Enter on an item `getHref` didn't give a URL for.                                                                                            |
@@ -135,6 +142,22 @@ tree.dataSource = {
 - A branch that loads empty becomes a leaf ("{label} is empty." is announced).
 - A failed load fires `tvx-load-error`; the next expand tries again.
 - `getChildrenCount` is called once per item, when the item is added.
+
+## Custom label editor
+
+Put an element in the `edit` slot to replace the built-in text input. While an item is edited
+the tree shows it in that row, sets its `value` to the current label (when it has a `value`
+property), focuses it — or its first `input`/`textarea` — and selects the text. Enter, Escape and
+focus leaving the element work as with the built-in input; the saved value is read from the
+control the key or focus event came from. Moving focus between controls inside the element (e.g. a
+save button) doesn't end editing; such a button can save with
+`tree.updateItemLabel({ id: tree.editedItem, label })` and `tree.setEditedItem(null)`.
+
+```html
+<tvx-tree-view>
+  <md-text-field slot="edit" variant="filled"></md-text-field>
+</tvx-tree-view>
+```
 
 ## Install
 
@@ -178,7 +201,7 @@ npx md-colors --sourceColor="#6750A4" --scheme=light --output=./theme.css
 - To recolor the `md-*` controls inside the tree as well (checkbox, spinner, skeleton), set
   `--md-sys-color-*` on `tvx-tree-view` instead of `--tvx-tree-view-color-*`.
 - Rows expose parts for anything else: `::part(row | chevron | checkbox | leading | label |
-trailing | placeholder)`.
+label-input | trailing | placeholder)`.
 
 ```css
 tvx-tree-view {
@@ -195,30 +218,36 @@ tvx-tree-view::part(label) {
 
 ### `--tvx-tree-view-*` reference
 
-| Token                                                                                  | Default                          | Used by                                                                                                                                                                                                                      |
-| -------------------------------------------------------------------------------------- | -------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `--tvx-tree-view-font-family`                                                          | `--md-sys-typescale-font-family` | every component                                                                                                                                                                                                              |
-| `--tvx-tree-view-font-weight-regular` / `-medium`                                      | `400` / `500`                    | row label                                                                                                                                                                                                                    |
-| `--tvx-tree-view-body-medium-font-size` / `-line-height`                               | `0.875rem` / `1.25rem`           | row label                                                                                                                                                                                                                    |
-| `--tvx-tree-view-color-<role>`                                                         | `--md-sys-color-<role>`          | `on-surface` (row text), `on-surface-variant` (chevron, loading row), `surface-container-high` (hover), `secondary-container` / `on-secondary-container` (selected row, drop target), `primary` (focus ring, drop indicator) |
-| `--tvx-tree-view-shape-corner-extra-small` / `-small` / `-medium` / `-large` / `-full` | `--md-sys-shape-corner-*`        | row shape (`-full`)                                                                                                                                                                                                          |
-| `--tvx-tree-view-row-gap`                                                              | `0.125rem`                       | space between rows                                                                                                                                                                                                           |
+| Token                                                                                  | Default                          | Used by                                                                                                                                                                                                                                                                   |
+| -------------------------------------------------------------------------------------- | -------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--tvx-tree-view-font-family`                                                          | `--md-sys-typescale-font-family` | every component                                                                                                                                                                                                                                                           |
+| `--tvx-tree-view-font-weight-regular` / `-medium`                                      | `400` / `500`                    | row label                                                                                                                                                                                                                                                                 |
+| `--tvx-tree-view-body-medium-font-size` / `-line-height`                               | `0.875rem` / `1.25rem`           | row label                                                                                                                                                                                                                                                                 |
+| `--tvx-tree-view-color-<role>`                                                         | `--md-sys-color-<role>`          | `on-surface` (row text, hover/pressed state layer), `on-surface-variant` (chevron, icons, loading row), `secondary-container` / `on-secondary-container` (selected row), `secondary` (focus ring), `primary` (drop target, drop indicator), `outline-variant` (scrollbar) |
+| `--tvx-tree-view-shape-corner-extra-small` / `-small` / `-medium` / `-large` / `-full` | `--md-sys-shape-corner-*`        | row shape (`-full`)                                                                                                                                                                                                                                                       |
+| `--tvx-tree-view-row-gap`                                                              | `0`                              | space between rows                                                                                                                                                                                                                                                        |
 
 ### Row tokens
 
-| Token                                                                    | Default                                             |
-| ------------------------------------------------------------------------ | --------------------------------------------------- |
-| `--tvx-tree-item-row-height` / `-padding` / `-gap`                       | `2.25rem` / `0.5rem` / `0.2rem`                     |
-| `--tvx-tree-item-indent`                                                 | per nesting level: the row padding + half a chevron |
-| `--tvx-tree-item-shape`                                                  | `shape-corner-full`                                 |
-| `--tvx-tree-item-color`                                                  | `on-surface`                                        |
-| `--tvx-tree-item-hover-background-color`                                 | `surface-container-high`                            |
-| `--tvx-tree-item-selected-background-color` / `-selected-color`          | `secondary-container` / `on-secondary-container`    |
-| `--tvx-tree-item-focus-outline-color`                                    | `primary`                                           |
-| `--tvx-tree-item-chevron-color` / `-loading-color`                       | `on-surface-variant`                                |
-| `--tvx-tree-item-label-font`                                             | body-medium, `font` shorthand                       |
-| `--tvx-tree-item-drop-target-background-color` / `-drop-indicator-color` | `secondary-container` / `primary`                   |
-| `--tvx-tree-skeleton-bar-height`                                         | `1em`                                               |
+| Token                                                                        | Default                                                                 |
+| ---------------------------------------------------------------------------- | ----------------------------------------------------------------------- |
+| `--tvx-tree-item-row-height`                                                 | `2.25rem` · compact `1.75rem`                                           |
+| `--tvx-tree-item-inset`                                                      | gap between the row and the tree's edges: `0.5rem` · compact `0.375rem` |
+| `--tvx-tree-item-padding-start` / `-padding-end`                             | `0.25rem` / `0.625rem`                                                  |
+| `--tvx-tree-item-indent`                                                     | per nesting level, inside the row: `1rem` · compact `0.75rem`           |
+| `--tvx-tree-item-chevron-size` / `-icon-size`                                | `1.5rem` / `1.25rem` · compact `1.25rem` / `1.125rem`                   |
+| `--tvx-tree-item-checkbox-size`                                              | checkbox hit zone: `2rem` · compact `1.5rem`                            |
+| `--tvx-tree-item-shape`                                                      | `shape-corner-full`                                                     |
+| `--tvx-tree-item-color`                                                      | `on-surface`                                                            |
+| `--tvx-tree-item-hover-background-color` / `-pressed-background-color`       | state layer over the row: `on-surface` 8% / 10%                         |
+| `--tvx-tree-item-selected-background-color` / `-selected-color`              | `secondary-container` / `on-secondary-container`                        |
+| `--tvx-tree-item-focus-outline-color`                                        | `secondary` (3px ring, keyboard focus only)                             |
+| `--tvx-tree-item-chevron-color` / `-icon-color` / `-loading-color`           | `on-surface-variant`                                                    |
+| `--tvx-tree-item-label-font`                                                 | body-medium, `font` shorthand · compact 13px                            |
+| `--tvx-tree-item-drop-target-background-color` / `-drop-indicator-color`     | `primary` 16% / `primary`                                               |
+| `--tvx-tree-item-label-input-background-color` / `-outline-color` / `-shape` | `surface-container-lowest` / `primary` / `shape-corner-extra-small`     |
+| `--tvx-tree-item-guide-color` / `-guide-active-color`                        | `outline-variant` / `on-surface-variant` 45%                            |
+| `--tvx-tree-skeleton-bar-height`                                             | `1em`                                                                   |
 
 ### Using the tokens in your own components
 

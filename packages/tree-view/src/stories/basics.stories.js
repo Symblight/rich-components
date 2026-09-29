@@ -70,3 +70,42 @@ export const LeadingAndTrailing = {
       defaultExpandedItems: ["src"],
     }),
 };
+
+/** @type {Story} */
+export const Compact = {
+  render: () =>
+    createTree({
+      items: buildFileTree(),
+      compact: true,
+      defaultExpandedItems: ["src", "components"],
+      defaultSelectedItems: ["button"],
+    }),
+};
+Compact.parameters = {
+  docs: {
+    description: {
+      story:
+        "The `compact` attribute packs rows to 28px (default 36px): 18px icons, 13px text and a " +
+        "12px indent per level.",
+    },
+  },
+};
+
+/** @type {Story} */
+export const IndentGuides = {
+  render: () =>
+    createTree({
+      items: buildFileTree(),
+      indentGuides: true,
+      defaultExpandedItems: ["src", "components"],
+    }),
+};
+IndentGuides.parameters = {
+  docs: {
+    description: {
+      story:
+        "`indent-guides` draws a line under each ancestor's chevron. They show while the tree is " +
+        "hovered or focused; at rest only the focused row's parent keeps its line.",
+    },
+  },
+};

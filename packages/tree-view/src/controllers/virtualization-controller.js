@@ -1,7 +1,7 @@
 import { VirtualizerController } from "@tanstack/lit-virtual";
 
-/** First guess for a row's height (2.25rem + gap); real heights are measured after render. */
-const ESTIMATED_ROW_SIZE = 38;
+/** First guess for a row's height (2.25rem, default density); real heights are measured after render. */
+const ESTIMATED_ROW_SIZE = 36;
 const OVERSCAN = 10;
 
 /**

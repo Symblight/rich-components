@@ -9,6 +9,7 @@ const MAX_SKELETON_ROWS = 8;
  * @property {any} item
  * @property {PropertyKey | null} parentId
  * @property {PropertyKey[] | null} childIds `null` while a lazy branch's children aren't loaded
+ * @property {string} [label] set by `updateItemLabel`; wins over `getItemLabel` until the next `.items`
  * @property {number | undefined} childCount `dataSource.getChildrenCount()`, asked once when the node is added
  */
 
@@ -119,7 +120,17 @@ export class TreeModelController {
   /** @param {PropertyKey} id */
   label(id) {
     const node = this.nodes.get(id);
-    return node ? String(this.host.getItemLabel(node.item) ?? "") : "";
+    if (!node) return "";
+    return node.label ?? String(this.host.getItemLabel(node.item) ?? "");
+  }
+
+  /** @param {PropertyKey} id
+   * @param {string} label */
+  setLabel(id, label) {
+    const node = this.nodes.get(id);
+    if (!node) return;
+    node.label = label;
+    this.host.requestUpdate();
   }
 
   /** @param {PropertyKey} id */

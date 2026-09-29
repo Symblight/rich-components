@@ -123,7 +123,9 @@ export class ReorderController {
     const row = /** @type {HTMLElement | null | undefined} */ (hit?.closest(".tree-view__item"));
     const id = row ? this.model.idAt(Number(row.dataset.index)) : null;
     if (!row || id === null) return null;
-    const onControl = !!hit?.closest(".tree-view__chevron, .tree-view__checkbox");
+    const onControl = !!hit?.closest(
+      ".tree-view__chevron, .tree-view__checkbox, .tree-view__label_editing",
+    );
     return { row, id, onControl };
   }
 

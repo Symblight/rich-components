@@ -22,6 +22,7 @@
 
   /* color — MD3 roles; setting --md-sys-color-* on tvx-tree-view retunes md-* children too */
   --_tvx-color-primary: var(--tvx-tree-view-color-primary, var(--md-sys-color-primary));
+  --_tvx-color-secondary: var(--tvx-tree-view-color-secondary, var(--md-sys-color-secondary));
   --_tvx-color-secondary-container: var(
     --tvx-tree-view-color-secondary-container,
     var(--md-sys-color-secondary-container)
@@ -34,10 +35,18 @@
     --tvx-tree-view-color-surface-container-high,
     var(--md-sys-color-surface-container-high)
   );
+  --_tvx-color-surface-container-lowest: var(
+    --tvx-tree-view-color-surface-container-lowest,
+    var(--md-sys-color-surface-container-lowest)
+  );
   --_tvx-color-on-surface: var(--tvx-tree-view-color-on-surface, var(--md-sys-color-on-surface));
   --_tvx-color-on-surface-variant: var(
     --tvx-tree-view-color-on-surface-variant,
     var(--md-sys-color-on-surface-variant)
+  );
+  --_tvx-color-outline-variant: var(
+    --tvx-tree-view-color-outline-variant,
+    var(--md-sys-color-outline-variant)
   );
 
   /* shape */

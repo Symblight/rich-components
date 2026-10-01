@@ -1,6 +1,8 @@
 export { CdxCodeEditor } from "./components/code-editor/code-editor.js";
 export { CdxDiff } from "./features/diff/diff.js";
 export { CdxFooter } from "./features/footer/footer.js";
+export { CdxComments } from "./features/comments/comments.js";
+export { CdxCommentsBar } from "./features/comments/comments-bar.js";
 export { defineCdxPlugin } from "./core/plugin.js";
 export { symbolProvider, syntaxTreeSymbols } from "./core/symbols.js";
 
@@ -17,3 +19,7 @@ export { symbolProvider, syntaxTreeSymbols } from "./core/symbols.js";
 /** @typedef {import("./components/code-editor/code-editor.js").CdxStateOptions} CdxStateOptions */
 /** @typedef {import("./core/symbols.js").CdxSymbol} CdxSymbol */
 /** @typedef {import("./core/symbols.js").CdxSymbolProvider} CdxSymbolProvider */
+/** @typedef {import("./features/comments/shared.js").CdxThread} CdxThread */
+/** @typedef {import("./features/comments/shared.js").CdxComment} CdxComment */
+/** @typedef {import("./features/comments/shared.js").CdxCommentAuthor} CdxCommentAuthor */
+/** @typedef {import("./features/comments/shared.js").CdxCommentDraft} CdxCommentDraft */

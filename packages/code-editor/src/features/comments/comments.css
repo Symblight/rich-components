@@ -1,0 +1,107 @@
+/* The comments feature's styles, adopted by cdx-code-editor: the gutter column and the thread rows
+   are CodeMirror DOM inside the editor's shadow root. Tokens are declared here, on the editor host,
+   so they're overridable on cdx-code-editor and reach cdx-comment-thread / cdx-comments-nav by inheritance. */
+:host {
+  --cdx-comment-background-color: var(--_cdx-color-surface-container-low);
+  --cdx-comment-accent-width: 3px;
+  --cdx-comment-max-width: 35rem;
+  --cdx-comment-shadow: var(--cdx-tooltip-shadow);
+  --cdx-comment-row-gap: 0.25rem;
+  /* the field's label (its placeholder) and typed text — the size of a comment's body */
+  --cdx-comment-field-font-size: 0.8125rem;
+
+  /* Tones: accent (stripe, marker, icon), on-accent (filled buttons), container / on-container
+     (marker fill). Comment is an open remark (secondary), resolved is settled. */
+  --cdx-comment-tone-comment-accent: var(--_cdx-color-secondary);
+  --cdx-comment-tone-comment-on-accent: var(--_cdx-color-on-secondary);
+  --cdx-comment-tone-comment-container: var(--_cdx-color-secondary-container);
+  --cdx-comment-tone-comment-on-container: var(--_cdx-color-on-secondary-container);
+  --cdx-comment-tone-resolved-accent: var(--_cdx-color-outline);
+  --cdx-comment-tone-resolved-on-accent: var(--_cdx-color-surface);
+  --cdx-comment-tone-resolved-container: var(--_cdx-color-surface-container-high);
+  --cdx-comment-tone-resolved-on-container: var(--_cdx-color-on-surface-variant);
+
+  --cdx-comment-add-background-color: var(--_cdx-color-primary);
+  --cdx-comment-add-color: var(--_cdx-color-on-primary);
+  --cdx-comments-bar-background-color: var(--_cdx-color-surface-container-high);
+  --cdx-comments-bar-shadow: var(--cdx-tooltip-shadow);
+}
+
+/* The 24dp column left of the change marks. */
+.cdx-comments-gutter .cm-gutterElement {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-sizing: border-box;
+  inline-size: 1.5rem;
+  cursor: pointer;
+}
+
+.cdx-comment-add,
+.cdx-comment-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 1rem;
+  block-size: 1rem;
+  border-radius: var(--_cdx-shape-corner-extra-small);
+
+  & svg {
+    inline-size: 0.8125rem;
+    block-size: 0.8125rem;
+    fill: currentColor;
+  }
+}
+
+.cdx-comment-add {
+  background-color: var(--cdx-comment-add-background-color);
+  color: var(--cdx-comment-add-color);
+  opacity: 0;
+  transition: opacity 0.12s;
+}
+
+.cdx-comments-gutter .cm-gutterElement:hover .cdx-comment-add,
+.cm-focused .cdx-comments-gutter .cm-activeLineGutter .cdx-comment-add {
+  opacity: 1;
+}
+
+.cdx-comment-marker {
+  background-color: var(--cdx-comment-tone-comment-container);
+  color: var(--cdx-comment-tone-comment-on-container);
+}
+
+.cdx-comment-marker_many {
+  font-size: 0.625rem;
+  font-weight: var(--_cdx-font-weight-medium);
+  line-height: 1;
+}
+
+.cdx-comment-marker_tone-resolved {
+  background-color: transparent;
+  box-shadow: inset 0 0 0 1px var(--_cdx-color-outline-variant);
+  color: color-mix(in srgb, var(--_cdx-color-on-surface-variant) 70%, transparent);
+}
+
+/* The thread widget: a row of its own under the line. It sticks to the gutter's edge and spans the
+   visible text width on horizontal scroll, like the chunk headers. */
+.cdx-comment-row {
+  /* room above and below for the card's shadow, so it doesn't sit on the neighbouring lines */
+  padding-block: var(--cdx-comment-row-gap);
+  white-space: normal;
+  cursor: default;
+
+  & cdx-comment-thread {
+    position: sticky;
+    inset-inline-start: var(--cdx-gutters-width, 0);
+    box-sizing: border-box;
+    inline-size: var(--cdx-text-width, 100%);
+  }
+}
+
+/* The optional open-threads bar floats over the text, above the footer. */
+cdx-comments-nav {
+  position: absolute;
+  inset-block-end: 0.75rem;
+  inset-inline-end: 1rem;
+  z-index: 7;
+}

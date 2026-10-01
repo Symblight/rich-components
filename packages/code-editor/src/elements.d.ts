@@ -15,6 +15,12 @@ import { CdxDiff } from "./features/diff/diff.js";
 import { CdxReviewBar } from "./components/review-bar/review-bar.js";
 import { CdxStatusBar } from "./components/status-bar/status-bar.js";
 import { CdxFooter } from "./features/footer/footer.js";
+import { CdxComments } from "./features/comments/comments.js";
+import { CdxCommentsBar } from "./features/comments/comments-bar.js";
+import { CdxCommentsNav } from "./components/comments-nav/comments-nav.js";
+import { CdxCommentField } from "./components/comment-field/comment-field.js";
+import { CdxCommentItem } from "./components/comment-item/comment-item.js";
+import { CdxCommentThread } from "./components/comment-thread/comment-thread.js";
 
 declare global {
   interface HTMLElementTagNameMap {
@@ -26,6 +32,12 @@ declare global {
     "cdx-problems-indicator": CdxProblemsIndicator;
     "cdx-quick-fix": CdxQuickFix;
     "cdx-go-to-line": CdxGoToLine;
+    "cdx-comments": CdxComments;
+    "cdx-comments-bar": CdxCommentsBar;
+    "cdx-comments-nav": CdxCommentsNav;
+    "cdx-comment-field": CdxCommentField;
+    "cdx-comment-item": CdxCommentItem;
+    "cdx-comment-thread": CdxCommentThread;
   }
 
   interface HTMLElementEventMap {
@@ -38,6 +50,15 @@ declare global {
     "cdx-symbols-change": CustomEvent<CdxSymbolsChangeDetail>;
     "cdx-before-change": CustomEvent<CdxBeforeChangeDetail>;
     "cdx-status-click": CustomEvent<{ item: string; index?: number }>;
+    "cdx-comment-open": CustomEvent<Record<string, unknown>>;
+    "cdx-comment-draft": CustomEvent<Record<string, unknown>>;
+    "cdx-comment-submit": CustomEvent<Record<string, unknown>>;
+    "cdx-comment-cancel": CustomEvent<Record<string, unknown>>;
+    "cdx-comment-edit": CustomEvent<Record<string, unknown>>;
+    "cdx-comment-delete": CustomEvent<Record<string, unknown>>;
+    "cdx-comment-resolve": CustomEvent<Record<string, unknown>>;
+    "cdx-comment-toggle": CustomEvent<Record<string, unknown>>;
+    "cdx-comment-navigate": CustomEvent<Record<string, unknown>>;
   }
 }
 

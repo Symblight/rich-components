@@ -1,0 +1,96 @@
+/* Buttons shared by the comment components: filled (--_btn), text and icon, 32dp, MD3 state layer. */
+.cbtn {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  box-sizing: border-box;
+  block-size: 2rem;
+  padding: 0 0.75rem;
+  overflow: hidden;
+  border: none;
+  border-radius: var(--_cdx-shape-corner-full);
+  background: transparent;
+  color: var(--_cdx-color-primary);
+  font-family: var(--_cdx-font-family);
+  font-size: 0.8125rem;
+  font-weight: var(--_cdx-font-weight-medium);
+  line-height: 1;
+  letter-spacing: 0.1px;
+  white-space: nowrap;
+  cursor: pointer;
+
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-color: currentColor;
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+
+  &:hover::after {
+    opacity: 0.08;
+  }
+
+  &:active::after {
+    opacity: 0.12;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--_cdx-color-primary);
+    outline-offset: 2px;
+  }
+
+  &:disabled {
+    color: color-mix(in srgb, var(--_cdx-color-on-surface) 38%, transparent);
+    cursor: default;
+
+    &::after {
+      display: none;
+    }
+  }
+
+  & svg {
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+    fill: currentColor;
+  }
+}
+
+.cbtn_filled {
+  padding-inline: 1.25rem;
+  background-color: var(--_btn, var(--_cdx-color-primary));
+  color: var(--_on-btn, var(--_cdx-color-on-primary));
+
+  &:disabled {
+    background-color: color-mix(in srgb, var(--_cdx-color-on-surface) 12%, transparent);
+  }
+}
+
+.cbtn_icon {
+  inline-size: 2rem;
+  padding: 0;
+  color: var(--_cdx-color-on-surface-variant);
+}
+
+.cbtn__spinner {
+  inline-size: 1rem;
+  block-size: 1rem;
+  flex: none;
+  border: 2px solid currentColor;
+  border-inline-end-color: transparent;
+  border-radius: 50%;
+
+  @media (prefers-reduced-motion: no-preference) {
+    animation: cbtn-spin 0.8s linear infinite;
+  }
+}
+
+@keyframes cbtn-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

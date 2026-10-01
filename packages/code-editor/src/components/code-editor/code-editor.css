@@ -1,0 +1,419 @@
+:host {
+  --cdx-content-font-family: var(--_cdx-mono-font-family);
+  --cdx-content-font-size: var(--_cdx-code-font-size);
+  --cdx-content-line-height: var(--_cdx-code-line-height);
+  --cdx-content-padding: 0.25rem 0 1.5rem;
+  --cdx-content-min-height: 6rem;
+  --cdx-content-color: var(--_cdx-color-on-surface);
+  --cdx-content-background-color: var(--_cdx-color-surface-container-lowest);
+  --cdx-content-border-color: var(--_cdx-color-outline-variant);
+  --cdx-content-focus-border-color: var(--_cdx-color-primary);
+  --cdx-content-border-radius: var(--_cdx-shape-corner-medium);
+  --cdx-line-padding-inline: 0.75rem;
+  --cdx-caret-color: var(--_cdx-color-primary);
+  --cdx-selection-background-color: color-mix(in srgb, var(--_cdx-color-primary) 20%, transparent);
+  --cdx-selection-inactive-background-color: color-mix(
+    in srgb,
+    var(--_cdx-color-on-surface) 10%,
+    transparent
+  );
+  --cdx-placeholder-color: var(--_cdx-color-on-surface-variant);
+
+  --cdx-line-number-color: color-mix(
+    in srgb,
+    var(--_cdx-color-on-surface-variant) 62%,
+    transparent
+  );
+  --cdx-line-number-active-color: var(--_cdx-color-on-surface);
+  --cdx-active-line-background-color: color-mix(in srgb, var(--_cdx-color-primary) 7%, transparent);
+  --cdx-active-line-inactive-background-color: color-mix(
+    in srgb,
+    var(--_cdx-color-on-surface) 3%,
+    transparent
+  );
+  --cdx-fold-marker-color: var(--_cdx-color-on-surface-variant);
+  --cdx-fold-marker-hover-background-color: color-mix(
+    in srgb,
+    var(--_cdx-color-on-surface) 8%,
+    transparent
+  );
+  --cdx-fold-placeholder-background-color: var(--_cdx-color-surface-container-high);
+  --cdx-fold-placeholder-hover-background-color: var(--_cdx-color-surface-container-highest);
+  --cdx-fold-placeholder-color: var(--_cdx-color-on-surface-variant);
+  --cdx-indent-guide-color: color-mix(in srgb, var(--_cdx-color-outline-variant) 70%, transparent);
+  --cdx-indent-guide-active-color: color-mix(
+    in srgb,
+    var(--_cdx-color-on-surface-variant) 55%,
+    transparent
+  );
+  --cdx-bracket-match-background-color: color-mix(
+    in srgb,
+    var(--_cdx-color-primary) 10%,
+    transparent
+  );
+  --cdx-bracket-match-border-color: color-mix(
+    in srgb,
+    var(--_cdx-color-on-surface-variant) 55%,
+    transparent
+  );
+  --cdx-bracket-mismatch-background-color: color-mix(
+    in srgb,
+    var(--_cdx-color-error) 16%,
+    transparent
+  );
+
+  /* Warnings are tertiary: MD3's "needs attention, but not an error" role. */
+  --cdx-diagnostic-error-color: var(--_cdx-color-error);
+  --cdx-diagnostic-warning-color: var(--_cdx-color-tertiary);
+  --cdx-diagnostic-info-color: var(--_cdx-color-primary);
+  --cdx-diagnostic-hint-color: var(--_cdx-color-on-surface-variant);
+  --cdx-quick-fix-color: var(--_cdx-color-tertiary);
+  --cdx-problems-background-color: var(--_cdx-color-surface-container-high);
+  --cdx-problems-color: var(--_cdx-color-on-surface-variant);
+  --cdx-problems-warning-background-color: var(--_cdx-color-tertiary-container);
+  --cdx-problems-warning-color: var(--_cdx-color-on-tertiary-container);
+  --cdx-problems-error-background-color: var(--_cdx-color-error-container);
+  --cdx-problems-error-color: var(--_cdx-color-on-error-container);
+  /* No MD3 "success" role — same extended green as the diff palette in chx-code-block. */
+  --cdx-problems-clean-color: #1b7a3d;
+
+  --cdx-menu-selected-background-color: color-mix(
+    in srgb,
+    var(--_cdx-color-primary) 12%,
+    transparent
+  );
+  --cdx-search-match-background-color: color-mix(
+    in srgb,
+    var(--_cdx-color-tertiary) 18%,
+    transparent
+  );
+  --cdx-search-match-selected-background-color: color-mix(
+    in srgb,
+    var(--_cdx-color-tertiary) 34%,
+    transparent
+  );
+  --cdx-search-match-selected-border-color: var(--_cdx-color-tertiary);
+  --cdx-selection-match-background-color: color-mix(
+    in srgb,
+    var(--_cdx-color-primary) 10%,
+    transparent
+  );
+  --cdx-search-field-border-color: var(--_cdx-color-outline);
+
+  --cdx-tooltip-background-color: var(--_cdx-color-surface-container);
+  --cdx-tooltip-color: var(--_cdx-color-on-surface);
+  --cdx-tooltip-shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 2px 6px 2px rgb(0 0 0 / 15%);
+  --cdx-panel-background-color: var(--_cdx-color-surface-container-low);
+  --cdx-panel-selected-background-color: color-mix(
+    in srgb,
+    var(--_cdx-color-primary) 12%,
+    transparent
+  );
+
+  /* Extended palette, same hues as chx-code-block: MD3 roles encode importance, syntax tokens just
+     need to differ from each other (≥ 4.5:1 on surface-container-lowest). */
+  --cdx-syntax-keyword-color: #8b1a8b;
+  --cdx-syntax-string-color: #0a6b2f;
+  --cdx-syntax-number-color: #8a4b00;
+  --cdx-syntax-comment-color: #5f6368;
+  --cdx-syntax-function-color: #0b57d0;
+  --cdx-syntax-type-color: #0f6b73;
+  --cdx-syntax-punctuation-color: #5f6368;
+  --cdx-syntax-property-color: var(--cdx-content-color);
+  --cdx-syntax-tag-color: #a8321f;
+  --cdx-syntax-invalid-color: var(--_cdx-color-error);
+
+  display: flex;
+  flex-direction: column;
+}
+
+@media (prefers-color-scheme: dark) {
+  :host {
+    --cdx-selection-background-color: color-mix(
+      in srgb,
+      var(--_cdx-color-primary) 28%,
+      transparent
+    );
+
+    --cdx-active-line-background-color: color-mix(
+      in srgb,
+      var(--_cdx-color-primary) 10%,
+      transparent
+    );
+    --cdx-active-line-inactive-background-color: color-mix(
+      in srgb,
+      var(--_cdx-color-on-surface) 4%,
+      transparent
+    );
+    --cdx-indent-guide-color: color-mix(
+      in srgb,
+      var(--_cdx-color-outline-variant) 80%,
+      transparent
+    );
+    --cdx-problems-clean-color: #81c995;
+    --cdx-tooltip-shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 2px 6px 2px rgb(0 0 0 / 30%);
+
+    --cdx-syntax-keyword-color: #f0a8e8;
+    --cdx-syntax-string-color: #81c995;
+    --cdx-syntax-number-color: #f3bd77;
+    --cdx-syntax-comment-color: #9aa0a6;
+    --cdx-syntax-function-color: #a8c7fa;
+    --cdx-syntax-type-color: #78d5dd;
+    --cdx-syntax-punctuation-color: #9aa0a6;
+    --cdx-syntax-tag-color: #f2b8b5;
+  }
+}
+
+/* 13/20 → 12/18, text inset 12 → 10. */
+:host([density="compact"]) {
+  --cdx-content-font-size: 0.75rem;
+  --cdx-content-line-height: 1.125rem;
+  --cdx-line-padding-inline: 0.625rem;
+}
+
+.code-editor {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  box-sizing: border-box;
+  min-block-size: var(--cdx-content-min-height);
+  overflow: hidden;
+  background-color: var(--cdx-content-background-color);
+  border: 1px solid var(--cdx-content-border-color);
+  border-radius: var(--cdx-content-border-radius);
+
+  &:focus-within {
+    border-color: var(--cdx-content-focus-border-color);
+  }
+}
+
+/* Everything under the review bar: the view plus the overlays positioned over it. */
+.code-editor__body {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-block-size: 0;
+}
+
+/* The mounted .cm-editor fills it; a height set on the host makes the editor scroll. */
+.code-editor__view {
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-block-size: 0;
+}
+
+.tok-keyword,
+.tok-controlKeyword,
+.tok-operatorKeyword,
+.tok-moduleKeyword {
+  color: var(--cdx-syntax-keyword-color);
+}
+
+.tok-string,
+.tok-string2,
+.tok-regexp {
+  color: var(--cdx-syntax-string-color);
+}
+
+.tok-number,
+.tok-bool,
+.tok-atom,
+.tok-null {
+  color: var(--cdx-syntax-number-color);
+}
+
+.tok-comment,
+.tok-lineComment,
+.tok-blockComment {
+  color: var(--cdx-syntax-comment-color);
+  font-style: italic;
+}
+
+.tok-propertyName,
+.tok-attributeName {
+  color: var(--cdx-syntax-property-color);
+}
+
+.tok-typeName,
+.tok-className,
+.tok-namespace {
+  color: var(--cdx-syntax-type-color);
+}
+
+/* After property/variable rules on purpose — a call is tagged `tok-variableName tok-function`. */
+.tok-function {
+  color: var(--cdx-syntax-function-color);
+}
+
+.tok-punctuation,
+.tok-operator {
+  color: var(--cdx-syntax-punctuation-color);
+}
+
+.tok-tagName,
+.tok-heading,
+.tok-link {
+  color: var(--cdx-syntax-tag-color);
+}
+
+.tok-invalid {
+  color: var(--cdx-syntax-invalid-color);
+}
+
+/* Find/replace — lives inside CodeMirror's top panel, so these reach it through the shadow root.
+   Compact variant of an MD3 outlined field: toggles sit inside it, icon buttons beside. */
+.cdx-search {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.25rem;
+  padding: 0.375rem 0.5rem;
+  font-family: var(--_cdx-font-family);
+  font-size: 0.8125rem;
+}
+
+.cdx-search__rows {
+  display: grid;
+  flex: 1;
+  gap: 0.375rem;
+  min-inline-size: 0;
+}
+
+.cdx-search__row {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+}
+
+.cdx-search__row_replace {
+  display: none;
+}
+
+.cdx-search_replacing .cdx-search__row_replace:not([hidden]) {
+  display: flex;
+}
+
+.cdx-search__box {
+  display: flex;
+  flex: 1 1 14rem;
+  align-items: center;
+  gap: 0.125rem;
+  box-sizing: border-box;
+  max-inline-size: 22rem;
+  min-inline-size: 0;
+  block-size: 2rem;
+  padding-inline: 0.5rem 0.25rem;
+  border: 1px solid var(--cdx-search-field-border-color);
+  border-radius: var(--_cdx-shape-corner-extra-small);
+
+  &:focus-within {
+    border-color: var(--_cdx-color-primary);
+    box-shadow: inset 0 0 0 1px var(--_cdx-color-primary);
+  }
+
+  &:has([aria-invalid="true"]) {
+    border-color: var(--_cdx-color-error);
+  }
+}
+
+.cdx-search__field {
+  flex: 1;
+  min-inline-size: 0;
+  padding: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: var(--cdx-content-color);
+  font-family: var(--cdx-content-font-family);
+  font-size: 0.8125rem;
+}
+
+.cdx-search__count {
+  flex: none;
+  min-inline-size: 4.5rem;
+  padding-inline: 0.25rem;
+  color: var(--_cdx-color-on-surface-variant);
+  font-size: 0.75rem;
+  white-space: nowrap;
+}
+
+.cdx-search__toggle,
+.cdx-search__icon,
+.cdx-search__expand,
+.cdx-search__text-button {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--_cdx-color-on-surface-variant);
+  cursor: pointer;
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-color: currentColor;
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+
+  &:hover::before {
+    opacity: 0.08;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--_cdx-color-primary);
+    outline-offset: -2px;
+  }
+
+  & svg {
+    inline-size: 1.125rem;
+    block-size: 1.125rem;
+    fill: currentColor;
+  }
+}
+
+.cdx-search__toggle {
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+  border-radius: var(--_cdx-shape-corner-extra-small);
+  font-family: var(--cdx-content-font-family);
+  font-size: 0.75rem;
+
+  &[aria-pressed="true"] {
+    background-color: var(--_cdx-color-primary-container);
+    color: var(--_cdx-color-on-primary-container);
+  }
+}
+
+.cdx-search__icon,
+.cdx-search__expand {
+  inline-size: 2rem;
+  block-size: 2rem;
+  border-radius: var(--_cdx-shape-corner-full);
+}
+
+.cdx-search__expand svg {
+  transition: rotate 0.15s;
+}
+
+.cdx-search_replacing .cdx-search__expand svg {
+  rotate: 90deg;
+}
+
+.cdx-search__text-button {
+  block-size: 2rem;
+  padding-inline: 0.75rem;
+  border-radius: var(--_cdx-shape-corner-full);
+  color: var(--_cdx-color-primary);
+  font-family: var(--_cdx-font-family);
+  font-size: 0.8125rem;
+  font-weight: var(--_cdx-font-weight-medium);
+}

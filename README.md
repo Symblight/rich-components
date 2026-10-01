@@ -15,9 +15,9 @@ A Material Design 3 chat component. Layout is a virtualized, scrollable list of 
 
 A Material Design 3 hierarchical tree view, following the WAI-ARIA APG tree pattern — expandable/collapsible nodes, single- or checkbox-based multi-select, roving-tabindex keyboard navigation, typeahead, and async-loaded branches. Data-driven (`.items`) or fully declarative (`<tvx-tree-item>` markup). See the [design spec](./.claude/plans/tree-view.spec.md) and the [package README](./packages/tree-view/README.md).
 
-### [`@symblight/editor`](./packages/editor)
+### [`@symblight/code-editor`](./packages/code-editor)
 
-A Material Design 3 rich text editor. Work in progress — currently an empty `<edx-editor>` shell. See the [package README](./packages/editor/README.md).
+A Material Design 3 code editor built on CodeMirror 6. Work in progress — currently an empty `<cdx-code-editor>` shell. See the [package README](./packages/code-editor/README.md).
 
 ## Development
 
@@ -29,7 +29,7 @@ pnpm install
 pnpm --filter @symblight/data-grid sb     # Storybook for data-grid
 pnpm --filter @symblight/chat sb          # Storybook for chat
 pnpm --filter @symblight/tree-view sb     # Storybook for tree-view
-pnpm --filter @symblight/editor sb     # Storybook for editor
+pnpm --filter @symblight/code-editor sb   # Storybook for code-editor
 
 pnpm build   # build all packages
 pnpm test    # test all packages

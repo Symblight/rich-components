@@ -1,0 +1,80 @@
+/* Centred on the seam between the gutter and the text — the editor sets top/left. */
+:host {
+  position: absolute;
+  z-index: 5;
+  display: block;
+  translate: -50% -50%;
+}
+
+.quick-fix__bulb {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+  padding: 0;
+  overflow: hidden;
+  background-color: var(--cdx-content-background-color);
+  border: none;
+  border-radius: var(--_cdx-shape-corner-full);
+  color: var(--cdx-quick-fix-color);
+  cursor: pointer;
+
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-color: currentColor;
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+
+  &:hover::before {
+    opacity: 0.08;
+  }
+
+  &:active::before {
+    opacity: 0.12;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--cdx-content-focus-border-color);
+    outline-offset: 1px;
+  }
+
+  & svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    fill: currentColor;
+  }
+}
+
+/* Container color through our resolver, so it survives theme generators that omit
+   --md-sys-color-surface-container (see tokens.css). */
+.quick-fix__menu {
+  --md-rich-tooltip-container-color: var(--cdx-tooltip-background-color);
+  --md-rich-tooltip-max-width: 22rem;
+}
+
+/* The severity rides on a leading bar, so it reads without color vision too via the subhead. */
+.quick-fix__message {
+  padding-inline-start: 0.5rem;
+  border-inline-start: 3px solid var(--cdx-diagnostic-hint-color);
+
+  & + & {
+    margin-block-start: 0.375rem;
+  }
+}
+
+.quick-fix__message_error {
+  border-inline-start-color: var(--cdx-diagnostic-error-color);
+}
+
+.quick-fix__message_warning {
+  border-inline-start-color: var(--cdx-diagnostic-warning-color);
+}
+
+.quick-fix__message_info {
+  border-inline-start-color: var(--cdx-diagnostic-info-color);
+}

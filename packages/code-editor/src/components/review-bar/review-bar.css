@@ -1,0 +1,168 @@
+/* Tone → private palette, from the per-tone tokens the editor host declares (diff.css). */
+:host {
+  --_accent: var(--cdx-diff-tone-tertiary-accent);
+  --_on-accent: var(--cdx-diff-tone-tertiary-on-accent);
+  --_container: var(--cdx-diff-tone-tertiary-container);
+  --_on-container: var(--cdx-diff-tone-tertiary-on-container);
+
+  display: block;
+  flex: none;
+}
+
+:host([tone="neutral"]) {
+  --_accent: var(--cdx-diff-tone-neutral-accent);
+  --_on-accent: var(--cdx-diff-tone-neutral-on-accent);
+  --_container: var(--cdx-diff-tone-neutral-container);
+  --_on-container: var(--cdx-diff-tone-neutral-on-container);
+}
+
+:host([tone="primary"]) {
+  --_accent: var(--cdx-diff-tone-primary-accent);
+  --_on-accent: var(--cdx-diff-tone-primary-on-accent);
+  --_container: var(--cdx-diff-tone-primary-container);
+  --_on-container: var(--cdx-diff-tone-primary-on-container);
+}
+
+:host([tone="error"]) {
+  --_accent: var(--cdx-diff-tone-error-accent);
+  --_on-accent: var(--cdx-diff-tone-error-on-accent);
+  --_container: var(--cdx-diff-tone-error-container);
+  --_on-container: var(--cdx-diff-tone-error-on-container);
+}
+
+/* The tone's container — "waiting for a person's decision". */
+.review-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--cdx-review-gap);
+  box-sizing: border-box;
+  min-block-size: var(--cdx-review-min-height);
+  padding: var(--cdx-review-padding);
+  background-color: var(--_container);
+  border-block-end: 1px solid var(--cdx-review-border-color);
+  color: var(--_on-container);
+  font-family: var(--_cdx-font-family);
+  font-size: var(--cdx-review-font-size);
+
+  & b {
+    font-weight: var(--_cdx-font-weight-medium);
+  }
+}
+
+.review-bar_done {
+  background-color: var(--cdx-review-done-background-color);
+  color: var(--cdx-review-done-color);
+
+  & b {
+    color: var(--_cdx-color-on-surface);
+  }
+
+  & .review-bar__icon {
+    color: var(--cdx-review-done-icon-color);
+  }
+}
+
+.review-bar__icon {
+  display: inline-flex;
+
+  & svg {
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    fill: currentColor;
+  }
+}
+
+/* md-avatar's --md-avatar-size is a radius: 12px draws a 24px avatar. */
+.review-bar__avatar {
+  --md-avatar-size: 12px;
+
+  inline-size: 1.5rem;
+  block-size: 1.5rem;
+}
+
+.review-bar__nav {
+  display: flex;
+  align-items: center;
+  margin-inline-start: 0.25rem;
+}
+
+.review-bar__position {
+  min-inline-size: 3.375rem;
+  font-family: var(--cdx-content-font-family);
+  font-size: 0.75rem;
+  font-weight: var(--_cdx-font-weight-medium);
+  text-align: center;
+}
+
+.review-bar__grow {
+  flex: 1;
+}
+
+.review-bar__button,
+.review-bar__icon-button {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border: none;
+  border-radius: var(--_cdx-shape-corner-full);
+  font-family: var(--_cdx-font-family);
+  font-weight: var(--_cdx-font-weight-medium);
+  cursor: pointer;
+
+  /* MD3 state layer. */
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-color: currentColor;
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+
+  &:hover::after {
+    opacity: 0.08;
+  }
+
+  &:active::after {
+    opacity: 0.12;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--_cdx-color-primary);
+    outline-offset: 1px;
+  }
+}
+
+.review-bar__icon-button {
+  inline-size: 2rem;
+  block-size: 2rem;
+  padding: 0;
+  background: transparent;
+  color: inherit;
+
+  & svg {
+    inline-size: 1.25rem;
+    block-size: 1.25rem;
+    fill: currentColor;
+  }
+}
+
+.review-bar__button {
+  block-size: var(--cdx-review-action-height);
+  padding-inline: 1rem;
+  font-size: var(--cdx-review-font-size);
+}
+
+.review-bar__button_filled {
+  background-color: var(--_accent);
+  color: var(--_on-accent);
+}
+
+.review-bar__button_text {
+  background: transparent;
+  color: inherit;
+}

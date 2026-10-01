@@ -1,0 +1,156 @@
+/* Editor-wide token layer, adopted first by every rendering component.
+   --cdx-code-editor-* is the public theme: set it on cdx-code-editor (or any ancestor) to retune every
+   component inside at once. No component ever declares --cdx-code-editor-* itself — a declaration on a
+   nested host would hide the ancestor's value — so each host resolves it here into a private
+   --_cdx-* (falling back to --md-sys-*), and component tokens (--cdx-<component>-*) map only from
+   --_cdx-*. */
+:host {
+  /* typography */
+  --_cdx-font-family: var(
+    --cdx-code-editor-font-family,
+    var(--md-sys-typescale-font-family, Roboto, system-ui, sans-serif)
+  );
+  --_cdx-mono-font-family: var(
+    --cdx-code-editor-mono-font-family,
+    "SF Mono",
+    ui-monospace,
+    "Cascadia Code",
+    "Roboto Mono",
+    Consolas,
+    monospace
+  );
+  --_cdx-font-weight-regular: var(--cdx-code-editor-font-weight-regular, 400);
+  --_cdx-font-weight-medium: var(--cdx-code-editor-font-weight-medium, 500);
+  --_cdx-body-large-font-size: var(
+    --cdx-code-editor-body-large-font-size,
+    var(--md-sys-typescale-body-large-size, 1rem)
+  );
+  --_cdx-body-large-line-height: var(
+    --cdx-code-editor-body-large-line-height,
+    var(--md-sys-typescale-body-large-line-height, 1.5rem)
+  );
+  --_cdx-body-medium-font-size: var(
+    --cdx-code-editor-body-medium-font-size,
+    var(--md-sys-typescale-body-medium-size, 0.875rem)
+  );
+  --_cdx-body-medium-line-height: var(
+    --cdx-code-editor-body-medium-line-height,
+    var(--md-sys-typescale-body-medium-line-height, 1.25rem)
+  );
+  --_cdx-code-font-size: var(--cdx-code-editor-code-font-size, 0.8125rem);
+  --_cdx-code-line-height: var(--cdx-code-editor-code-line-height, 1.25rem);
+
+  /* color — MD3 roles; setting --md-sys-color-* on cdx-code-editor retunes md-* children too */
+  --_cdx-color-primary: var(--cdx-code-editor-color-primary, var(--md-sys-color-primary));
+  --_cdx-color-on-primary: var(--cdx-code-editor-color-on-primary, var(--md-sys-color-on-primary));
+  --_cdx-color-on-tertiary: var(
+    --cdx-code-editor-color-on-tertiary,
+    var(--md-sys-color-on-tertiary)
+  );
+  --_cdx-color-on-error: var(--cdx-code-editor-color-on-error, var(--md-sys-color-on-error));
+  --_cdx-color-primary-container: var(
+    --cdx-code-editor-color-primary-container,
+    var(--md-sys-color-primary-container)
+  );
+  --_cdx-color-on-primary-container: var(
+    --cdx-code-editor-color-on-primary-container,
+    var(--md-sys-color-on-primary-container)
+  );
+  --_cdx-color-tertiary: var(--cdx-code-editor-color-tertiary, var(--md-sys-color-tertiary));
+  --_cdx-color-tertiary-container: var(
+    --cdx-code-editor-color-tertiary-container,
+    var(--md-sys-color-tertiary-container)
+  );
+  --_cdx-color-on-tertiary-container: var(
+    --cdx-code-editor-color-on-tertiary-container,
+    var(--md-sys-color-on-tertiary-container)
+  );
+  --_cdx-color-secondary-container: var(
+    --cdx-code-editor-color-secondary-container,
+    var(--md-sys-color-secondary-container)
+  );
+  --_cdx-color-on-secondary-container: var(
+    --cdx-code-editor-color-on-secondary-container,
+    var(--md-sys-color-on-secondary-container)
+  );
+  --_cdx-color-error: var(--cdx-code-editor-color-error, var(--md-sys-color-error));
+  --_cdx-color-error-container: var(
+    --cdx-code-editor-color-error-container,
+    var(--md-sys-color-error-container)
+  );
+  --_cdx-color-on-error-container: var(
+    --cdx-code-editor-color-on-error-container,
+    var(--md-sys-color-on-error-container)
+  );
+  --_cdx-color-surface: var(--cdx-code-editor-color-surface, var(--md-sys-color-surface));
+  --_cdx-color-surface-container-lowest: var(
+    --cdx-code-editor-color-surface-container-lowest,
+    var(--md-sys-color-surface-container-lowest)
+  );
+  --_cdx-color-surface-container-low: var(
+    --cdx-code-editor-color-surface-container-low,
+    var(--md-sys-color-surface-container-low)
+  );
+  /* Some generators (e.g. @symblight/md-colors) omit the plain role; its tone sits between -low and -high. */
+  --_cdx-color-surface-container: var(
+    --cdx-code-editor-color-surface-container,
+    var(
+      --md-sys-color-surface-container,
+      color-mix(
+        in srgb,
+        var(--md-sys-color-surface-container-low) 50%,
+        var(--md-sys-color-surface-container-high)
+      )
+    )
+  );
+  --_cdx-color-surface-container-high: var(
+    --cdx-code-editor-color-surface-container-high,
+    var(--md-sys-color-surface-container-high)
+  );
+  --_cdx-color-surface-container-highest: var(
+    --cdx-code-editor-color-surface-container-highest,
+    var(--md-sys-color-surface-container-highest)
+  );
+  --_cdx-color-on-surface: var(--cdx-code-editor-color-on-surface, var(--md-sys-color-on-surface));
+  --_cdx-color-on-surface-variant: var(
+    --cdx-code-editor-color-on-surface-variant,
+    var(--md-sys-color-on-surface-variant)
+  );
+  --_cdx-color-outline: var(--cdx-code-editor-color-outline, var(--md-sys-color-outline));
+  --_cdx-color-outline-variant: var(
+    --cdx-code-editor-color-outline-variant,
+    var(--md-sys-color-outline-variant)
+  );
+
+  /* shape */
+  --_cdx-shape-corner-extra-small: var(
+    --cdx-code-editor-shape-corner-extra-small,
+    var(--md-sys-shape-corner-extra-small, 0.25rem)
+  );
+  --_cdx-shape-corner-small: var(
+    --cdx-code-editor-shape-corner-small,
+    var(--md-sys-shape-corner-small, 0.5rem)
+  );
+  --_cdx-shape-corner-medium: var(
+    --cdx-code-editor-shape-corner-medium,
+    var(--md-sys-shape-corner-medium, 0.75rem)
+  );
+  --_cdx-shape-corner-large: var(
+    --cdx-code-editor-shape-corner-large,
+    var(--md-sys-shape-corner-large, 1rem)
+  );
+  --_cdx-shape-corner-full: var(
+    --cdx-code-editor-shape-corner-full,
+    var(--md-sys-shape-corner-full, 9999px)
+  );
+
+  /* md-* children read their font from these; only the *-font roles are bridged — they don't feed
+     back into --_cdx-font-family, so there's no cycle (bridging a size or color would create one) */
+  --md-sys-typescale-body-large-font: var(--_cdx-font-family);
+  --md-sys-typescale-body-medium-font: var(--_cdx-font-family);
+  --md-sys-typescale-label-large-font: var(--_cdx-font-family);
+  --md-sys-typescale-label-medium-font: var(--_cdx-font-family);
+  --md-sys-typescale-title-small-font: var(--_cdx-font-family);
+
+  font-family: var(--_cdx-font-family);
+}

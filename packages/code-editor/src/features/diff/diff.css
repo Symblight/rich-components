@@ -1,0 +1,299 @@
+/* The diff feature's styles, adopted by cdx-code-editor: its chunk headers, ghost rows and gutter
+   tints are CodeMirror DOM inside the editor's shadow root. Tokens are declared here, on the editor
+   host, so they're overridable on cdx-code-editor and reach cdx-review-bar by inheritance. */
+:host {
+  /* Same extended green as chx-code-block's diff palette — MD3 has no "added" role. */
+  --cdx-vcs-added-color: #1b7a3d;
+  --cdx-vcs-modified-color: var(--_cdx-color-primary);
+  --cdx-vcs-deleted-color: var(--_cdx-color-error);
+  --cdx-diff-added-background-color: color-mix(in srgb, #1b7a3d 11%, transparent);
+  --cdx-diff-removed-background-color: color-mix(in srgb, #b3261e 9%, transparent);
+  --cdx-diff-added-sign-color: #0a5c2c;
+  --cdx-diff-removed-sign-color: #93211a;
+  --cdx-diff-removed-opacity: 0.8;
+  --cdx-diff-flash-color: color-mix(in srgb, var(--cdx-vcs-added-color) 28%, transparent);
+
+  /* Chunk header (36dp, like a CodeLens) and review bar sizes. */
+  --cdx-chunk-header-height: 2.25rem;
+  --cdx-chunk-header-accent-width: 3px;
+  --cdx-chunk-header-color: var(--_cdx-color-on-surface-variant);
+  --cdx-chunk-author-color: var(--_cdx-color-on-surface);
+  --cdx-chunk-action-height: 1.75rem;
+  --cdx-chunk-action-text-color: var(--_cdx-color-on-surface-variant);
+  --cdx-chunk-action-danger-color: var(--_cdx-color-error);
+  --cdx-review-min-height: 3rem;
+  --cdx-review-padding: 0.375rem 0.5rem 0.375rem 1rem;
+  --cdx-review-gap: 0.5rem;
+  --cdx-review-font-size: 0.8125rem;
+  --cdx-review-action-height: 2.25rem;
+  --cdx-review-border-color: var(--_cdx-color-outline-variant);
+  --cdx-review-done-background-color: var(--_cdx-color-surface-container-high);
+  --cdx-review-done-color: var(--_cdx-color-on-surface-variant);
+  --cdx-review-done-icon-color: var(--cdx-vcs-added-color);
+
+  /* Tones — a header and the review bar take one: accent (bar, icon, filled button), on-accent,
+     surface (header fill), container / on-container (review bar). Tertiary is an agent's
+     "waiting for a person", neutral is git's. */
+  --cdx-diff-tone-tertiary-accent: var(--_cdx-color-tertiary);
+  --cdx-diff-tone-tertiary-on-accent: var(--_cdx-color-on-tertiary);
+  --cdx-diff-tone-tertiary-surface: color-mix(
+    in srgb,
+    var(--_cdx-color-tertiary) 10%,
+    var(--cdx-content-background-color)
+  );
+  --cdx-diff-tone-tertiary-container: var(--_cdx-color-tertiary-container);
+  --cdx-diff-tone-tertiary-on-container: var(--_cdx-color-on-tertiary-container);
+  --cdx-diff-tone-neutral-accent: var(--_cdx-color-outline);
+  --cdx-diff-tone-neutral-on-accent: var(--_cdx-color-surface);
+  --cdx-diff-tone-neutral-surface: var(--_cdx-color-surface-container);
+  --cdx-diff-tone-neutral-container: var(--_cdx-color-surface-container-high);
+  --cdx-diff-tone-neutral-on-container: var(--_cdx-color-on-surface);
+  --cdx-diff-tone-primary-accent: var(--_cdx-color-primary);
+  --cdx-diff-tone-primary-on-accent: var(--_cdx-color-on-primary);
+  --cdx-diff-tone-primary-surface: color-mix(
+    in srgb,
+    var(--_cdx-color-primary) 10%,
+    var(--cdx-content-background-color)
+  );
+  --cdx-diff-tone-primary-container: var(--_cdx-color-primary-container);
+  --cdx-diff-tone-primary-on-container: var(--_cdx-color-on-primary-container);
+  --cdx-diff-tone-error-accent: var(--_cdx-color-error);
+  --cdx-diff-tone-error-on-accent: var(--_cdx-color-on-error);
+  --cdx-diff-tone-error-surface: color-mix(
+    in srgb,
+    var(--_cdx-color-error) 10%,
+    var(--cdx-content-background-color)
+  );
+  --cdx-diff-tone-error-container: var(--_cdx-color-error-container);
+  --cdx-diff-tone-error-on-container: var(--_cdx-color-on-error-container);
+}
+
+@media (prefers-color-scheme: dark) {
+  :host {
+    --cdx-vcs-added-color: #81c995;
+    --cdx-diff-added-background-color: color-mix(in srgb, #81c995 14%, transparent);
+    --cdx-diff-removed-background-color: color-mix(in srgb, #f2b8b5 13%, transparent);
+    --cdx-diff-added-sign-color: #a8dab5;
+    --cdx-diff-removed-sign-color: #f2b8b5;
+  }
+}
+
+/* Tone → private palette; public per-tone tokens stay overridable. */
+.cdx-chunk,
+.cdx-gutter-chunk-header {
+  --_accent: var(--cdx-diff-tone-tertiary-accent);
+  --_on-accent: var(--cdx-diff-tone-tertiary-on-accent);
+  --_surface: var(--cdx-diff-tone-tertiary-surface);
+  --_container: var(--cdx-diff-tone-tertiary-container);
+  --_on-container: var(--cdx-diff-tone-tertiary-on-container);
+}
+
+.cdx-chunk_tone-neutral,
+.cdx-gutter-chunk-header_tone-neutral {
+  --_accent: var(--cdx-diff-tone-neutral-accent);
+  --_on-accent: var(--cdx-diff-tone-neutral-on-accent);
+  --_surface: var(--cdx-diff-tone-neutral-surface);
+  --_container: var(--cdx-diff-tone-neutral-container);
+  --_on-container: var(--cdx-diff-tone-neutral-on-container);
+}
+
+.cdx-chunk_tone-primary,
+.cdx-gutter-chunk-header_tone-primary {
+  --_accent: var(--cdx-diff-tone-primary-accent);
+  --_on-accent: var(--cdx-diff-tone-primary-on-accent);
+  --_surface: var(--cdx-diff-tone-primary-surface);
+  --_container: var(--cdx-diff-tone-primary-container);
+  --_on-container: var(--cdx-diff-tone-primary-on-container);
+}
+
+.cdx-chunk_tone-error,
+.cdx-gutter-chunk-header_tone-error {
+  --_accent: var(--cdx-diff-tone-error-accent);
+  --_on-accent: var(--cdx-diff-tone-error-on-accent);
+  --_surface: var(--cdx-diff-tone-error-surface);
+  --_container: var(--cdx-diff-tone-error-container);
+  --_on-container: var(--cdx-diff-tone-error-on-container);
+}
+
+/* Gutters beside diff rows share their fill, so rows read edge to edge; the leftmost gutter
+   carries the header's 3dp accent. */
+.cdx-gutter-added {
+  background-color: var(--cdx-diff-added-background-color);
+}
+
+.cdx-gutter-deleted {
+  background-color: var(--cdx-diff-removed-background-color);
+}
+
+.cdx-gutter-chunk-header {
+  background-color: var(--_surface);
+}
+
+.cdx-vcs-gutter .cdx-gutter-chunk-header {
+  box-shadow: inset var(--cdx-chunk-header-accent-width) 0 0 var(--_accent);
+}
+
+/* The header: a row of its own above the change, so it never covers code. The bar sticks to the
+   gutter's edge and spans the visible text width on horizontal scroll. */
+.cdx-chunk {
+  block-size: var(--cdx-chunk-header-height);
+}
+
+.cdx-chunk__bar {
+  position: sticky;
+  inset-inline-start: var(--cdx-gutters-width, 0);
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  box-sizing: border-box;
+  inline-size: var(--cdx-text-width, 100%);
+  block-size: 100%;
+  padding-inline: var(--cdx-line-padding-inline) 0.5rem;
+  overflow: hidden;
+  background-color: var(--_surface);
+  color: var(--cdx-chunk-header-color);
+  font-family: var(--_cdx-font-family);
+  font-size: 0.78125rem;
+  white-space: nowrap;
+}
+
+.cdx-author-icon {
+  flex: none;
+  inline-size: 1rem;
+  block-size: 1rem;
+  fill: var(--_accent);
+}
+
+.cdx-chunk_tone-neutral .cdx-author-icon {
+  fill: var(--cdx-chunk-header-color);
+}
+
+/* md-avatar's --md-avatar-size is a radius: 10px draws a 20px avatar. */
+.cdx-author-avatar {
+  --md-avatar-size: 10px;
+
+  flex: none;
+  inline-size: 1.25rem;
+  block-size: 1.25rem;
+}
+
+.cdx-chunk__author {
+  color: var(--cdx-chunk-author-color);
+  font-weight: var(--_cdx-font-weight-medium);
+}
+
+.cdx-chunk__sep {
+  opacity: 0.6;
+}
+
+.cdx-chunk__stats {
+  display: inline-flex;
+  gap: 0.25rem;
+  margin-inline-start: 0.25rem;
+  font-family: var(--cdx-content-font-family);
+  font-size: 0.71875rem;
+  font-weight: var(--_cdx-font-weight-medium);
+}
+
+.cdx-chunk__added {
+  color: var(--cdx-diff-added-sign-color);
+}
+
+.cdx-chunk__removed {
+  color: var(--cdx-diff-removed-sign-color);
+}
+
+.cdx-chunk__grow {
+  flex: 1;
+}
+
+.cdx-chunk__action {
+  position: relative;
+  display: inline-flex;
+  flex: none;
+  align-items: center;
+  justify-content: center;
+  gap: 0.25rem;
+  overflow: hidden;
+  padding: 0 0.75rem;
+  border: none;
+  border-radius: var(--_cdx-shape-corner-full);
+  font-family: var(--_cdx-font-family);
+  font-weight: var(--_cdx-font-weight-medium);
+  cursor: pointer;
+
+  /* MD3 state layer. */
+  &::after {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-color: currentColor;
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+
+  &:hover::after {
+    opacity: 0.08;
+  }
+
+  &:active::after {
+    opacity: 0.12;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--_cdx-color-primary);
+    outline-offset: 1px;
+  }
+
+  & svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    fill: currentColor;
+  }
+}
+
+.cdx-chunk__action {
+  block-size: var(--cdx-chunk-action-height);
+  font-size: 0.78125rem;
+}
+
+.cdx-chunk__action_filled {
+  padding-inline-start: 0.5rem;
+  background-color: var(--_accent);
+  color: var(--_on-accent);
+}
+
+.cdx-chunk__action_text {
+  background: transparent;
+  color: var(--cdx-chunk-action-text-color);
+}
+
+/* Revert loses work — the only red action. Reject of a proposal destroys nothing, so it's neutral. */
+.cdx-chunk__action_danger {
+  background: transparent;
+  color: var(--cdx-chunk-action-danger-color);
+}
+
+.cdx-chunk__action_icon {
+  inline-size: var(--cdx-chunk-action-height);
+  padding: 0;
+  background: transparent;
+  color: var(--cdx-chunk-action-text-color);
+}
+
+/* Accepted lines flash green once; nothing moves for reduced motion. */
+.cdx-line-flash {
+  animation: cdx-line-flash 1.2s ease-out 1;
+}
+
+@keyframes cdx-line-flash {
+  0% {
+    background-color: var(--cdx-diff-flash-color);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cdx-line-flash {
+    animation: none;
+  }
+}

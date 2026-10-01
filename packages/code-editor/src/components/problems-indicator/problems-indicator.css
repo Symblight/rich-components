@@ -1,0 +1,73 @@
+/* Floats over the text's top-right corner, clear of the vertical scrollbar. Tokens come from the
+   editor host, so a consumer's overrides on cdx-code-editor reach it. */
+:host {
+  position: absolute;
+  inset-block-start: 0.5rem;
+  inset-inline-end: 1.125rem;
+  z-index: 6;
+  display: block;
+}
+
+.problems-indicator {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  block-size: 1.5rem;
+  padding: 0 0.5rem;
+  overflow: hidden;
+  background-color: var(--cdx-problems-background-color);
+  border: none;
+  border-radius: var(--_cdx-shape-corner-full);
+  color: var(--cdx-problems-color);
+  font-family: var(--_cdx-font-family);
+  font-size: 0.71875rem;
+  font-weight: var(--_cdx-font-weight-medium);
+  cursor: pointer;
+
+  /* MD3 state layer. */
+  &::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    background-color: currentColor;
+    opacity: 0;
+    transition: opacity 0.12s;
+  }
+
+  &:hover::before {
+    opacity: 0.08;
+  }
+
+  &:active::before {
+    opacity: 0.12;
+  }
+
+  &:focus-visible {
+    outline: 2px solid var(--cdx-content-focus-border-color);
+    outline-offset: 1px;
+  }
+
+  & svg {
+    flex: none;
+    inline-size: 1rem;
+    block-size: 1rem;
+    fill: currentColor;
+  }
+}
+
+.problems-indicator_clean {
+  padding: 0 0.25rem;
+  background-color: var(--cdx-content-background-color);
+  color: var(--cdx-problems-clean-color);
+}
+
+.problems-indicator_warning {
+  background-color: var(--cdx-problems-warning-background-color);
+  color: var(--cdx-problems-warning-color);
+}
+
+.problems-indicator_error {
+  background-color: var(--cdx-problems-error-background-color);
+  color: var(--cdx-problems-error-color);
+}

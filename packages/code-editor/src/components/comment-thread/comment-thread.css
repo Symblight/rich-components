@@ -1,0 +1,113 @@
+:host {
+  display: block;
+  font-family: var(--_cdx-font-family);
+}
+
+/* Tone → private palette, from the per-tone public tokens the editor host declares (comments.css). */
+.thread {
+  --_accent: var(--cdx-comment-tone-comment-accent);
+  --_container: var(--cdx-comment-tone-comment-container);
+  --_on-container: var(--cdx-comment-tone-comment-on-container);
+
+  box-sizing: border-box;
+  padding: 0.5rem 1rem 0.75rem var(--cdx-line-padding-inline);
+  background-color: var(--cdx-comment-background-color);
+  box-shadow:
+    inset var(--cdx-comment-accent-width) 0 0 var(--_accent),
+    var(--cdx-comment-shadow);
+  color: var(--_cdx-color-on-surface);
+}
+
+.thread_tone-resolved {
+  --_accent: var(--cdx-comment-tone-resolved-accent);
+  --_container: var(--cdx-comment-tone-resolved-container);
+  --_on-container: var(--cdx-comment-tone-resolved-on-container);
+}
+
+.thread_collapsed {
+  padding-block: 0;
+}
+
+.thread__in {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  max-inline-size: var(--cdx-comment-max-width);
+}
+
+.thread__bar {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  min-block-size: 2.25rem;
+  color: var(--_cdx-color-on-surface-variant);
+  font-size: 0.78125rem;
+}
+
+.thread_collapsed .thread__bar {
+  cursor: default;
+}
+
+.thread__icon {
+  display: inline-flex;
+  flex: none;
+  color: var(--_accent);
+
+  & svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    fill: currentColor;
+  }
+}
+
+.thread__summary {
+  display: flex;
+  flex: 0 1 auto;
+  gap: 0.25rem;
+  min-inline-size: 0;
+  white-space: nowrap;
+
+  & b {
+    color: var(--_cdx-color-on-surface);
+    font-weight: var(--_cdx-font-weight-medium);
+  }
+}
+
+.thread__snippet {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.thread__tag {
+  padding: 0 0.5rem;
+  border-radius: var(--_cdx-shape-corner-extra-small);
+  background-color: var(--_cdx-color-surface-container-high);
+  font-size: 0.6875rem;
+  font-weight: var(--_cdx-font-weight-medium);
+  line-height: 1.25rem;
+}
+
+.thread__grow {
+  flex: 1;
+}
+
+.thread__content,
+.thread__list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.thread__error {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  color: var(--_cdx-color-error);
+  font-size: 0.75rem;
+
+  & svg {
+    inline-size: 1rem;
+    block-size: 1rem;
+    fill: currentColor;
+  }
+}

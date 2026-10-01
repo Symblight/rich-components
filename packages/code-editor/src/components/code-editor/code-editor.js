@@ -9,7 +9,11 @@ import "../quick-fix/quick-fix.js";
 import "../../features/diff/diff.js";
 import "../review-bar/review-bar.js";
 import "../status-bar/status-bar.js";
+import "../comments-nav/comments-nav.js";
 import "../../features/footer/footer.js";
+import "../../features/comments/comments.js";
+import "../../features/comments/comments-bar.js";
+import commentsStyles from "../../features/comments/comments.css?inline";
 import footerStyles from "../../features/footer/footer.css?inline";
 import diffStyles from "../../features/diff/diff.css?inline";
 import { baseSetup } from "../../core/setup.js";
@@ -17,6 +21,7 @@ import { ALL, ConfigController } from "../../controllers/ConfigController.js";
 import { ContextMenuController } from "../../controllers/ContextMenuController.js";
 import { DiagnosticsController } from "../../controllers/DiagnosticsController.js";
 import { FooterController } from "../../features/footer/FooterController.js";
+import { CommentsController } from "../../features/comments/CommentsController.js";
 import { DiffController } from "../../features/diff/DiffController.js";
 import { EditorViewController } from "../../controllers/EditorViewController.js";
 import { GoToLineController } from "../../controllers/GoToLineController.js";
@@ -79,7 +84,7 @@ export class CdxCodeEditor extends LitElement {
     reviewBase: { attribute: false },
   };
 
-  static styles = [tokens, styles, diffStyles, footerStyles];
+  static styles = [tokens, styles, diffStyles, footerStyles, commentsStyles];
 
   /** Per-document extensions from `createState`, e.g. an LSP binding for that file's URI. */
   #documentExtensions = new Compartment();
@@ -101,6 +106,8 @@ export class CdxCodeEditor extends LitElement {
   #diagnostics = new DiagnosticsController(this, this.#editor);
   /** @type {DiffController} */
   #diff = new DiffController(this, this.#editor);
+  /** @type {CommentsController} */
+  #comments = new CommentsController(this, this.#editor);
   /** @type {SymbolsController} */
   #symbols = new SymbolsController(this, this.#editor);
   /** @type {GoToLineController} */
@@ -223,7 +230,11 @@ export class CdxCodeEditor extends LitElement {
     if (!this.#config.owns(next)) {
       throw new Error("cdx-code-editor: `state` must come from this element's createState()");
     }
-    const effects = [...this.#config.effects(ALL), ...this.#language.pluginEffects()];
+    const effects = [
+      ...this.#config.effects(ALL),
+      ...this.#language.pluginEffects(),
+      ...this.#comments.effectsFor(),
+    ];
     this.#editor.replaceState(next.update({ effects }).state);
   }
 
@@ -242,6 +253,7 @@ export class CdxCodeEditor extends LitElement {
     const effects = [
       ...this.#config.effects(ALL),
       ...this.#language.pluginEffects(),
+      ...this.#comments.effectsFor(),
       await this.#language.effectFor({ language, filename }),
       ...this.#diff.effectsFor({ baseline, reviewBase }),
       this.#documentExtensions.reconfigure(extensions),
@@ -290,6 +302,75 @@ export class CdxCodeEditor extends LitElement {
     return this.#diff.navigate(-1);
   }
 
+  /** Opens the comment field at a line — a new thread, or a reply when one lives there (with
+   *  `newThread`, another thread on that line, `thread` mode). Returns the thread id, or null when
+   *  `cdx-comment-open` was cancelled or comments are off.
+   * @param {number} line
+   * @param {{ range?: import("../../features/comments/shared.js").CdxCommentRange | null, newThread?: boolean }} [options] */
+  openComment(line, options) {
+    return this.#comments.openComment(line, options);
+  }
+
+  /** @returns {import("../../features/comments/shared.js").CdxThread[]} */
+  getComments() {
+    return this.#comments.getComments();
+  }
+
+  /** Adds a comment thread, or replaces the one with its id (uncontrolled).
+   * @param {import("../../features/comments/shared.js").CdxThread} thread */
+  addComment(thread) {
+    this.#comments.addComment(thread);
+  }
+
+  /** The host saved a submitted comment; server `id`/`author`/`createdAt` may come along, and
+   *  `options.threadId` gives a new thread its server id (uncontrolled).
+   * @param {string} threadId @param {Partial<import("../../features/comments/shared.js").CdxComment>} [comment]
+   * @param {{ threadId?: string }} [options] */
+  resolveSubmit(threadId, comment, options) {
+    this.#comments.resolveSubmit(threadId, comment, options);
+  }
+
+  /** @param {string} threadId @param {string} message */
+  rejectSubmit(threadId, message) {
+    this.#comments.rejectSubmit(threadId, message);
+  }
+
+  /** @param {string} threadId @param {string} text */
+  setDraft(threadId, text) {
+    this.#comments.setDraft(threadId, text);
+  }
+
+  /** Answers a cancelled `cdx-comment-resolve` (or, uncontrolled, resolves directly).
+   * @param {string} threadId @param {boolean} [resolved] */
+  resolveComment(threadId, resolved) {
+    this.#comments.resolveComment(threadId, resolved);
+  }
+
+  /** Answers a cancelled `cdx-comment-delete` (or, uncontrolled, deletes directly).
+   * @param {string} threadId @param {string} commentId */
+  deleteComment(threadId, commentId) {
+    this.#comments.deleteComment(threadId, commentId);
+  }
+
+  /** A resolve or delete failed: the thread stops waiting and shows `message`.
+   * @param {string} threadId @param {string} message */
+  rejectComment(threadId, message) {
+    this.#comments.rejectComment(threadId, message);
+  }
+
+  /** Resolves (`false`: reopens) every thread — one `cdx-comment-resolve` each.
+   * @param {boolean} [resolved] */
+  resolveAll(resolved) {
+    this.#comments.resolveAll(resolved);
+  }
+
+  /** Removes every comment, or with `id` one comment (its thread goes with its last) — or the
+   *  thread with that id. No events, no permission hooks (uncontrolled).
+   * @param {string} [id] */
+  clearComments(id) {
+    this.#comments.clearComments(id);
+  }
+
   /** Opens the "Go to line" card (also Ctrl-G). */
   openGoToLine() {
     this.#goToLine.show();
@@ -318,6 +399,7 @@ export class CdxCodeEditor extends LitElement {
     return [
       baseSetup(),
       this.#value.extension,
+      this.#comments.extension,
       this.#diff.extension,
       this.#quickFix.extension,
       this.#goToLine.extension,
@@ -350,6 +432,21 @@ export class CdxCodeEditor extends LitElement {
       dismiss: () => this.#diff.dismissReview(),
     };
     actions[event.detail.action]();
+  };
+
+  /** @param {Event} event */
+  handleCommentsSlotchange = (event) => {
+    this.#comments.handleSlotchange(/** @type {HTMLSlotElement} */ (event.target));
+  };
+
+  /** @param {Event} event */
+  handleCommentsBarSlotchange = (event) => {
+    this.#comments.handleBarSlotchange(/** @type {HTMLSlotElement} */ (event.target));
+  };
+
+  /** @param {CustomEvent<{ action: "previous" | "next" | "resolve-all" }>} event */
+  handleCommentsNavAction = (event) => {
+    this.#comments.handleBarAction(event.detail);
   };
 
   /** @param {Event} event */
@@ -471,6 +568,20 @@ export class CdxCodeEditor extends LitElement {
     `;
   }
 
+  #renderCommentsBar() {
+    const bar = this.#comments.bar;
+    if (!bar) return nothing;
+    return html`
+      <cdx-comments-nav
+        part="comments-bar-host"
+        exportparts="bar: comments-bar, nav: comments-bar-nav, count: comments-bar-count, action: comments-bar-action"
+        .config=${bar.config}
+        .model=${bar.model}
+        @cdx-comments-nav-action=${this.handleCommentsNavAction}
+      ></cdx-comments-nav>
+    `;
+  }
+
   #renderGoToLine() {
     if (!this.#goToLine.open) return nothing;
     return html`
@@ -490,11 +601,14 @@ export class CdxCodeEditor extends LitElement {
     return html`
       <slot name="diff" hidden @slotchange=${this.handleDiffSlotchange}></slot>
       <slot name="footer" hidden @slotchange=${this.handleFooterSlotchange}></slot>
+      <slot name="comments" hidden @slotchange=${this.handleCommentsSlotchange}></slot>
+      <slot name="comments-bar" hidden @slotchange=${this.handleCommentsBarSlotchange}></slot>
       <div class="code-editor" part="container">
         ${this.#renderReviewBar()}
         <div class="code-editor__body">
           <div class="code-editor__view"></div>
           ${this.#renderProblems()} ${this.#renderQuickFix()} ${this.#renderGoToLine()}
+          ${this.#renderCommentsBar()}
         </div>
         ${this.#renderStatusBar()}
       </div>

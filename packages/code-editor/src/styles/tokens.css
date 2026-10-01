@@ -73,6 +73,11 @@
     --cdx-code-editor-color-on-secondary-container,
     var(--md-sys-color-on-secondary-container)
   );
+  --_cdx-color-secondary: var(--cdx-code-editor-color-secondary, var(--md-sys-color-secondary));
+  --_cdx-color-on-secondary: var(
+    --cdx-code-editor-color-on-secondary,
+    var(--md-sys-color-on-secondary)
+  );
   --_cdx-color-error: var(--cdx-code-editor-color-error, var(--md-sys-color-error));
   --_cdx-color-error-container: var(
     --cdx-code-editor-color-error-container,

@@ -1,0 +1,84 @@
+:host {
+  --_btn: var(--_cdx-color-primary);
+  --_on-btn: var(--_cdx-color-on-primary);
+
+  display: block;
+  font-family: var(--_cdx-font-family);
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.field__input {
+  --md-text-field-label-size: var(--cdx-comment-field-font-size);
+  --md-text-field-font-size: var(--cdx-comment-field-font-size);
+
+  inline-size: 100%;
+
+  /* grows with the text: 3 rows to 8, then scrolls */
+  &::part(input) {
+    field-sizing: content;
+    min-block-size: calc(3 * 1.25rem);
+    max-block-size: calc(8 * 1.25rem);
+    line-height: 1.25rem;
+  }
+}
+
+:host([idle]) .field__input::part(input) {
+  min-block-size: 1.25rem;
+}
+
+:host([sending]) .field__input {
+  opacity: 0.38;
+}
+
+.field__support {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  min-block-size: 1rem;
+  padding-inline: 1rem;
+  color: var(--_cdx-color-on-surface-variant);
+  font-size: 0.75rem;
+  line-height: 1rem;
+}
+
+.field__message {
+  display: flex;
+  flex: 1;
+  gap: 0.25rem;
+  min-inline-size: 0;
+
+  & svg {
+    flex: none;
+    inline-size: 1rem;
+    block-size: 1rem;
+    fill: currentColor;
+  }
+}
+
+:host([sending]) .field__support {
+  opacity: 0.38;
+}
+
+.field__support:has([role="alert"]:not(:empty)) {
+  color: var(--_cdx-color-error);
+}
+
+.field__counter {
+  flex: none;
+  font-variant-numeric: tabular-nums;
+}
+
+.field__counter_over {
+  color: var(--_cdx-color-error);
+}
+
+.field__actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 0.5rem;
+}

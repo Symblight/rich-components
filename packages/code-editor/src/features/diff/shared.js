@@ -289,7 +289,7 @@ export const addedGutterClass = new ClassMarker("cdx-gutter-added");
 
 /** Keeps the headers' sticky bar exactly over the visible text area: it sticks to the gutter's
  *  right edge and spans the scroller's visible width, whatever the horizontal scroll. */
-const stickyGeometry = ViewPlugin.define((view) => {
+export const stickyGeometry = ViewPlugin.define((view) => {
   const measure = () =>
     view.requestMeasure({
       read: () => ({

@@ -3,99 +3,66 @@ import { DEFAULT_CONVERSATION_ID } from "../../constants.js";
 /** @import { ChxConversation } from "../../types/conversation.js" */
 
 /**
- * Decides whether a `chx-chat` is running in single- or multi-conversation mode, and what follows
- * from that: which conversation id message routing keys off, and whether the chat is in the empty
- * state. Both latches are one-way, which is the whole reason this is stateful rather than a pair of
- * pure functions — see `refresh()`.
- *
- * Reads are pulled through callbacks rather than pushed in, deliberately: `effectiveConversationId`
- * is read from `#applyMessages`, which a streamed chunk can reach outside the update cycle, and a
- * pushed snapshot taken in `willUpdate` would be stale there.
+ * @typedef {{
+ *   getConversationsPresent: () => boolean,
+ *   getConversations: () => ChxConversation[] | undefined,
+ *   getInitialConversations: () => ChxConversation[] | undefined,
+ *   getInitialActiveConversationId: () => string | undefined,
+ *   getActiveConversationId: () => string | undefined,
+ * }} ConversationModeConfig
+ */
+
+/**
+ * Single- vs multi-conversation mode and what follows from it: the routing id and the empty state.
+ * Both latches are one-way. Reads are pulled live — a streamed chunk can reach `#applyMessages`
+ * outside the update cycle, where a snapshot taken in `willUpdate` would be stale.
  */
 export class ConversationModeController {
-  /** @type {() => boolean} */
-  #getConversationsPresent;
-  /** @type {() => ChxConversation[] | undefined} */
-  #getConversations;
-  /** @type {() => ChxConversation[] | undefined} */
-  #getInitialConversations;
-  /** @type {() => string | undefined} */
-  #getInitialActiveConversationId;
-  /** @type {() => string | undefined} */
-  #getActiveConversationId;
-
+  /** @type {ConversationModeConfig} */
+  #config;
   #usesConversations = false;
-  /** Latched separately from `#usesConversations`: true once the `conversations` collection is
-   *  actually being maintained (a bound sidebar, or a non-empty app-provided array). Only then does
-   *  a missing entry mean "removed" — see `isEmptyState`. */
+  /** Only a maintained collection can say an active id was removed — see `isEmptyState`. */
   #tracksConversations = false;
 
-  /**
-   * @param {{
-   *   getConversationsPresent: () => boolean,
-   *   getConversations: () => ChxConversation[] | undefined,
-   *   getInitialConversations: () => ChxConversation[] | undefined,
-   *   getInitialActiveConversationId: () => string | undefined,
-   *   getActiveConversationId: () => string | undefined,
-   * }} config
-   */
+  /** @param {ConversationModeConfig} config */
   constructor(config) {
-    this.#getConversationsPresent = config.getConversationsPresent;
-    this.#getConversations = config.getConversations;
-    this.#getInitialConversations = config.getInitialConversations;
-    this.#getInitialActiveConversationId = config.getInitialActiveConversationId;
-    this.#getActiveConversationId = config.getActiveConversationId;
+    this.#config = config;
   }
 
-  /**
-   * Latches multi-conversation mode on the moment any conversation signal appears — a bound
-   * `<chx-conversations>`, conversations data, or an `activeConversationId`. Never flips back, so
-   * once a chat is conversation-driven, clearing or removing every conversation lands in the empty
-   * state rather than reverting to the single-conversation default. Call it from `connectedCallback`
-   * and `willUpdate`, to catch late-arriving signals.
-   */
+  /** Latches multi-conversation mode on the first conversation signal. Call from `connectedCallback` and `willUpdate`. */
   refresh() {
-    // A sidebar owns the collection outright; an app-provided one only counts once it's non-empty,
-    // since `[]` is also what a chat driven by activeConversationId alone carries.
-    if (this.#getConversationsPresent() || (this.#getConversations()?.length ?? 0) > 0) {
+    const config = this.#config;
+    // `[]` is also what a chat driven by activeConversationId alone carries, so only non-empty counts
+    if (config.getConversationsPresent() || (config.getConversations()?.length ?? 0) > 0) {
       this.#tracksConversations = true;
     }
     if (this.#usesConversations) return;
     if (
       this.#tracksConversations ||
-      this.#getInitialConversations() !== undefined ||
-      this.#getInitialActiveConversationId() !== undefined ||
-      this.#getActiveConversationId() != null
+      config.getInitialConversations() !== undefined ||
+      config.getInitialActiveConversationId() !== undefined ||
+      config.getActiveConversationId() != null
     ) {
       this.#usesConversations = true;
     }
   }
 
   /**
-   * The conversation id message routing/rendering keys off: the (string) active conversation in
-   * multi-conversation mode, the `DEFAULT_CONVERSATION_ID` sentinel in single-conversation mode, or
-   * `null` in the empty state. Internal only — never stored on a message or sent to an adapter.
+   * The id routing keys off: the active conversation, `DEFAULT_CONVERSATION_ID` in
+   * single-conversation mode, or `null` in the empty state. Never stored or sent to an adapter.
    * @returns {string | symbol | null}
    */
   get effectiveConversationId() {
     if (!this.#usesConversations) return DEFAULT_CONVERSATION_ID;
-    return this.isEmptyState ? null : (this.#getActiveConversationId() ?? null);
+    return this.isEmptyState ? null : (this.#config.getActiveConversationId() ?? null);
   }
 
-  /**
-   * True when a conversation-driven chat has no usable active conversation — the active one was
-   * cleared/removed, or points at a conversation no longer in `conversations` (bulk-removed). The
-   * single-conversation flavor never hits this (it isn't conversation-driven). The membership check
-   * is gated on the tracking latch: `conversations` is optional picker metadata, so an app switching
-   * `activeConversationId` without ever populating it must not read as "that conversation doesn't
-   * exist" — only a maintained collection can say that.
-   * @returns {boolean}
-   */
+  /** A conversation-driven chat with no usable active conversation (cleared, or removed from a tracked collection). */
   get isEmptyState() {
     if (!this.#usesConversations) return false;
-    const id = this.#getActiveConversationId();
+    const id = this.#config.getActiveConversationId();
     if (id == null) return true;
     if (!this.#tracksConversations) return false;
-    return !this.#getConversations()?.some((conversation) => conversation.id === id);
+    return !this.#config.getConversations()?.some((conversation) => conversation.id === id);
   }
 }

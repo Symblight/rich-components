@@ -10,6 +10,8 @@ import tokens from "../../styles/tokens.css?inline";
 import styles from "./message-composer.css?inline";
 
 import "../textbox/textbox.js";
+import { CONNECT_REGISTRY } from "../../api/keys.js";
+import { EDITOR_EXTENSION } from "../../editor/extension.js";
 
 /**
  * @tag chx-message-composer
@@ -58,7 +60,7 @@ export class ChxMessageComposer extends LitElement {
     /** @type {boolean} MD3 density −2 — 48dp field, body-medium text. Pushed down to chx-textbox. */
     this.compact = false;
 
-    /** @type {boolean} Pushed down by chx-chat — true while #internalMessages is empty. See pushSuggestionListProperties. */
+    /** @type {boolean} Pushed down by chx-chat — true while #internalMessages is empty. See #pushSuggestionListProperties. */
     this.messagesEmpty = true;
   }
 
@@ -70,11 +72,127 @@ export class ChxMessageComposer extends LitElement {
   connectedCallback() {
     super.connectedCallback();
     this.addEventListener("paste", this.#handlePasteFiles);
+    this.addEventListener("chx-insert-chip", this.#handleInsertChip);
+    this.#registerInput();
+    this.#syncAttachmentsOwner();
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     this.removeEventListener("paste", this.#handlePasteFiles);
+    this.removeEventListener("chx-insert-chip", this.#handleInsertChip);
+    this.#unregisterAll();
+  }
+
+  /** @type {import("../../context/chat-api-context.js").ChatApiRegistry | undefined} */
+  #registry; // pushed by chx-chat, see [CONNECT_REGISTRY]
+  /** @type {(() => void) | undefined} */
+  #unregisterInput;
+  /** @type {{element: import("../attachments/attachments.js").ChxAttachments, unregister: () => void} | undefined} */
+  #attachmentsOwner;
+
+  /** Internal: chx-chat hands over its API registry. @param {import("../../context/chat-api-context.js").ChatApiRegistry} registry */
+  [CONNECT_REGISTRY](registry) {
+    if (registry === this.#registry) return;
+    this.#unregisterAll();
+    this.#registry = registry;
+    this.#registerInput();
+    this.#syncAttachmentsOwner();
+  }
+
+  #unregisterAll() {
+    this.#unregisterInput?.();
+    this.#unregisterInput = undefined;
+    this.#attachmentsOwner?.unregister();
+    this.#attachmentsOwner = undefined;
+  }
+
+  #registerInput() {
+    if (!this.#registry || this.#unregisterInput || !this.isConnected) return;
+    this.#unregisterInput = this.#registry.register("input", this, {
+      getValue: () => ({
+        value: this.#textbox?.getValue() ?? "",
+        html: this.#textbox?.getHTML() ?? "",
+      }),
+      setText: (text) => this.#setText(text),
+      clear: () => this.#textbox?.clear(),
+      focus: () => this.focus(),
+      focusEnd: () => this.#textbox?.focusEnd(),
+      isEmpty: () => this.#textbox?.editor?.isEmpty() ?? true,
+      insertChip: (node, target) => this.#insertChip(node, target),
+    });
+  }
+
+  /**
+   * Internal: slotted chx-command-picker / chx-attachments ask for a chip insertion with this
+   * event instead of reaching for the composer. `target` (a command search session, may be `null`)
+   * replaces that tracked range; without it the chip lands at the caret.
+   * @param {Event} event
+   */
+  #handleInsertChip = (event) => {
+    const { node, target } = /** @type {CustomEvent<{node: Node, target?: string | null}>} */ (
+      event
+    ).detail;
+    event.stopPropagation();
+    this.#insertChip(node, target);
+  };
+
+  /** @param {Node} node @param {string | null} [target] */
+  #insertChip(node, target) {
+    if (target === undefined) this.#textbox?.insertChip(node);
+    else this.#textbox?.insertAtRange(target, node);
+  }
+
+  /**
+   * Editor extensions from direct children, read live at paste/render time — a child upgraded later
+   * counts from its first paste on. Stable identity, so chx-textbox isn't dirtied on every render.
+   * @returns {import("../../editor/extension.js").EditorExtension[]}
+   */
+  #getExtensions = () =>
+    [...this.children].flatMap(
+      (child) =>
+        /** @type {{[EDITOR_EXTENSION]?: import("../../editor/extension.js").EditorExtension}} */ (
+          child
+        )[EDITOR_EXTENSION] ?? [],
+    );
+
+  /** Registers `attachments` on behalf of the slotted `<chx-attachments>`, following slot changes. */
+  async #syncAttachmentsOwner() {
+    const element = this.#registry && this.isConnected ? this.#attachments : null;
+    if (element === (this.#attachmentsOwner?.element ?? null)) return;
+    this.#attachmentsOwner?.unregister();
+    this.#attachmentsOwner = undefined;
+    if (!element) return;
+
+    await customElements.whenDefined("chx-attachments"); // may be imported after the composer
+    const registry = this.#registry;
+    if (!registry || this.#attachmentsOwner || this.#attachments !== element) return;
+
+    const unregisterNamespace = registry.register(
+      "attachments",
+      element,
+      {
+        add: (files) => element.addFiles(Array.isArray(files) ? files : [files], "api"),
+        remove: (file) => {
+          const entry = element.getAttachmentEntries().find((e) => e.file === file);
+          if (entry) element.removeAttachment(entry.element);
+        },
+        clear: () => element.clearAttachments(),
+        getFiles: () => element.getAttachments(),
+        open: () => element.open(),
+      },
+      () => element.getAttachments(),
+    );
+    // cards are light-DOM children: adding one doesn't re-render chx-attachments, so check on its event
+    const check = () => registry.check("attachments");
+    element.addEventListener("chx-attachments-change", check);
+    this.#attachmentsOwner = {
+      element,
+      unregister: () => {
+        element.removeEventListener("chx-attachments-change", check);
+        unregisterNamespace();
+      },
+    };
   }
 
   /**
@@ -85,16 +203,16 @@ export class ChxMessageComposer extends LitElement {
   #handlePasteFiles = (event) => {
     const files = event.clipboardData?.files;
     if (!files || files.length === 0) return;
-    const textbox = this.textboxElement;
+    const textbox = this.#textbox;
     if (!textbox || !event.composedPath().includes(textbox)) return;
-    const attachments = this.attachmentsElement;
+    const attachments = this.#attachments;
     if (!attachments) return;
 
     event.preventDefault();
     attachments.addFiles(files, "paste");
   };
 
-  /** @type {Map<string, Element>} Keyed by element.id — see handleCommandFieldSlotchange. */
+  /** @type {Map<string, Element>} Keyed by element.id — see #handleCommandFieldSlotchange. */
   #triggerFields = new Map();
 
   /** Stable identity — an inline arrow in the template would dirty chx-textbox on every render. */
@@ -106,81 +224,47 @@ export class ChxMessageComposer extends LitElement {
    * `textbox.js`).
    * @param {Event} event
    */
-  handleCommandFieldSlotchange(event) {
+  #handleCommandFieldSlotchange(event) {
     const slot = /** @type {HTMLSlotElement} */ (event.target);
     this.#triggerFields = new Map(
       slot.assignedElements({ flatten: true }).map((element) => [element.id, element]),
     );
   }
 
-  /**
-   * Replaces the tracked range identified by `target` with `node` — see chx-textbox.insertAtRange.
-   * @param {string | null} target
-   * @param {Node} node
-   */
-  insertAtRange(target, node) {
-    this.textboxElement?.insertAtRange(target, node);
+  /** Queued until the first render if the textbox doesn't exist yet. @param {string} text */
+  #setText(text) {
+    if (this.#textbox) this.#textbox.setText(text);
+    else this.updateComplete.then(() => this.#textbox?.setText(text));
   }
 
-  /**
-   * Programmatically attaches a file — same effect as picking or dropping
-   * one (fires chx-attach, still preventable by a JS-driven listener). A
-   * no-op if no <chx-attachments> is connected.
-   * @param {File} file
-   */
-  attachFile(file) {
-    this.attachmentsElement?.addFiles([file], "api");
-  }
-
-  /**
-   * Replaces the textbox's document with plain text — e.g. pre-filling a
-   * draft or a suggested reply. Queued until the first render if called
-   * before the textbox exists. See chx-textbox.setText for why this isn't
-   * called `setValue` (FormControlMixin already owns that name one level
-   * down, for a different, form-value-only purpose).
-   * @param {string} text
-   */
-  setText(text) {
-    if (this.textboxElement) this.textboxElement.setText(text);
-    else this.updateComplete.then(() => this.textboxElement?.setText(text));
-  }
-
-  /** Focuses the underlying chx-textbox — see chx-textbox.focus for the ProseMirror-side behavior. */
+  /** Focuses the underlying chx-textbox — kept as an override: the composer doesn't delegate focus. */
   focus() {
-    this.textboxElement?.focus();
-  }
-
-  /** The ProseMirror facade owned by chx-textbox — see chx-textbox's `editor` field. @returns {import("../../editor/Editor.js").Editor | undefined} */
-  get editor() {
-    return this.textboxElement?.editor;
+    this.#textbox?.focus();
   }
 
   /** @returns {import("../textbox/textbox.js").ChxTextbox | null} */
-  get textboxElement() {
+  get #textbox() {
     return /** @type {import("../textbox/textbox.js").ChxTextbox | null} */ (
       this.renderRoot?.querySelector("chx-textbox") ?? null
     );
   }
 
   /**
-   * chx-attachments is optional, consumer-authored light DOM (slot="attachments"
-   * on this element, forwarded into chx-textbox's own attachments slot) — a
-   * light-DOM query, same reasoning as chx-chat's messageComposerElement, not
-   * a renderRoot one like textboxElement above.
+   * Optional, consumer-authored light DOM (`slot="attachments"`, forwarded into chx-textbox).
    * @returns {import("../attachments/attachments.js").ChxAttachments | null}
    */
-  get attachmentsElement() {
+  get #attachments() {
     return /** @type {import("../attachments/attachments.js").ChxAttachments | null} */ (
       this.querySelector("chx-attachments")
     );
   }
 
   /**
-   * Warns if more than one <chx-attachments> is slotted — attachmentsElement silently uses only
-   * the first.
+   * Warns if more than one <chx-attachments> is slotted — only the first is used.
    * @param {Event} event
    */
-  handleAttachmentsSlotchange(event) {
+  #handleAttachmentsSlotchange(event) {
+    this.#syncAttachmentsOwner();
     const slot = /** @type {HTMLSlotElement} */ (event.target);
     const assigned = slot
       .assignedElements({ flatten: true })
@@ -195,10 +279,10 @@ export class ChxMessageComposer extends LitElement {
 
   /**
    * chx-suggestion-list is optional, consumer-authored light DOM (slot="suggestions" on this
-   * element) — same status/reasoning as attachmentsElement above.
+   * element).
    * @returns {(HTMLElement & {alwaysVisible: boolean, hidden: boolean}) | null}
    */
-  get suggestionListElement() {
+  get #suggestionList() {
     return /** @type {(HTMLElement & {alwaysVisible: boolean, hidden: boolean}) | null} */ (
       this.querySelector("chx-suggestion-list")
     );
@@ -212,8 +296,8 @@ export class ChxMessageComposer extends LitElement {
    * needed here since either a consumer toggling `always-visible` after the list is already slotted,
    * or the list being (re)assigned after `messagesEmpty` was already pushed, must re-run this check.
    */
-  pushSuggestionListProperties() {
-    const list = this.suggestionListElement;
+  #pushSuggestionListProperties() {
+    const list = this.#suggestionList;
     if (!list) return;
     list.hidden = !list.alwaysVisible && !this.messagesEmpty;
   }
@@ -223,9 +307,9 @@ export class ChxMessageComposer extends LitElement {
    */
   #handleSuggestionSelect = (event) => {
     const { value, autoSubmit } = event.detail;
-    this.setText(value);
-    if (autoSubmit) this.textboxElement?.closest("form")?.requestSubmit();
-    else this.textboxElement?.focusEnd();
+    this.#setText(value);
+    if (autoSubmit) this.#textbox?.closest("form")?.requestSubmit();
+    else this.#textbox?.focusEnd();
   };
 
   /**
@@ -239,11 +323,11 @@ export class ChxMessageComposer extends LitElement {
   #handleSend(event) {
     event.preventDefault();
     if (this.loading) return;
-    const textbox = this.textboxElement;
+    const textbox = this.#textbox;
     if (!textbox) return;
 
     const value = textbox.getValue();
-    const attachments = this.attachmentsElement?.getAttachments() ?? [];
+    const attachments = this.#attachments?.getAttachments() ?? [];
     if (!value.trim() && attachments.length === 0) return;
 
     const html = textbox.getHTML();
@@ -259,13 +343,13 @@ export class ChxMessageComposer extends LitElement {
     if (!allowed) return;
 
     textbox.focus();
-    this.clearValue();
+    this.#clearValue();
   }
 
   /** Resets the editor's document and any attached files. */
-  clearValue() {
-    this.textboxElement?.clear();
-    this.attachmentsElement?.clearAttachments();
+  #clearValue() {
+    this.#textbox?.clear();
+    this.#attachments?.clearAttachments();
   }
 
   /**
@@ -278,7 +362,7 @@ export class ChxMessageComposer extends LitElement {
       new CustomEvent("chx-change", {
         detail: {
           ...event.detail,
-          attachments: this.attachmentsElement?.getAttachments() ?? [],
+          attachments: this.#attachments?.getAttachments() ?? [],
         },
         bubbles: true,
         composed: true,
@@ -289,18 +373,17 @@ export class ChxMessageComposer extends LitElement {
   /** @param {import("lit").PropertyValues} changedProperties */
   updated(changedProperties) {
     super.updated(changedProperties);
-    this.pushSuggestionListProperties();
+    this.#pushSuggestionListProperties();
   }
 
   render() {
     return html`
       <slot
         name="suggestions"
-        @slotchange=${this.pushSuggestionListProperties}
+        @slotchange=${this.#pushSuggestionListProperties}
         @chx-suggestion-select=${this.#handleSuggestionSelect}
       ></slot>
-      <slot name="command-field" @slotchange=${this.handleCommandFieldSlotchange}></slot>
-      <slot name="paste-long-text"></slot>
+      <slot name="command-field" @slotchange=${this.#handleCommandFieldSlotchange}></slot>
       <form class="message-composer__form" @submit=${this.#handleSend}>
         <chx-textbox
           name="message"
@@ -311,6 +394,7 @@ export class ChxMessageComposer extends LitElement {
           .stopLabel=${this.stopLabel}
           .dropHint=${this.dropHint}
           .getTriggerFields=${this.#getTriggerFields}
+          .getExtensions=${this.#getExtensions}
           ?loading=${this.loading}
           ?disabled=${this.disabled}
           ?dragging=${this.dragging}
@@ -321,7 +405,7 @@ export class ChxMessageComposer extends LitElement {
           <slot
             name="attachments"
             slot="attachments"
-            @slotchange=${this.handleAttachmentsSlotchange}
+            @slotchange=${this.#handleAttachmentsSlotchange}
           ></slot>
           <!-- The default lives here, not in chx-textbox: a forwarding <slot> counts as assigned
                content, so the inner fallback would never render through it. -->

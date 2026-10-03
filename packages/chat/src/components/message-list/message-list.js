@@ -16,10 +16,13 @@ import { FocusBehaviorController } from "../../controllers/message-list/FocusBeh
 import { BottomAnchorController } from "../../controllers/message-list/BottomAnchorController.js";
 import { ReadTrackingController } from "../../controllers/message-list/ReadTrackingController.js";
 import { DividerController } from "../../controllers/message-list/DividerController.js";
-import { GroupController } from "../../controllers/message-list/GroupController.js";
+import { groupAt } from "./group.js";
 import { PartRenderer } from "./PartRenderer.js";
 import { StatusController } from "../../controllers/message-list/StatusController.js";
 import { StickyController } from "../../controllers/message-list/StickyController.js";
+import { CONNECT_REGISTRY } from "../../api/keys.js";
+import { indexById } from "../../utils/messages.js";
+import { pollFrames } from "../../utils/dom.js";
 import tokens from "../../styles/tokens.css?inline";
 import styles from "./message-list.css?inline";
 
@@ -184,8 +187,6 @@ export class ChxMessageList extends LitElement {
   /** Last known author per authorId, rebuilt when `messages` changes by reference.
    *  @type {{messages: ChxMessage[], byId: Map<string, import("../../types/message.js").ChxMessageAuthor>} | undefined} */
   #knownAuthors;
-  /** @type {GroupController} */
-  #groups; // same-author runs — assigned in the constructor, below
   /** @type {StickyController} */
   #stickyController; // floating stuck-section date label — assigned in the constructor, below
   /** @type {StatusController} */
@@ -225,6 +226,13 @@ export class ChxMessageList extends LitElement {
   };
   #itemKey = (/** @type {ChxMessage} */ message, /** @type {number} */ index) =>
     message?.id ?? index;
+  /** @param {number} index */
+  #groupAt = (index) =>
+    groupAt(this.messages, index, (message, i) => this.#dividerController.shouldShow(message, i));
+  /** @type {import("../../context/chat-api-context.js").ChatApiRegistry | undefined} */
+  #registry; // pushed by chx-chat, see [CONNECT_REGISTRY]
+  /** @type {(() => void) | undefined} */
+  #unregisterViewport;
 
   constructor() {
     super();
@@ -336,11 +344,6 @@ export class ChxMessageList extends LitElement {
 
     this.#dividerController = new DividerController({ getMessages: () => this.messages });
 
-    this.#groups = new GroupController({
-      getMessages: () => this.messages,
-      hasDividerBefore: (message, index) => this.#dividerController.shouldShow(message, index),
-    });
-
     this.#partRenderer = new PartRenderer({ getPartElements: () => this.partElements });
 
     this.#status = new StatusController(this, {
@@ -373,11 +376,62 @@ export class ChxMessageList extends LitElement {
     this.#observePattern();
     // reconnect-must-reset, same posture VisibilityController/RowMeasurer already have
     this.#readTracking.reset();
+    this.#registerViewport();
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     this.#patternObserver.disconnect();
+    this.#unregisterViewport?.();
+    this.#unregisterViewport = undefined;
+  }
+
+  /** Internal: chx-chat hands over its API registry. @param {import("../../context/chat-api-context.js").ChatApiRegistry} registry */
+  [CONNECT_REGISTRY](registry) {
+    if (registry === this.#registry) return;
+    this.#unregisterViewport?.();
+    this.#unregisterViewport = undefined;
+    this.#registry = registry;
+    this.#registerViewport();
+  }
+
+  #registerViewport() {
+    if (!this.#registry || this.#unregisterViewport || !this.isConnected) return;
+    this.#unregisterViewport = this.#registry.register(
+      "viewport",
+      this,
+      {
+        toBottom: (behavior) => this.#bottomAnchor.scrollToBottom(behavior),
+        toMessage: (messageId, options) => this.#scrollToMessage(messageId, options),
+        isAwayFromBottom: () => this.#bottomAnchor.awayFromBottom,
+        getScrollOffset: () => this.#infinityScrollElement?.getScrollOffset(),
+        scrollToOffset: async (offset) => {
+          await this.updateComplete;
+          this.#infinityScrollElement?.scrollToOffset(offset);
+        },
+      },
+      () => [this.#bottomAnchor.awayFromBottom],
+    );
+  }
+
+  /**
+   * Scrolls a loaded message into view; `false` when it isn't in `messages`. Resolves once the row
+   * has mounted and been re-aligned at its measured size (or after a capped number of frames).
+   * @param {string} messageId
+   * @param {{align?: "start" | "center" | "end", behavior?: ScrollBehavior}} [options]
+   * @returns {Promise<boolean>}
+   */
+  async #scrollToMessage(messageId, { align = "start", behavior } = {}) {
+    const index = indexById(this.messages).get(messageId);
+    if (index === undefined) return false;
+    await this.updateComplete;
+    const list = this.#infinityScrollElement;
+    if (!list) return false;
+    list.scrollToIndex(index, { align, behavior });
+    const selector = `[data-message-id="${CSS.escape(messageId)}"]`;
+    if (!(await pollFrames(() => list.renderRoot.querySelector(selector)))) return false;
+    list.scrollToIndex(index, { align, behavior }); // re-align at the measured size
+    return true;
   }
 
   /** Discovers the app's `<chx-message slot="message">` pattern; renders nothing itself.
@@ -451,7 +505,7 @@ export class ChxMessageList extends LitElement {
     let size = lines * density.lineHeight + density.padding;
     if (parts.some((part) => part.type === "attachment")) size += ESTIMATE.attachments;
 
-    const { groupStart, groupEnd } = this.#groups.at(index);
+    const { groupStart, groupEnd } = this.#groupAt(index);
     // regular own rows hide their meta and avatar in CSS, so their author adds no height
     const authorShown = this.#authorFor(message) !== undefined && (this.compact || !message.own);
     if (groupStart && authorShown) size += density.meta;
@@ -523,7 +577,7 @@ export class ChxMessageList extends LitElement {
       selected,
       compact: this.compact,
       actionable: this.#focusBehavior.isActionable(message.id),
-      ...this.#groups.at(index),
+      ...this.#groupAt(index),
     };
     const partNames = messagePartNames(message, { streaming, compact: this.compact, selected });
     // a part missing `id` was already console.error'd by validateMessages — excluded here too
@@ -558,16 +612,6 @@ export class ChxMessageList extends LitElement {
       >
     `;
     return this.#dividerController.wrap(rowTemplate, message, index);
-  }
-
-  /** The chx-infinity-scroll instance rendering this list. @returns {ChxInfinityScroll | undefined} */
-  get list() {
-    return this.#infinityScrollElement;
-  }
-
-  /** Forwards to chx-infinity-scroll.scrollToBottom. @param {"auto" | "smooth" | "instant"} [behavior] */
-  scrollToBottom(behavior) {
-    this.#bottomAnchor.scrollToBottom(behavior);
   }
 
   /** @param {import("lit").PropertyValues} changedProperties */

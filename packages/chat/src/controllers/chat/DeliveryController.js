@@ -1,169 +1,278 @@
+import { reconcileMessages } from "../../utils/messages.js";
+import { finalizeStreamingParts } from "../../stream/streamHelpers.js";
+
 /** @import { ChxMessage } from "../../types/message.js" */
-/** @import { ChxChatStatus } from "../../types/adapter.js" */
+/** @import { ChxChatStatus, ChxChatAdapter, ChxMessageChunk, ChxMessageEnvelope } from "../../types/adapter.js" */
+/** @import { StreamController } from "./StreamController.js" */
 
 /**
  * @typedef {import("lit").ReactiveController} ReactiveController
  * @typedef {import("lit").ReactiveControllerHost & import("lit").LitElement} Host
+ * @typedef {"completed" | "cancelled" | "failed"} Outcome
+ * @typedef {{
+ *   getActiveConversationId: () => string | undefined,
+ *   getMessages: () => ChxMessage[],
+ *   getAdapter: () => ChxChatAdapter | undefined,
+ *   getUserId: () => string | undefined,
+ *   applyMessages: (messages: ChxMessage[], conversationId?: string) => void,
+ *   stream: StreamController,
+ * }} DeliveryConfig
  */
 
 /**
- * Owns which turns are in flight for `chx-chat` and everything derived from that: the abort
- * controllers, the last failed delivery, the public `status`/`busy` state, and the two ways a turn
- * is stopped (`stop()` for the active conversation, `cancel(messageId)` for one delivery anywhere).
- * `chx-delivery-start`/`chx-delivery-end` are dispatched from here too.
- *
- * Host-bound for two reasons, both load-bearing: the delivery map is a plain `Map`, not a reactive
- * property, so every mutation has to kick `requestUpdate()` by hand or the composer's stop button
- * never repaints; and the two events are dispatched on the chat element itself.
+ * Sending turns for `chx-chat`: `deliver`/`retry`/`regenerate`, what's in flight, the derived
+ * `status`/`busy`, and stopping. Host-bound: the in-flight map isn't reactive, so every change
+ * requests an update, and `chx-delivery-*`/`chx-send-error` are dispatched on the chat.
  * @implements {ReactiveController}
  */
 export class DeliveryController {
   /** @type {Host} */
   #host;
-  /** @type {() => string | undefined} */
-  #getActiveConversationId;
-  /** @type {() => ChxMessage[]} */
-  #getMessages;
-  /** messageId/replyId -> in-flight delivery, tagged with the conversation it belongs to.
+  /** @type {DeliveryConfig} */
+  #config;
+  /** delivery id (a send's id, or a regenerated reply's) → its abort controller and conversation.
    *  @type {Map<string, {controller: AbortController, conversationId: string | undefined}>} */
   #active = new Map();
-  /** Drives `status: "error"`; cleared when that conversation starts a new delivery.
+  /** Drives `status: "error"` until that conversation starts a new delivery.
    *  @type {{conversationId: string | undefined} | null} */
   #lastError = null;
 
-  /**
-   * @param {Host} host
-   * @param {{
-   *   getActiveConversationId: () => string | undefined,
-   *   getMessages: () => ChxMessage[],
-   * }} config
-   */
+  /** @param {Host} host @param {DeliveryConfig} config */
   constructor(host, config) {
     this.#host = host;
+    this.#config = config;
     host.addController(this);
-    this.#getActiveConversationId = config.getActiveConversationId;
-    this.#getMessages = config.getMessages;
   }
 
-  /** Aborts everything still running — the chat is leaving the document. */
   hostDisconnected() {
     for (const { controller } of this.#active.values()) controller.abort();
   }
 
-  /**
-   * The active conversation's turn state, derived — nothing assigns it. `submitted` is the window
-   * between a send and its first chunk (`isWaitingForReply`), `streaming` is a reply shell filling
-   * in, `error` is a delivery that failed without being cancelled, cleared by the next send.
-   * A backgrounded conversation's own delivery never shows up here, same rule `isWaitingForReply`
-   * follows.
-   * @returns {ChxChatStatus}
-   */
+  /** The active conversation's turn state. @returns {ChxChatStatus} */
   get status() {
-    if (this.#hasActive()) return this.isWaitingForReply() ? "submitted" : "streaming";
-    // the null check has to be explicit: `undefined` is a real conversationId here (the
-    // single-conversation case), so optional chaining would read "error" for every idle chat
-    if (this.#lastError && this.#lastError.conversationId === this.#getActiveConversationId()) {
-      return "error";
+    return this.statusFor(this.#config.getActiveConversationId());
+  }
+
+  get busy() {
+    return this.busyFor(this.#config.getActiveConversationId());
+  }
+
+  /** @param {string | undefined} conversationId @returns {ChxChatStatus} */
+  statusFor(conversationId) {
+    if (this.#hasActive(conversationId)) {
+      return this.#isWaitingForReply(conversationId) ? "submitted" : "streaming";
     }
+    // explicit null check: `undefined` is a real conversationId (the single-conversation case)
+    if (this.#lastError && this.#lastError.conversationId === conversationId) return "error";
     return "ready";
   }
 
-  /** `status` narrowed to the one bit the composer needs. @returns {boolean} */
-  get busy() {
-    const status = this.status;
+  /** @param {string | undefined} conversationId */
+  busyFor(conversationId) {
+    const status = this.statusFor(conversationId);
     return status === "submitted" || status === "streaming";
   }
 
-  /**
-   * True while at least one in-flight delivery *for the active conversation* hasn't produced its
-   * reply shell yet — the "waiting for a reply, no message to attach a status to yet" window. A
-   * backgrounded conversation's own in-flight delivery is deliberately excluded: its streaming
-   * indicator belongs to whichever chat is actually showing it. Derived fresh on each read, not
-   * tracked incrementally — the map holds 0-1 deliveries per conversation in the normal case, so
-   * the scan is cheap.
-   * @returns {boolean}
-   */
+  /** A delivery for the active conversation has no reply shell yet. */
   isWaitingForReply() {
-    const activeConversationId = this.#getActiveConversationId();
-    const messages = this.#getMessages();
-    for (const [deliveryId, delivery] of this.#active) {
-      if (delivery.conversationId !== activeConversationId) continue;
-      if (!messages.some((message) => message.replyToId === deliveryId)) return true;
-    }
-    return false;
+    return this.#isWaitingForReply(this.#config.getActiveConversationId());
   }
 
   /**
-   * Registers a delivery. The one place that happens — `chx-chat`'s `#deliver` and
-   * `#deliverRegenerate` both come through here.
-   * @param {string} deliveryId
-   * @param {AbortController} controller
+   * Aborts every delivery for `conversationId` and settles it at once — an adapter that never
+   * closes its stream on abort would otherwise strand the composer in its stop state. The transport
+   * still has to react to the signal itself (see `src/docs/agentic.md`).
    * @param {string} [conversationId]
    */
-  track(deliveryId, controller, conversationId) {
+  stop(conversationId = this.#config.getActiveConversationId()) {
+    for (const [deliveryId, delivery] of [...this.#active]) {
+      if (delivery.conversationId !== conversationId) continue;
+      delivery.controller.abort();
+      this.#untrack(deliveryId, "cancelled", delivery.conversationId);
+    }
+  }
+
+  /** Aborts one delivery, any conversation. @param {string} deliveryId */
+  cancel(deliveryId) {
+    const delivery = this.#active.get(deliveryId);
+    if (!delivery) return;
+    delivery.controller.abort();
+    this.#untrack(deliveryId, "cancelled", delivery.conversationId);
+  }
+
+  /**
+   * Sends an own message; without `adapter.sendMessage` it's just marked sent (local echo).
+   * `conversationId` is captured by the caller so a later switch can't redirect the writes.
+   * @param {ChxMessage} message
+   * @param {string} [conversationId]
+   */
+  async deliver(message, conversationId) {
+    const adapter = this.#config.getAdapter();
+    if (!adapter?.sendMessage) {
+      this.#markSent(message.id, conversationId);
+      return;
+    }
+    await this.#run(message.id, conversationId, {
+      start: (signal) => adapter.sendMessage?.(message, { signal }),
+      replyToId: message.id,
+      // resolving means the adapter accepted the message; the reply may still be streaming
+      onAccepted: () => this.#markSent(message.id, conversationId),
+      onError: (status, error) => {
+        const updated = {
+          ...message,
+          status,
+          ...(status === "failed"
+            ? { error: { message: String(/** @type {any} */ (error)?.message ?? error) } }
+            : {}),
+        };
+        const next = reconcileMessages(
+          this.#config.getMessages(),
+          updated,
+          this.#config.getUserId(),
+        );
+        this.#config.applyMessages(
+          this.#finalizeReply(next, message.id, status) ?? next,
+          conversationId,
+        );
+      },
+    });
+  }
+
+  /** Re-sends a `status: "failed"` message, dropping a reply already anchored to it. @param {string} messageId */
+  retry(messageId) {
+    const messages = this.#config.getMessages();
+    const message = messages.find((m) => m.id === messageId);
+    if (!message || message.status !== "failed") return;
+    const conversationId = message.conversationId;
+    const resetMessage = {
+      ...message,
+      status: /** @type {"sending"} */ ("sending"),
+      error: undefined,
+    };
+    this.#config.applyMessages(
+      reconcileMessages(
+        messages.filter((m) => m.replyToId !== messageId),
+        resetMessage,
+        this.#config.getUserId(),
+      ),
+      conversationId,
+    );
+    this.deliver(resetMessage, conversationId);
+  }
+
+  /** Redoes an assistant reply — the reply's id or its send's id. Needs `adapter.regenerate`. @param {string} messageId */
+  regenerate(messageId) {
+    const messages = this.#config.getMessages();
+    const reply =
+      messages.find((m) => m.id === messageId && m.replyToId) ??
+      messages.find((m) => m.replyToId === messageId);
+    const adapter = this.#config.getAdapter();
+    if (!reply || !adapter?.regenerate) return;
+
+    const replyToId = /** @type {string} */ (reply.replyToId);
+    const conversationId = reply.conversationId;
+    this.#config.applyMessages(
+      messages.filter((m) => m.id !== reply.id),
+      conversationId,
+    );
+    this.#run(reply.id, conversationId, {
+      start: (signal) => adapter.regenerate?.(reply.id, { signal, conversationId }),
+      replyToId,
+      onError: (status) => {
+        const settled = this.#finalizeReply(this.#config.getMessages(), replyToId, status);
+        if (settled) this.#config.applyMessages(settled, conversationId);
+      },
+    });
+  }
+
+  /**
+   * One tracked turn: start → stream the reply → settle. Cancellation shows up either as an
+   * `{kind: "abort"}` chunk (settles inside `deliverStream`) or as the adapter throwing on abort.
+   * @param {string} deliveryId
+   * @param {string | undefined} conversationId
+   * @param {{
+   *   start: (signal: AbortSignal) => Promise<ReadableStream<ChxMessageChunk | ChxMessageEnvelope> | void> | undefined,
+   *   replyToId: string,
+   *   onAccepted?: () => void,
+   *   onError: (status: "failed" | "cancelled", error: unknown) => void,
+   * }} turn
+   */
+  async #run(deliveryId, conversationId, { start, replyToId, onAccepted, onError }) {
+    const controller = new AbortController();
+    let failed = false;
+    this.#track(deliveryId, controller, conversationId);
+    try {
+      const stream = await start(controller.signal);
+      onAccepted?.();
+      if (!stream) return;
+      await this.#config.stream.deliverStream(stream, { replyToId, conversationId });
+    } catch (error) {
+      const cancelled = controller.signal.aborted;
+      failed = !cancelled;
+      onError(cancelled ? "cancelled" : "failed", error);
+      if (!cancelled) this.#emit("chx-send-error", { messageId: deliveryId, error });
+    } finally {
+      // an abort chunk never throws, so the outcome reads the signal, not the catch
+      const outcome = controller.signal.aborted ? "cancelled" : failed ? "failed" : "completed";
+      this.#untrack(deliveryId, outcome, conversationId);
+    }
+  }
+
+  /**
+   * `messages` with a still-sending reply to `replyToId` closed out as `status`, or `undefined`
+   * when no reply shell exists yet.
+   * @param {ChxMessage[]} messages @param {string} replyToId @param {"failed" | "cancelled"} status
+   */
+  #finalizeReply(messages, replyToId, status) {
+    const orphan = messages.find((m) => m.replyToId === replyToId && m.status === "sending");
+    if (!orphan) return undefined;
+    return messages.map((m) => (m === orphan ? finalizeStreamingParts({ ...m, status }) : m));
+  }
+
+  /** @param {string} messageId @param {string} [conversationId] */
+  #markSent(messageId, conversationId) {
+    const messages = this.#config.getMessages();
+    const current = messages.find((m) => m.id === messageId);
+    if (current?.status !== "sending") return;
+    this.#config.applyMessages(
+      messages.map((m) => (m === current ? { ...m, status: "sent" } : m)),
+      conversationId,
+    );
+  }
+
+  /** @param {string} deliveryId @param {AbortController} controller @param {string} [conversationId] */
+  #track(deliveryId, controller, conversationId) {
     this.#active.set(deliveryId, { controller, conversationId });
     if (this.#lastError && this.#lastError.conversationId === conversationId) {
       this.#lastError = null;
     }
-    this.#host.requestUpdate(); // see the class doc — the map is not reactive
+    this.#host.requestUpdate();
     this.#emit("chx-delivery-start", { messageId: deliveryId, conversationId });
   }
 
-  /**
-   * The counterpart to `track` — same requestUpdate reasoning. Idempotent: an abort settles the
-   * delivery here right away, and the stream's own unwind lands here again later, whenever the
-   * adapter gets around to it, if ever.
-   * @param {string} deliveryId
-   * @param {"completed" | "cancelled" | "failed"} outcome
-   * @param {string} [conversationId]
-   */
-  untrack(deliveryId, outcome, conversationId) {
+  /** Idempotent: an abort settles here at once, and the stream's own unwind may land again later.
+   *  @param {string} deliveryId @param {Outcome} outcome @param {string} [conversationId] */
+  #untrack(deliveryId, outcome, conversationId) {
     if (!this.#active.delete(deliveryId)) return;
     if (outcome === "failed") this.#lastError = { conversationId };
     this.#host.requestUpdate();
     this.#emit("chx-delivery-end", { messageId: deliveryId, conversationId, outcome });
   }
 
-  /**
-   * Aborts every in-flight delivery for the active conversation — what the composer's stop button
-   * reaches through `chx-stop`. A backgrounded conversation's delivery is deliberately left alone;
-   * use `cancel(messageId)` for that.
-   *
-   * Aborting only stops this client reading the stream. An agent transport has to react to the
-   * signal itself — send ACP's `session/cancel`, answer any outstanding `session/request_permission`
-   * — or the agent keeps working with nothing listening. See `src/docs/agentic.md`.
-   *
-   * Which is why the delivery is settled here rather than left to the stream to unwind: an adapter
-   * that returns from its `start()` on abort without closing the stream leaves the read pending
-   * forever, and waiting on that would strand the composer in its stop state. Trailing chunks from
-   * a well-behaved adapter still land — settling is about this chat's own turn state, nothing else.
-   */
-  stopActive() {
-    const activeConversationId = this.#getActiveConversationId();
-    for (const [deliveryId, delivery] of [...this.#active]) {
-      if (delivery.conversationId !== activeConversationId) continue;
-      delivery.controller.abort();
-      this.untrack(deliveryId, "cancelled", delivery.conversationId);
-    }
-  }
-
-  /**
-   * Aborts one in-flight `sendMessage`/`regenerate` delivery, backgrounded conversations included.
-   * A no-op if nothing is currently in flight for that id.
-   * @param {string} deliveryId
-   */
-  cancel(deliveryId) {
-    const delivery = this.#active.get(deliveryId);
-    if (!delivery) return;
-    delivery.controller.abort();
-    this.untrack(deliveryId, "cancelled", delivery.conversationId); // see stopActive()
-  }
-
-  /** @returns {boolean} */
-  #hasActive() {
-    const activeConversationId = this.#getActiveConversationId();
+  /** @param {string | undefined} conversationId */
+  #hasActive(conversationId) {
     for (const delivery of this.#active.values()) {
-      if (delivery.conversationId === activeConversationId) return true;
+      if (delivery.conversationId === conversationId) return true;
+    }
+    return false;
+  }
+
+  /** @param {string | undefined} conversationId */
+  #isWaitingForReply(conversationId) {
+    const messages = this.#config.getMessages();
+    for (const [deliveryId, delivery] of this.#active) {
+      if (delivery.conversationId !== conversationId) continue;
+      if (!messages.some((message) => message.replyToId === deliveryId)) return true;
     }
     return false;
   }

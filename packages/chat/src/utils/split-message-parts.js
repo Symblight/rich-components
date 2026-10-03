@@ -69,7 +69,7 @@ export const chipPartRule = {
 
 /**
  * Convenience `chx-messages-change` handler factory — re-splits a just-sent own message's flat
- * text part via `splitMessageParts`, then feeds the corrected parts back through `addMessage()`
+ * text part via `splitMessageParts`, then feeds the corrected parts back through `store.add()`
  * (matches by `id`, replacing in place rather than duplicating). Covers the common case of every
  * `partElements`-based hydration demo in this package: wire it once per set of rules and forget it.
  * @param {import("../types/inline-part-rule.js").InlinePartRule[]} rules
@@ -90,8 +90,9 @@ export function createSplitOnSendHandler(rules) {
 
     const parts = splitMessageParts(last.id, part.html, rules);
     if (!parts) return;
-    /** @type {HTMLElement & {addMessage: (message: import("../types/message.js").ChxMessage) => void}} */ (
-      event.currentTarget
-    ).addMessage({ ...last, parts });
+    /** @type {import("../components/base/chat.js").ChxChat} */ (event.currentTarget).store.add({
+      ...last,
+      parts,
+    });
   };
 }

@@ -357,7 +357,7 @@ describe("chx-chat", () => {
       let changeFired = false;
       el.addEventListener("chx-messages-change", () => (changeFired = true));
 
-      el.retry("m1");
+      el.delivery.retry("m1");
       await el.updateComplete;
 
       expect(changeFired).to.be.false;
@@ -388,7 +388,7 @@ describe("chx-chat", () => {
       await el.updateComplete;
 
       const resent = waitForMessage(el, (m) => m.id === "m1" && m.status === "sending");
-      el.retry("m1");
+      el.delivery.retry("m1");
       const resetMessage = await resent;
 
       expect(resetMessage.error).to.be.undefined;
@@ -435,7 +435,7 @@ describe("chx-chat", () => {
       );
 
       const resent = waitForMessage(el, (m) => m.id === "m1" && m.status === "sending");
-      el.retry("m1");
+      el.delivery.retry("m1");
       await resent;
 
       // the very first chx-messages-change after retry() already has the stale reply gone — same
@@ -490,7 +490,7 @@ describe("chx-chat", () => {
       );
 
       const done = waitForMessage(el, (m) => m.id === "reply-2" && m.status === "sent");
-      el.regenerate("reply-1"); // by the reply's own id
+      el.delivery.regenerate("reply-1"); // by the reply's own id
       await done;
 
       // the very first chx-messages-change after regenerate() already has the old reply gone —
@@ -523,7 +523,7 @@ describe("chx-chat", () => {
 
       let changeFired = false;
       el.addEventListener("chx-messages-change", () => (changeFired = true));
-      el.regenerate("reply-1");
+      el.delivery.regenerate("reply-1");
       await el.updateComplete;
 
       expect(changeFired).to.be.false;
@@ -562,7 +562,7 @@ describe("chx-chat", () => {
           detail: { value: "hi", html: "hi", attachments: [], commands: [] },
         }),
       );
-      el.cancel(sentId);
+      el.delivery.cancel(sentId);
       const cancelledMessage = await cancelled;
 
       expect(cancelledMessage.id).to.equal(sentId);
@@ -625,11 +625,11 @@ describe("chx-chat", () => {
       el.addEventListener("chx-send-error", () => (errorFired = true));
 
       const streaming = waitForMessage(el, (m) => m.id === "reply-2" && m.status === "sending");
-      el.regenerate("reply-1");
+      el.delivery.regenerate("reply-1");
       await streaming; // the fresh reply has landed — only now cancel it mid-flight
 
       const cancelled = waitForMessage(el, (m) => m.id === "reply-2" && m.status === "cancelled");
-      el.cancel("reply-1"); // #activeDeliveries is still keyed by the old reply's id, see #deliverRegenerate
+      el.delivery.cancel("reply-1"); // #activeDeliveries is still keyed by the old reply's id, see DeliveryController
       const reply = await cancelled;
 
       expect(reply.replyToId).to.equal("user-1");
@@ -845,7 +845,7 @@ describe("chx-chat", () => {
     });
   });
 
-  describe("loadMoreHistory", () => {
+  describe("store.loadMore", () => {
     it("prepends the result and no-ops without a matching adapter/in-flight/hasMore state", async () => {
       const el = /** @type {ChxChat} */ (await fixture(html`<chx-chat></chx-chat>`));
       el.messages = [
@@ -854,7 +854,7 @@ describe("chx-chat", () => {
       await el.updateComplete;
 
       // no adapter.listMessages at all — a no-op, not an error
-      await el.loadMoreHistory();
+      await el.store.loadMore();
       expect(el.messages).to.have.lengthOf(1);
 
       let calls = 0;
@@ -882,14 +882,14 @@ describe("chx-chat", () => {
           },
         ),
       );
-      await el.loadMoreHistory();
+      await el.store.loadMore();
       const messages = /** @type {any[]} */ (await changed);
 
       expect(calls).to.equal(1);
       expect(messages.map((m) => m.id)).to.deep.equal(["m1", "m2"]); // prepended, not replaced
 
       // hasMore: false from the previous call — a further call is a no-op
-      await el.loadMoreHistory();
+      await el.store.loadMore();
       expect(calls).to.equal(1);
     });
 
@@ -907,15 +907,15 @@ describe("chx-chat", () => {
       };
       await el.updateComplete;
 
-      const first = el.loadMoreHistory();
-      const second = el.loadMoreHistory(); // fired before the first resolves
+      const first = el.store.loadMore();
+      const second = el.store.loadMore(); // fired before the first resolves
       resolveFirst({ messages: [] });
       await Promise.all([first, second]);
 
       expect(calls).to.equal(1);
     });
 
-    it("chx-message-list's onLoadMore (wired by chx-chat) triggers loadMoreHistory", async () => {
+    it("chx-message-list's onLoadMore (wired by chx-chat) triggers store.loadMore", async () => {
       let calls = 0;
       const el = /** @type {ChxChat} */ (
         await fixture(
@@ -930,7 +930,7 @@ describe("chx-chat", () => {
       };
       await el.updateComplete;
 
-      const list = /** @type {ChxMessageList} */ (el.messageListElement);
+      const list = /** @type {ChxMessageList} */ (el.querySelector("chx-message-list"));
       await list.onLoadMore();
 
       expect(calls).to.be.greaterThan(0);
@@ -944,7 +944,7 @@ describe("chx-chat", () => {
           html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`,
         )
       );
-      const list = /** @type {ChxMessageList} */ (el.messageListElement);
+      const list = /** @type {ChxMessageList} */ (el.querySelector("chx-message-list"));
       expect(list.typing).to.be.false;
 
       /** @type {CustomEvent | undefined} */
@@ -953,7 +953,7 @@ describe("chx-chat", () => {
         changeEvent = /** @type {CustomEvent} */ (event);
       });
 
-      el.setTyping(true);
+      el.presence.setTyping(true);
       await el.updateComplete;
 
       expect(list.typing).to.be.true;
@@ -966,13 +966,13 @@ describe("chx-chat", () => {
           html`<chx-chat><chx-message-list slot="message-list"></chx-message-list></chx-chat>`,
         )
       );
-      el.setTyping(true);
+      el.presence.setTyping(true);
       await el.updateComplete;
 
       let fireCount = 0;
       el.addEventListener("chx-typing-change", () => fireCount++);
 
-      el.setTyping(true); // same value again
+      el.presence.setTyping(true); // same value again
       await el.updateComplete;
 
       expect(fireCount).to.equal(0);
@@ -994,7 +994,7 @@ describe("chx-chat", () => {
         document.body.append(el);
         await el.updateComplete;
 
-        const list = /** @type {ChxMessageList} */ (el.messageListElement);
+        const list = /** @type {ChxMessageList} */ (el.querySelector("chx-message-list"));
         handlers.onTyping(true);
         await el.updateComplete;
 
@@ -1022,7 +1022,7 @@ describe("chx-chat", () => {
           }),
       };
       await el.updateComplete;
-      const list = /** @type {ChxMessageList} */ (el.messageListElement);
+      const list = /** @type {ChxMessageList} */ (el.querySelector("chx-message-list"));
       expect(list.streaming).to.be.false;
 
       el.dispatchEvent(
@@ -1096,7 +1096,7 @@ describe("chx-chat", () => {
           }),
       };
       await el.updateComplete;
-      const list = /** @type {ChxMessageList} */ (el.messageListElement);
+      const list = /** @type {ChxMessageList} */ (el.querySelector("chx-message-list"));
 
       const sent = new Promise((resolve) => {
         const handler = (/** @type {CustomEvent} */ event) => {

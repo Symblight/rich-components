@@ -4,76 +4,62 @@
 /**
  * @typedef {import("lit").ReactiveController} ReactiveController
  * @typedef {import("lit").ReactiveControllerHost & import("lit").LitElement} Host
+ * @typedef {{
+ *   getInfinityScrollElement: () => ChxInfinityScroll | undefined,
+ *   stickyController: StickyController,
+ * }} BottomAnchorConfig
  */
 
 /**
- * Owns `chx-message-list`'s relationship with the bottom of the scroll: whether the reader has
- * scrolled away from it (which gates the `scroll-to-bottom` slot and feeds `StickyController`),
- * the `chx-scroll-to-bottom-click` event a slotted affordance bubbles up, and the delegation of
- * `scrollToBottom()` down to `chx-infinity-scroll`.
- *
- * Host-bound so the listener can live on `hostConnected`/`hostDisconnected` — that pair is the only
- * reason `chx-message-list` had a `disconnectedCallback` at all.
+ * `chx-message-list`'s relationship with the bottom: `awayFromBottom` (gates the scroll-to-bottom
+ * slot, feeds `StickyController`), the affordance's bubbled click, and scrolling down.
  * @implements {ReactiveController}
  */
 export class BottomAnchorController {
   /** @type {Host} */
   #host;
-  /** @type {() => ChxInfinityScroll | undefined} */
-  #getInfinityScrollElement;
-  /** @type {StickyController} */
-  #stickyController;
+  /** @type {BottomAnchorConfig} */
+  #config;
   #awayFromBottom = false;
 
-  /**
-   * @param {Host} host
-   * @param {{
-   *   getInfinityScrollElement: () => ChxInfinityScroll | undefined,
-   *   stickyController: StickyController,
-   * }} config
-   */
+  /** @param {Host} host @param {BottomAnchorConfig} config */
   constructor(host, config) {
     this.#host = host;
+    this.#config = config;
     host.addController(this);
-    this.#getInfinityScrollElement = config.getInfinityScrollElement;
-    this.#stickyController = config.stickyController;
   }
 
-  /** Scrolled further than `buffer` px from the bottom — reported by chx-infinity-scroll. */
+  /** Further than `buffer` px from the bottom — reported by chx-infinity-scroll. */
   get awayFromBottom() {
     return this.#awayFromBottom;
   }
 
   hostConnected() {
-    // the affordance is a slotted light-DOM child, so its event is caught here rather than by a
-    // template binding
-    this.#host.addEventListener(
-      "chx-scroll-to-bottom-click",
-      /** @type {EventListener} */ (this.#handleScrollToBottomClick),
-    );
+    // the affordance is slotted light DOM, so its event is caught here, not by a template binding
+    this.#host.addEventListener("chx-scroll-to-bottom-click", this.#handleScrollToBottomClick);
   }
 
   hostDisconnected() {
-    this.#host.removeEventListener(
-      "chx-scroll-to-bottom-click",
-      /** @type {EventListener} */ (this.#handleScrollToBottomClick),
-    );
+    this.#host.removeEventListener("chx-scroll-to-bottom-click", this.#handleScrollToBottomClick);
   }
 
-  /** Wired straight to `chx-infinity-scroll.onAwayFromBottomChange`. @param {boolean} away */
+  /** `chx-infinity-scroll.onAwayFromBottomChange`. @param {boolean} away */
   handleAwayFromBottomChange = (away) => {
     this.#awayFromBottom = away;
-    this.#stickyController.handleAwayFromBottomChange(away); // back at bottom — drop the label, cancel the idle timer
-    this.#host.requestUpdate(); // gates the scroll-to-bottom slot in the host's own template
+    this.#config.stickyController.handleAwayFromBottomChange(away);
+    this.#host.requestUpdate();
   };
 
   /** @param {"auto" | "smooth" | "instant"} [behavior] */
   scrollToBottom(behavior) {
-    this.#getInfinityScrollElement()?.scrollToBottom(behavior);
+    this.#config.getInfinityScrollElement()?.scrollToBottom(behavior);
   }
 
-  /** @param {CustomEvent<{behavior: "auto" | "smooth" | "instant"}>} event */
+  /** @param {Event} event */
   #handleScrollToBottomClick = (event) => {
-    this.scrollToBottom(event.detail.behavior);
+    const { behavior } = /** @type {CustomEvent<{behavior: "auto" | "smooth" | "instant"}>} */ (
+      event
+    ).detail;
+    this.scrollToBottom(behavior);
   };
 }

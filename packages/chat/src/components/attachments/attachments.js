@@ -165,17 +165,10 @@ export class ChxAttachments extends LitElement {
 
   /**
    * Inserts a file as an inline chip at the current caret position — chip mode's counterpart to
-   * buildAttachment/addAttachments. No-op if there's no composer/editor to insert into.
+   * buildAttachment/addAttachments. No-op outside a chx-message-composer.
    * @param {File} file
    */
   insertChip(file) {
-    const composer =
-      /** @type {(Element & {editor?: import("../../editor/Editor.js").Editor}) | null} */ (
-        this.closest("chx-message-composer")
-      );
-    const editor = composer?.editor;
-    if (!editor) return;
-
     const attrs = {
       templateId: /** @type {HTMLTemplateElement} */ (this.#chipTemplate).id,
       label: file.name,
@@ -184,7 +177,8 @@ export class ChxAttachments extends LitElement {
     };
     const node = ensureTemplateId(this.buildChip(attrs, "composer"), attrs.templateId);
     stampChipOwner(node, this.id);
-    editor.insertChip(node);
+    // the slotting chx-message-composer listens for this and inserts at the caret
+    this.dispatchEvent(new CustomEvent("chx-insert-chip", { detail: { node }, bubbles: true }));
   }
 
   /**

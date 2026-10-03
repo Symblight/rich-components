@@ -82,13 +82,13 @@ for a different conversation lands in its cache silently. None of this needs you
 care which conversation is currently visible.
 
 ```js
-chatEl.refresh(); // re-fetch the active conversation from scratch
-chatEl.refresh("c2"); // ...or a specific one, active or not
-chatEl.cache.clear(); // drop every conversation's cache, no re-fetch
-chatEl.cache.clear("c2"); // ...or just one
+chatEl.store.refresh(); // re-fetch the active conversation from scratch
+chatEl.store.refresh("c2"); // ...or a specific one, active or not
+chatEl.store.clear(); // drop every conversation's cache, no re-fetch
+chatEl.store.clear("c2"); // ...or just one
 ```
 
-`refresh(id)` is `cache.clear(id)` followed by re-invoking `adapter.listMessages` for `id` — the
+`store.refresh(id)` is `store.clear(id)` followed by re-invoking `adapter.listMessages` for `id` — the
 general "reset chat state" hook, including for a single-conversation app that never sets
 `activeConversationId` at all.
 
@@ -100,8 +100,7 @@ general "reset chat state" hook, including for a single-conversation app that ne
   `chx-messages-change` only fires for the conversation currently on screen, there's no
   cross-conversation broadcast of it. A `listConversations`-style summary fetch would need to be
   layered on separately.
-- Pluggable cache storage (persisting to `localStorage`/a server instead of in-memory) — `cache` is
-  planned to grow a `get`/`set` seam for this, not built yet.
+- Pluggable cache storage (persisting to `localStorage`/a server instead of in-memory).
 
 ## Reference
 
@@ -117,10 +116,12 @@ general "reset chat state" hook, including for a single-conversation app that ne
 
 ### `chx-chat` — methods
 
-| Method        | Signature                         | Notes                                                               |
-| ------------- | --------------------------------- | ------------------------------------------------------------------- |
-| `refresh`     | `(conversationId?: string): void` | Clears and re-fetches one conversation. Defaults to the active one. |
-| `cache.clear` | `(conversationId?: string): void` | Clears without re-fetching. No argument clears every conversation.  |
+Under the `store` namespace — see [Public API](./public-api.md).
+
+| Method          | Signature                         | Notes                                                               |
+| --------------- | --------------------------------- | ------------------------------------------------------------------- |
+| `store.refresh` | `(conversationId?: string): void` | Clears and re-fetches one conversation. Defaults to the active one. |
+| `store.clear`   | `(conversationId?: string): void` | Clears without re-fetching. No argument clears every conversation.  |
 
 ### `chx-chat` — events
 
@@ -157,4 +158,4 @@ type ChxConversation = {
 
 See [`conversations.stories.js`](../components/stories/conversations.stories.js) for a complete,
 working `<ul>`/`<li>` picker — including per-conversation previews synced off `chx-messages-change`
-and reset/flood test buttons exercising the cache directly.
+and reset/flood test buttons exercising the `store` namespace directly.

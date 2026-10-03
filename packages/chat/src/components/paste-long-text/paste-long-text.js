@@ -4,15 +4,15 @@ import { customElement } from "lit/decorators.js";
 import "../paste-chip/paste-chip.js";
 import "../code-block/code-block.js";
 import { detectLanguage } from "./detect-language.js";
+import { EDITOR_EXTENSION } from "../../editor/extension.js";
 
 import styles from "./paste-long-text.css?inline";
 
 /**
  * @tag chx-paste-long-text
  * @summary Collapses a long paste in chx-message-composer into a chip — a plain "N lines" chip by
- * default, or a `chx-code-block` chip when the pasted text looks like code. Renders nothing itself;
- * reaches into its ancestor chx-message-composer's editor directly (see #registerWithEditor) so
- * chx-message-composer/chx-textbox carry no paste-specific properties at all.
+ * default, or a `chx-code-block` chip when the pasted text looks like code. Renders nothing; an
+ * editor extension (`EDITOR_EXTENSION`) picked up by its parent chx-message-composer.
  */
 @customElement("chx-paste-long-text")
 export class ChxPasteLongText extends LitElement {
@@ -23,11 +23,6 @@ export class ChxPasteLongText extends LitElement {
     codeLanguages: { attribute: false },
     maxCodeErrorRatio: { type: Number, attribute: "max-code-error-ratio" },
   };
-
-  // real private fields must be declared here, in the class body — a bare `this.#foo = ...` inside
-  // the constructor alone isn't enough
-  /** @type {import("../message-composer/message-composer.js").ChxMessageComposer | undefined} */
-  #composer;
 
   constructor() {
     super();
@@ -50,46 +45,26 @@ export class ChxPasteLongText extends LitElement {
     return [styles];
   }
 
-  connectedCallback() {
-    super.connectedCallback();
-    this.#registerWithEditor();
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    this.#composer?.editor?.configurePasteLongText(null);
-    this.#composer = undefined;
+  /** Editor hooks — picked up by the parent chx-message-composer. @returns {import("../../editor/extension.js").EditorExtension} */
+  get [EDITOR_EXTENSION]() {
+    return {
+      handlePaste: (text, lines) => this.#collapse(text, lines),
+      buildPasteElement: (attrs, source) => this.buildElement(attrs, source),
+    };
   }
 
   /**
-   * The editor is constructed asynchronously (chx-textbox's own `firstUpdated()`, itself reached
-   * only after chx-message-composer's first render) — awaiting both `updateComplete`s in turn is
-   * the same ordering `handleSend`/`focus()` already rely on elsewhere, and is guaranteed to run
-   * after `firstUpdated()` since Lit resolves `updateComplete` only once that's already happened.
+   * A paste at or over `pasteThreshold` lines is always the plain chip (`classify()` never runs);
+   * below it, `classify()` decides. `pasteThreshold <= 0` leaves only `classify()`.
+   * @param {string} text @param {number} lines
    */
-  async #registerWithEditor() {
-    const composer =
-      /** @type {import("../message-composer/message-composer.js").ChxMessageComposer | null} */ (
-        this.closest("chx-message-composer")
-      );
-    if (!composer) return;
-    this.#composer = composer;
-
-    await composer.updateComplete;
-    await composer.textboxElement?.updateComplete;
-    if (this.#composer !== composer) return; // disconnected again while awaiting
-
-    composer.editor?.configurePasteLongText({
-      getPasteThreshold: () => this.pasteThreshold,
-      classify: (text, lines) => this.classify(text, lines),
-      buildElement: (attrs, source) => this.buildElement(attrs, source),
-    });
+  #collapse(text, lines) {
+    if (this.pasteThreshold > 0 && lines >= this.pasteThreshold) return {};
+    return this.classify(text, lines);
   }
 
   /**
-   * Is `text` code? Called synchronously during the original paste — a paste at or over
-   * `pasteThreshold` always wins first and never reaches this (see paste-plugin.js's own
-   * precedence doc).
+   * Is `text` code? Called synchronously during the paste, only below `pasteThreshold`.
    * @param {string} text
    * @param {number} lines
    * @returns {{lang: string} | null}

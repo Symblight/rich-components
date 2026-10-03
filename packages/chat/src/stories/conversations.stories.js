@@ -154,7 +154,7 @@ function createConversationsAdapter() {
  * touches `ChxConversation.unreadCount` (that stays app/`<chx-conversations>` territory) — this
  * wiring is the app closing that loop.
  *
- * "Reset all chats" clears every conversation's message cache (`cache.clear()`, no argument) and
+ * "Reset all chats" clears every conversation's message cache (`store.clear()`, no argument) and
  * their previews, then `refresh()` re-fetches the visible one. "Start flood chats" pushes a bounded
  * burst of fake inbound messages via `adapter.emitMessage` (the story's stand-in for a backend calling
  * `subscribe`'s `onMessage`) at random conversations — a backgrounded conversation accumulates them
@@ -162,7 +162,7 @@ function createConversationsAdapter() {
  *
  * The "Simulate…" buttons drive `adapter.subscribe`'s `onEvent` via `emitEvent`:
  * - "Simulate typing" — fires a `typing` event for the active conversation. Typing is now
- *   per-conversation in `chx-chat` (`TypingController` keyed by `conversationId`), so this single event
+ *   per-conversation in `chx-chat` (`PresenceController` keyed by `conversationId`), so this single event
  *   lights up both indicators with no story glue: the chat one (`RealtimeSyncController` →
  *   `setTyping(isTyping, conversationId)` → `<chx-typing-indicator slot="typing">` in
  *   `chx-message-list` for the active conversation) and the sidebar row's own `typing` slot
@@ -246,9 +246,9 @@ export const ConversationsList = {
       chatEl?.updateComplete.then(() => {
         // Resync this conversation's preview from whatever's now visible — switching into an
         // already-cached conversation isn't a message mutation, so chx-messages-change won't fire for it.
-        const messages = chatEl?.messageListElement?.messages ?? [];
+        const messages = chatEl?.store.getMessages() ?? [];
         if (messages.length) setPreview(id, formatPreview(messages[messages.length - 1]));
-        // Typing needs no story reconciliation anymore — chx-chat's TypingController is per-conversation,
+        // Typing needs no story reconciliation anymore — chx-chat's PresenceController is per-conversation,
         // so switching back to a still-typing conversation restores its chat indicator on its own.
       });
     };
@@ -309,8 +309,8 @@ export const ConversationsList = {
         clearInterval(floodTimer);
         floodTimer = undefined;
       }
-      chatEl.cache.clear(); // no argument — every conversation's cache, not just the active one
-      chatEl.refresh(); // re-fetches just the currently-visible conversation
+      chatEl.store.clear(); // no argument — every conversation's cache, not just the active one
+      chatEl.store.refresh(); // re-fetches just the currently-visible conversation
       chatEl.conversations = (chatEl.conversations ?? []).map((c) => ({
         ...c,
         lastMessagePreview: "No messages yet",
@@ -326,7 +326,7 @@ export const ConversationsList = {
         const own = Math.random() < 0.3;
         const id = `flood-${conversation.id}-${Date.now()}-${count}`;
         // Pushed through the simulated subscribe channel's `onMessage` (via `adapter.emitMessage`), not
-        // `chatEl.addMessage()` directly — `onMessage` already just calls `addMessage` internally
+        // `chatEl.store.add()` directly — `onMessage` already goes through the same path internally
         // (see `chat.js`'s `#subscribeAdapter()`), so the observable effect is identical, but this
         // way the flood is a realistic stand-in for "the backend pushed these," same as the
         // "Simulate…" buttons above do for `onEvent`.

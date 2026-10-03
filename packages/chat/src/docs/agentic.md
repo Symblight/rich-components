@@ -59,22 +59,23 @@ roving-focus wiring. Restyling the wrapper is CSS — see "Styling messages" in
 
 `chx-chat` derives the active conversation's turn state; nothing assigns it:
 
-| `chat.status` | meaning                                                        |
-| ------------- | -------------------------------------------------------------- |
-| `ready`       | nothing in flight                                              |
-| `submitted`   | a send is out, its first chunk hasn't landed yet               |
-| `streaming`   | a reply is filling in                                          |
-| `error`       | the last delivery failed uncancelled; cleared by the next send |
+| `chat.delivery.getStatus()` | meaning                                                        |
+| --------------------------- | -------------------------------------------------------------- |
+| `ready`                     | nothing in flight                                              |
+| `submitted`                 | a send is out, its first chunk hasn't landed yet               |
+| `streaming`                 | a reply is filling in                                          |
+| `error`                     | the last delivery failed uncancelled; cleared by the next send |
 
-`chat.busy` is the same thing narrowed to `submitted || streaming`, and it raises
+`chat.delivery.isBusy()` is the same thing narrowed to `submitted || streaming` (in your own Lit
+element, read `ChatController.status`/`.busy` instead — they re-render it), and it raises
 `chx-message-composer`'s `loading` on its own — so `chx-textbox`'s action button turns into a stop
 button for the whole turn with no wiring at all. That button is `type="button"` (it cannot submit the
-form) and dispatches **`chx-stop`**, which `chx-chat` answers with `stop()`. To intercept, listen
+form) and dispatches **`chx-stop`**, which `chx-chat` answers with `delivery.stop()`. To intercept, listen
 lower and call `stopPropagation()`.
 
 ```js
-chat.stop(); // abort every delivery for the active conversation
-chat.cancel(messageId); // abort one, backgrounded conversations included
+chat.delivery.stop(); // abort every delivery for the active conversation
+chat.delivery.cancel(messageId); // abort one, backgrounded conversations included
 ```
 
 Slot `stop` on `chx-message-composer` replaces the icon inside that button (it falls back to a stop

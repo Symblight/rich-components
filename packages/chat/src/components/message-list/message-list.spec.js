@@ -4,6 +4,9 @@ import "./message-list.js";
 import "../typing-indicator/typing-indicator.js";
 import "../streaming-indicator/streaming-indicator.js";
 import "../scroll-to-bottom-affordance/scroll-to-bottom-affordance.js";
+import { ApiRegistry } from "../../api/ApiRegistry.js";
+import { CHAT_API_DEFAULTS } from "../../api/chat-api-defaults.js";
+import { CONNECT_REGISTRY } from "../../api/keys.js";
 /** @import { ChxMessageList } from "./message-list.js" */
 /** @import { ChxMessage as ChxMessageEl } from "../message/message.js" */
 
@@ -475,7 +478,7 @@ describe("chx-message-list", () => {
       expect(mountedIds()).to.not.include("m0"); // scrolled out — evicted from the cache too
     });
 
-    it("scrollToBottom() forwards to chx-infinity-scroll and fires chx-scroll-to-bottom", async () => {
+    it("viewport.toBottom() forwards to chx-infinity-scroll and fires chx-scroll-to-bottom", async () => {
       const el = /** @type {ChxMessageList} */ (
         await fixture(html`<chx-message-list style="height: 400px;"></chx-message-list>`)
       );
@@ -494,7 +497,9 @@ describe("chx-message-list", () => {
       /** @type {Event | undefined} */
       let event;
       el.addEventListener("chx-scroll-to-bottom", (e) => (event = e));
-      el.scrollToBottom();
+      const registry = new ApiRegistry(CHAT_API_DEFAULTS, { name: "test" });
+      el[CONNECT_REGISTRY](registry);
+      registry.facades.viewport.toBottom();
 
       await waitFor(() => scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight <= 32);
       expect(event).to.exist;
@@ -676,13 +681,13 @@ describe("chx-message-list", () => {
       expect(el.shadowRoot?.querySelector('slot[name="scroll-to-bottom"]')).to.not.exist;
     });
 
-    it("scrollToBottom() forwards the affordance's chx-scroll-to-bottom-click behavior override", async () => {
+    it("forwards the affordance's chx-scroll-to-bottom-click behavior override to chx-infinity-scroll", async () => {
       const el = /** @type {ChxMessageList} */ (
         await fixture(html`<chx-message-list style="height: 400px;"></chx-message-list>`)
       );
       /** @type {"auto" | "smooth" | "instant" | undefined} */
       let calledWith;
-      el.scrollToBottom = (behavior) => {
+      infinityScrollOf(el).scrollToBottom = (behavior) => {
         calledWith = behavior;
       };
       el.dispatchEvent(

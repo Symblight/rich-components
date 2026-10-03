@@ -1,63 +1,40 @@
 import { RowMeasurer } from "../../components/infinity-scroll/RowMeasurer.js";
+import { distanceToBottom } from "../../utils/dom.js";
 
 /**
- * Real-DOM counterpart to `VirtualListController` + `StickToBottom`, for `noVirtualization` mode —
- * every row already exists in the DOM at its real height, so there is nothing to window. Two problems
- * remain, ported from a reference `<infinity-scroll>` component (no virtualization,
- * `MutationObserver`-driven):
- *
- *  - **anchor restoration on prepend**: before any DOM change, remember the first row still
- *    intersecting the scroll element's top edge and its offset from it; after the change, re-apply
- *    that offset so a prepend doesn't shove the row the user is reading off screen.
- *  - **stick to bottom**: while the user is within `buffer` px of the bottom, growth at the end keeps
- *    the view pinned there. Reuses the existing `buffer` prop rather than a second threshold.
- *
- * The reference's own rows are plain, synchronously-rendered elements, so it can safely read their
- * layout the instant its `MutationObserver` fires. This package's rows are usually `<chx-message>` (or
- * a consumer's own custom element), which renders on a *microtask* — reading `getBoundingClientRect()`
- * in the same task a freshly-prepended row was inserted can see a height of **0**, which corrupts the
- * anchor's captured offset and produces a visibly wrong restore once the row actually renders. So a
- * mutation doesn't reconcile immediately; it hands off to {@link RowMeasurer} (the same readiness
- * engine the virtualized path uses, generalized to serve both) and only reconciles once the affected
- * rows are confirmed ready. A `ResizeObserver` firing needs no such gate: by definition, whatever it
- * reports has already rendered for real.
- *
- * Unlike the virtualized quartet, nothing here needs a per-render `sync()` — the observers already
- * react to every DOM change on their own. `observe()` only needs calling once elements exist (safe to
- * call from every `hostUpdated`, a no-op once observing has already started).
- *
- * `onReconciled` fires every time `#reconcile()` runs — mutation-triggered (after the readiness gate
- * above) or resize-triggered, always with `scrollTop` in its genuinely settled, post-correction state.
- * `InfinityScrollController` uses it as the *only* place it checks `LoadMoreController.maybeLoad()` in
- * this mode — confirmed live (via a stack trace) that checking directly from `hostUpdated()` instead
- * races this same correction and reads a stale value, causing a real, duplicate `onLoadMore()` call.
+ * @typedef {"auto" | "smooth" | "instant"} Behavior
+ * @typedef {{element: HTMLElement, offset: number, bottomOffset: number, index: string | undefined}} Anchor
+ * @typedef {{
+ *   getScrollElement: () => Element | undefined,
+ *   getCanvasElement: () => Element | undefined,
+ *   rows: () => Iterable<HTMLElement>,
+ *   getBuffer: () => number,
+ *   onReconciled?: () => void,
+ *   getFollowing?: () => boolean,
+ *   getHold?: () => boolean,
+ *   beforeReconcile?: () => void,
+ * }} PlainListConfig
+ */
+
+/**
+ * `noVirtualization` counterpart to `VirtualListController` + `StickToBottom`: every row is real DOM,
+ * so it only has to hold the reading position across a prepend (anchor restore) and stick to the
+ * bottom within `buffer`. Rows like `<chx-message>` render on a microtask and read as 0px tall in
+ * the mutating task, so a mutation reconciles only once `RowMeasurer` confirms the rows are ready.
+ * `onReconciled` fires with `scrollTop` settled — the only safe moment for `maybeLoad()` here.
  */
 export class PlainListController {
-  /** @type {() => Element | undefined} */
-  #getScrollElement;
-  /** @type {() => Element | undefined} */
-  #getCanvasElement;
-  /** @type {() => Iterable<HTMLElement>} */
-  #rows;
-  /** @type {() => number} */
-  #getBuffer;
-  /** @type {() => void} */
-  #onReconciled;
-  /** @type {() => boolean} */
-  #getFollowing;
-  /** @type {() => boolean} */
-  #getHold;
-  /** @type {() => void} */
-  #beforeReconcile;
+  /** @type {PlainListConfig} */
+  #config;
   #measurer;
 
-  /** @type {{element: HTMLElement, offset: number, bottomOffset: number, index: string | undefined} | null} */
+  /** @type {Anchor | null} */
   #anchor = null;
   #prevScrollTop = 0;
   #prevScrollHeight = 0;
-  /** Whether the last recompute found the view within `buffer` of the true bottom. */
+  /** the last recompute found the view within `buffer` of the bottom */
   #atBottom = true;
-  /** Whether `observe()` has ever successfully started — gates the one-time initial pin dance. */
+  /** `observe()` has started once — gates the initial pin */
   #everStarted = false;
 
   /** @type {MutationObserver | null} */
@@ -68,59 +45,33 @@ export class PlainListController {
   #scrollFrame = null;
   #disposed = false;
 
-  /**
-   * @param {{
-   *   getScrollElement: () => Element | undefined,
-   *   getCanvasElement: () => Element | undefined,
-   *   rows: () => Iterable<HTMLElement>,
-   *   getBuffer: () => number,
-   *   onReconciled?: () => void,
-   *   getFollowing?: () => boolean,
-   *   getHold?: () => boolean,
-   *   beforeReconcile?: () => void,
-   * }} config
-   */
+  /** @param {PlainListConfig} config */
   constructor(config) {
-    this.#getScrollElement = config.getScrollElement;
-    this.#getCanvasElement = config.getCanvasElement;
-    this.#rows = config.rows;
-    this.#getBuffer = config.getBuffer;
-    this.#onReconciled = config.onReconciled ?? (() => {});
-    this.#getFollowing = config.getFollowing ?? (() => true);
-    // a smooth scroll in flight: restoring a mid-animation anchor would cancel it halfway
-    this.#getHold = config.getHold ?? (() => false);
-    this.#beforeReconcile = config.beforeReconcile ?? (() => {});
+    this.#config = config;
     this.#measurer = new RowMeasurer({
       rows: config.rows,
-      // real DOM already has its real height once ready — nothing to cache, unlike the virtualizer
+      // real DOM already has its real height — nothing to cache, and nothing keyed by index
       onRowReady: () => {},
-      // ...and so nothing keyed by index either: a row confirmed ready stays ready through the
-      // index shift every prepend causes. See RowMeasurer's own doc for why that matters here.
       recheckOnIndexChange: false,
       afterMeasure: () => this.#reconcile(),
     });
   }
 
-  // -------------------------------------------------------------- lifecycle
-
   /**
-   * Idempotent — starts observing the first time the canvas element exists. On the very first start,
-   * optimistically pins to the bottom and baselines the anchor (harmless even if today's rows haven't
-   * rendered yet — see the class doc — since a not-yet-rendered row has no height to correct for
-   * yet), then hands off to {@link RowMeasurer} to catch up once they actually have. On a later start
-   * (a reconnect after `dispose()`), just re-pins if the view was at the bottom before — re-attaching
-   * a detached element resets `scrollTop`, same as the reference's own `connectedCallback`.
+   * Idempotent — starts observing once the canvas exists. The first start pins to the bottom and
+   * baselines the anchor; a later one (reconnect) re-pins if it was at the bottom, since
+   * re-attaching resets `scrollTop`.
    */
   observe() {
     if (this.#disposed || this.#mutationObserver) return;
-    const canvas = this.#getCanvasElement();
+    const canvas = this.#config.getCanvasElement();
     if (!canvas) return;
 
     this.#mutationObserver = new MutationObserver(this.#handleMutation);
     this.#mutationObserver.observe(canvas, { childList: true, subtree: true, characterData: true });
 
     this.#resizeObserver = new ResizeObserver(this.#handleResize);
-    const scrollElement = this.#getScrollElement();
+    const scrollElement = this.#config.getScrollElement();
     if (scrollElement) this.#resizeObserver.observe(scrollElement);
     this.#resizeObserver.observe(canvas);
 
@@ -136,14 +87,13 @@ export class PlainListController {
     this.#measurer.schedule();
   }
 
-  /** Re-arms after a reconnect — the teardown in `dispose()` disconnected the observers. */
+  /** Re-arms after a reconnect. */
   reset() {
     this.#disposed = false;
     this.#measurer.reset();
     this.observe();
   }
 
-  /** Tears the observers down and cancels any pending frame; call from `hostDisconnected`. */
   dispose() {
     this.#disposed = true;
     this.#measurer.dispose();
@@ -154,18 +104,11 @@ export class PlainListController {
     this.#cancelScrollFrame();
   }
 
-  /** Releases this instance's row-readiness tracking for a row that left the DOM — call from the
-   *  host's row `ref`, same trigger `InfinityScrollController.releaseRows()` already uses. */
   releaseRows() {
     this.#measurer.releaseRows();
   }
 
-  // ---------------------------------------------------------------- commands
-
-  /**
-   * Recomputes `atBottom` against `buffer` — call synchronously from the scroll handler, so a stale
-   * value can't let a later reconcile yank the view back down mid-gesture.
-   */
+  /** Call synchronously from the scroll handler, so a stale `atBottom` can't yank the view mid-gesture. */
   handleScroll = () => {
     this.#updateAtBottom();
     if (this.#scrollFrame !== null) return;
@@ -175,13 +118,9 @@ export class PlainListController {
     });
   };
 
-  /**
-   * Jump or glide to the newest content. `"auto"` also re-engages the bottom pin synchronously; a
-   * smooth/instant scroll leaves that to the next `handleScroll` once the gesture settles.
-   * @param {"auto" | "smooth" | "instant"} [behavior]
-   */
+  /** `"auto"` also re-engages the bottom pin synchronously. @param {Behavior} [behavior] */
   scrollToBottom(behavior = "auto") {
-    const el = this.#getScrollElement();
+    const el = this.#config.getScrollElement();
     if (!el) return;
     if (behavior === "auto") {
       el.scrollTop = el.scrollHeight;
@@ -191,62 +130,43 @@ export class PlainListController {
     }
   }
 
-  /** @param {number} offset @param {{behavior?: "auto" | "smooth" | "instant"}} [options] */
+  /** @param {number} offset @param {{behavior?: Behavior}} [options] */
   scrollToOffset(offset, options = {}) {
-    const el = this.#getScrollElement();
-    if (!el) return;
-    el.scrollTo({ top: offset, behavior: options.behavior ?? "auto" });
+    this.#config
+      .getScrollElement()
+      ?.scrollTo({ top: offset, behavior: options.behavior ?? "auto" });
   }
 
   /** @returns {number | undefined} */
   getScrollOffset() {
-    return this.#getScrollElement()?.scrollTop;
+    return this.#config.getScrollElement()?.scrollTop;
   }
 
-  /** Plain-DOM counterpart to the virtualizer's `getOffsetForIndex` — the scrollTop that puts the row's
-   * edge at the viewport edge, read straight off the real DOM. `undefined` when the row isn't found.
-   * @param {number} index @param {"start" | "center" | "end"} [align] @returns {number | undefined} */
+  /** The scrollTop that aligns row `index`. @param {number} index @param {"start" | "center" | "end"} [align] */
   getOffsetForIndex(index, align = "start") {
-    const el = this.#getScrollElement();
+    const el = this.#config.getScrollElement();
     const row = this.#findRow(index);
     if (!el || !row) return undefined;
-    const viewportRect = el.getBoundingClientRect();
-    const rowRect = row.getBoundingClientRect();
-    let delta;
-    if (align === "center")
-      delta = rowRect.top - viewportRect.top - (el.clientHeight - rowRect.height) / 2;
-    else if (align === "end") delta = rowRect.bottom - viewportRect.bottom;
-    else delta = rowRect.top - viewportRect.top;
-    return el.scrollTop + delta;
+    return el.scrollTop + this.#alignDelta(el, row, align);
   }
 
-  /**
-   * Scrolls the row at `index` into view — the plain-DOM counterpart to the virtualizer's own
-   * `scrollToIndex`, resolved via `[data-index]` instead of an offset lookup table.
-   * @param {number} index
-   * @param {{align?: "auto" | "start" | "center" | "end", behavior?: "auto" | "smooth" | "instant"}} [options]
-   */
+  /** @param {number} index @param {{align?: "auto" | "start" | "center" | "end", behavior?: Behavior}} [options] */
   scrollToIndex(index, options = {}) {
-    const el = this.#getScrollElement();
+    const el = this.#config.getScrollElement();
     const row = this.#findRow(index);
     if (!el || !row) return;
 
     const { align = "start", behavior = "auto" } = options;
-    const viewportRect = el.getBoundingClientRect();
-    const rowRect = row.getBoundingClientRect();
-
     let delta;
-    if (align === "center") {
-      delta = rowRect.top - viewportRect.top - (el.clientHeight - rowRect.height) / 2;
-    } else if (align === "end") {
-      delta = rowRect.bottom - viewportRect.bottom;
-    } else if (align === "auto") {
+    if (align === "auto") {
+      const viewportRect = el.getBoundingClientRect();
+      const rowRect = row.getBoundingClientRect();
       const aboveTop = rowRect.top < viewportRect.top;
       const belowBottom = rowRect.bottom > viewportRect.bottom;
       if (!aboveTop && !belowBottom) return; // already fully visible
-      delta = aboveTop ? rowRect.top - viewportRect.top : rowRect.bottom - viewportRect.bottom;
+      delta = this.#alignDelta(el, row, aboveTop ? "start" : "end");
     } else {
-      delta = rowRect.top - viewportRect.top; // "start"
+      delta = this.#alignDelta(el, row, align);
     }
 
     el.scrollTo({ top: el.scrollTop + delta, behavior });
@@ -254,28 +174,25 @@ export class PlainListController {
   }
 
   /**
-   * Remembers the current reading position — the first row still intersecting the scroll element's
-   * top edge, and its offset from it. Called automatically on scroll and after every observed DOM
-   * change; exposed for callers that mutate content in ways the observers cannot see ahead of.
-   * @returns {{element: HTMLElement, offset: number, bottomOffset: number, index: string | undefined} | null}
+   * Remembers the first row still crossing the viewport's top edge and its offset. Runs on scroll
+   * and after every reconcile; exposed for changes the observers can't see ahead of.
+   * @returns {Anchor | null}
    */
   captureAnchor() {
-    const el = this.#getScrollElement();
+    const el = this.#config.getScrollElement();
     if (!el) return null;
 
     this.#prevScrollTop = el.scrollTop;
     this.#prevScrollHeight = el.scrollHeight;
 
-    const items = Array.from(this.#rows());
+    const items = Array.from(this.#config.rows());
     if (items.length === 0) {
       this.#anchor = null;
       return null;
     }
 
     const viewportTop = el.getBoundingClientRect().top;
-
-    // Rows are laid out in document order, so their edges are monotonic: binary-search for the
-    // first one whose bottom is still in the viewport.
+    // rows are in document order, so edges are monotonic — binary search
     let lo = 0;
     let hi = items.length - 1;
     let found = -1;
@@ -300,22 +217,17 @@ export class PlainListController {
     return this.#anchor;
   }
 
-  /**
-   * Re-applies the captured anchor. After content is inserted above the viewport this puts the
-   * previously visible row back under the user's eyes.
-   */
+  /** Puts the anchored row back under the reader's eyes. */
   restoreAnchor() {
-    const el = this.#getScrollElement();
+    const el = this.#config.getScrollElement();
     if (!el) return;
 
     const anchor = this.#anchor;
     if (anchor && anchor.element.isConnected) {
       const viewportTop = el.getBoundingClientRect().top;
       const rect = anchor.element.getBoundingClientRect();
-      // A prepend (the anchor's index moved) can resize the anchor row itself at its top — a date
-      // divider or run author line the new older neighbour makes redundant — so hold its bottom edge:
-      // that change is above what's being read. Not tied to the fold: at scrollTop 0 the first row
-      // can sit a few px below it (list padding) and still lose its divider.
+      // a prepend (index moved) can resize the anchor row at its top (a divider/author line the new
+      // neighbour makes redundant), so hold its bottom edge instead
       const heldByBottom = anchor.element.dataset.index !== anchor.index;
       const delta = heldByBottom
         ? rect.bottom - viewportTop - anchor.bottomOffset
@@ -324,55 +236,56 @@ export class PlainListController {
       return;
     }
 
-    // The anchored row is gone (replaced rather than reused, e.g. an unkeyed re-render). Fall back
-    // to the height difference, which only describes growth above the viewport.
+    // anchor row replaced (unkeyed re-render): fall back to growth above the viewport
     if (!this.#atBottom) {
       const delta = el.scrollHeight - this.#prevScrollHeight;
       if (delta !== 0) el.scrollTop = this.#prevScrollTop + delta;
     }
   }
 
-  // ---------------------------------------------------------------- internals
-
-  /**
-   * Deliberately does not reconcile inline — see the class doc. Handing off to `RowMeasurer` means
-   * the eventual `#reconcile()` (via `afterMeasure`) runs against the *pre-mutation* anchor baseline,
-   * once the newly-inserted rows are confirmed to have real layout, instead of re-baselining against
-   * a transiently-collapsed one.
-   */
+  /** Waits for row readiness instead of reconciling inline, against the pre-mutation anchor. */
   #handleMutation = () => {
     if (this.#disposed) return;
-    // A capture queued by an in-flight scroll gesture is still pending on the *same* frame this
-    // mutation's reconcile will use, and rAF runs them in request order — so it would land after the
-    // prepend and re-baseline onto the already-shifted layout, leaving `restoreAnchor()` with a zero
-    // delta and the reading position jumped. Drop it; `#reconcile()` re-captures once corrected.
+    // a capture queued by an in-flight scroll would land after the prepend and re-baseline onto the
+    // shifted layout, zeroing the restore delta — drop it; #reconcile() re-captures
     this.#cancelScrollFrame();
     this.#measurer.schedule();
   };
 
-  /** A resize means the reported box already reflects real, settled layout — no readiness gate
-   *  needed, unlike a mutation (see the class doc). */
+  /** A resize already reflects settled layout — no readiness gate. */
   #handleResize = () => {
     if (this.#disposed) return;
     this.#reconcile();
   };
 
-  /** Either hold the bottom or hold the reading position — then re-baseline against the new layout. */
+  /** Hold the bottom or the reading position, then re-baseline. */
   #reconcile() {
-    this.#beforeReconcile();
-    if (this.#getHold()) {
+    this.#config.beforeReconcile?.();
+    // a smooth pin scroll in flight: restoring a mid-animation anchor would cancel it
+    if (this.#config.getHold?.()) {
       this.#updateAtBottom();
-      this.#onReconciled();
+      this.#config.onReconciled?.();
       return;
     }
-    if (this.#atBottom && this.#getFollowing()) {
+    if (this.#atBottom && (this.#config.getFollowing?.() ?? true)) {
       this.scrollToBottom();
     } else {
       this.restoreAnchor();
     }
     this.captureAnchor();
     this.#updateAtBottom();
-    this.#onReconciled();
+    this.#config.onReconciled?.();
+  }
+
+  /** px to scroll so `row`'s edge meets the viewport's. @param {Element} el @param {HTMLElement} row @param {"start" | "center" | "end"} align */
+  #alignDelta(el, row, align) {
+    const viewportRect = el.getBoundingClientRect();
+    const rowRect = row.getBoundingClientRect();
+    if (align === "center") {
+      return rowRect.top - viewportRect.top - (el.clientHeight - rowRect.height) / 2;
+    }
+    if (align === "end") return rowRect.bottom - viewportRect.bottom;
+    return rowRect.top - viewportRect.top;
   }
 
   #cancelScrollFrame() {
@@ -383,15 +296,14 @@ export class PlainListController {
 
   /** @param {number} index @returns {HTMLElement | undefined} */
   #findRow(index) {
-    for (const row of this.#rows()) {
+    for (const row of this.#config.rows()) {
       if (Number(row.dataset.index) === index) return row;
     }
     return undefined;
   }
 
   #updateAtBottom() {
-    const el = this.#getScrollElement();
-    const distance = el ? el.scrollHeight - el.clientHeight - el.scrollTop : 0;
-    this.#atBottom = distance <= this.#getBuffer();
+    const el = this.#config.getScrollElement();
+    this.#atBottom = (el ? distanceToBottom(el) : 0) <= this.#config.getBuffer();
   }
 }

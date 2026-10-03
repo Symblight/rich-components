@@ -29,30 +29,13 @@ function insertPasteChip(view, attrs) {
 }
 
 /**
- * Forces paste to always be plain text, matching the old
- * handleComposerPaste's policy — `handlePaste` runs before ProseMirror's
- * own HTML/text clipboard parsing and fully replaces it when it returns
- * `true`. Splits the clipboard text on "\n" and inserts each line in turn,
- * splitting the current `line` block between them — so paste merges with
- * whatever text already surrounds the cursor instead of overwriting it.
- *
- * Precedence, driven entirely by chx-paste-long-text (see Editor.js's
- * `configurePasteLongText`) — this plugin itself has no opinion:
- *  1. A paste of at least `getPasteThreshold()` lines always collapses to
- *     the plain "N lines" chip — `classify()` never runs in this branch,
- *     however it would have classified the content. `threshold <= 0`
- *     disables collapsing entirely (the default when no chx-paste-long-text
- *     is registered).
- *  2. Otherwise, `getClassify()` (e.g. chx-paste-long-text's code detector)
- *     is checked once; a non-null result collapses to a classified chip.
- *  3. Otherwise, the existing inline plain-text insertion — unchanged.
- * @param {{
- *   getPasteThreshold?: () => number,
- *   getClassify?: () => ((text: string, lines: number) => Record<string, unknown> | null) | undefined,
- * }} [options]
+ * Forces plain-text paste: lines are inserted one by one, splitting the current `line` block, so a
+ * paste merges with the surrounding text. The first editor extension whose `handlePaste` returns
+ * data collapses the paste into a `paste` node instead; with none, it's always inline.
+ * @param {{getExtensions?: () => import("./extension.js").EditorExtension[]}} [options]
  * @returns {import("prosemirror-state").Plugin}
  */
-export function createPastePlugin({ getPasteThreshold, getClassify } = {}) {
+export function createPastePlugin({ getExtensions = () => [] } = {}) {
   return new Plugin({
     props: {
       /**
@@ -63,15 +46,10 @@ export function createPastePlugin({ getPasteThreshold, getClassify } = {}) {
         const text = event.clipboardData?.getData("text/plain");
         if (!text) return false;
 
-        const threshold = getPasteThreshold?.() ?? 0;
         const lineCount = countLines(text);
-        if (threshold > 0 && lineCount >= threshold) {
-          return insertPasteChip(view, { text, lines: lineCount, data: {} });
-        }
-
-        const data = getClassify?.()?.(text, lineCount);
-        if (data != null) {
-          return insertPasteChip(view, { text, lines: lineCount, data });
+        for (const extension of getExtensions()) {
+          const data = extension.handlePaste?.(text, lineCount);
+          if (data != null) return insertPasteChip(view, { text, lines: lineCount, data });
         }
 
         const lines = text.split("\n");

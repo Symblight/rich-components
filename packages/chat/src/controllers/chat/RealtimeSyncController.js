@@ -2,82 +2,55 @@
 /** @import { ChxConversation } from "../../types/conversation.js" */
 
 /**
- * Maps inbound `ChxRealtimeEvent`s (`adapter.subscribe`'s `onEvent`) to chat-owned state changes —
- * the one place that knows the event → action mapping, so `chx-chat` itself doesn't. No host
- * reference at all (unlike `TypingController`/`PaginationController`) — every action it can take
- * goes through one of the injected callbacks below, so there's nothing else to depend on.
+ * @typedef {{
+ *   getActiveConversationId: () => string | undefined,
+ *   setTyping: (isTyping: boolean, conversationId?: string) => void,
+ *   clearActiveConversation: () => void,
+ *   markMessageRead: (messageId: string) => void,
+ *   getConversations: () => ChxConversation[],
+ *   applyConversations: (next: ChxConversation[]) => void,
+ * }} RealtimeSyncConfig
  */
-export class RealtimeSyncController {
-  /** @type {() => string | undefined} */
-  #getActiveConversationId;
-  /** @type {(isTyping: boolean, conversationId?: string) => void} */
-  #setTyping;
-  /** @type {() => void} */
-  #clearActiveConversation;
-  /** @type {(messageId: string) => void} */
-  #markMessageRead;
-  /** @type {() => ChxConversation[]} */
-  #getConversations;
-  /** @type {(next: ChxConversation[]) => void} */
-  #applyConversations;
 
-  /**
-   * @param {{
-   *   getActiveConversationId: () => string | undefined,
-   *   setTyping: (isTyping: boolean, conversationId?: string) => void,
-   *   clearActiveConversation: () => void,
-   *   markMessageRead: (messageId: string) => void,
-   *   getConversations: () => ChxConversation[],
-   *   applyConversations: (next: ChxConversation[]) => void,
-   * }} callbacks
-   */
-  constructor({
-    getActiveConversationId,
-    setTyping,
-    clearActiveConversation,
-    markMessageRead,
-    getConversations,
-    applyConversations,
-  }) {
-    this.#getActiveConversationId = getActiveConversationId;
-    this.#setTyping = setTyping;
-    this.#clearActiveConversation = clearActiveConversation;
-    this.#markMessageRead = markMessageRead;
-    this.#getConversations = getConversations;
-    this.#applyConversations = applyConversations;
+/** Maps inbound `ChxRealtimeEvent`s (`adapter.subscribe`'s `onEvent`) to chat state changes. */
+export class RealtimeSyncController {
+  /** @type {RealtimeSyncConfig} */
+  #config;
+
+  /** @param {RealtimeSyncConfig} config */
+  constructor(config) {
+    this.#config = config;
   }
 
   /** @param {ChxRealtimeEvent} event */
   handleEvent(event) {
+    const config = this.#config;
     switch (event.type) {
       case "typing":
-        // Per-conversation now — no active-conversation filter. TypingController keys by
-        // conversationId, so a background conversation's typing drives its own sidebar row while only
-        // the active one reaches chx-message-list's typing slot (see pushMessageListProperties).
-        this.#setTyping(event.isTyping, event.conversationId);
-        // TODO: per-user tracking (multiple simultaneous typers) — still one boolean per conversation.
+        // TODO: per-user tracking — still one boolean per conversation
+        config.setTyping(event.isTyping, event.conversationId);
         break;
       case "conversation-removed": {
-        if (event.conversationId === this.#getActiveConversationId()) {
-          this.#clearActiveConversation();
+        if (event.conversationId === config.getActiveConversationId()) {
+          config.clearActiveConversation();
         }
-        this.#setTyping(false, event.conversationId); // drop any lingering typing state for it
-        const list = this.#getConversations();
+        config.setTyping(false, event.conversationId);
+        const list = config.getConversations();
         const next = list.filter((conversation) => conversation.id !== event.conversationId);
-        if (next.length !== list.length) this.#applyConversations(next);
+        if (next.length !== list.length) config.applyConversations(next);
         break;
       }
       case "conversation-added": {
-        const list = this.#getConversations();
+        const list = config.getConversations();
         if (!list.some((conversation) => conversation.id === event.conversation.id)) {
-          this.#applyConversations([...list, event.conversation]);
+          config.applyConversations([...list, event.conversation]);
         }
         break;
       }
       case "conversation-updated": {
-        const list = this.#getConversations();
+        const list = config.getConversations();
         if (list.some((conversation) => conversation.id === event.conversation.id)) {
-          this.#applyConversations(
+          config.applyConversations(
             list.map((conversation) =>
               conversation.id === event.conversation.id
                 ? { ...conversation, ...event.conversation }
@@ -88,7 +61,7 @@ export class RealtimeSyncController {
         break;
       }
       case "presence": {
-        const list = this.#getConversations();
+        const list = config.getConversations();
         let changed = false;
         const next = list.map((conversation) => {
           if (!conversation.participants?.some((participant) => participant.id === event.userId)) {
@@ -104,16 +77,12 @@ export class RealtimeSyncController {
             ),
           };
         });
-        if (changed) this.#applyConversations(next);
+        if (changed) config.applyConversations(next);
         break;
       }
       case "read":
-        // Idempotently sets ChxMessage.readState to "read" for event.messageId — a per-message
-        // effect. ChxConversation.readState/unreadCount patching is deliberately not done here: a
-        // single ChxReadEvent (one messageId) doesn't unambiguously mean the whole conversation is
-        // read, so conversation-level read state stays a TODO. Not a toggle: a ChxReadEvent is a
-        // one-way signal the transport can redeliver.
-        this.#markMessageRead(event.messageId);
+        // per-message only: one messageId doesn't mean the whole conversation is read (TODO)
+        config.markMessageRead(event.messageId);
         break;
     }
   }

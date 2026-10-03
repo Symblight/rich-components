@@ -390,7 +390,7 @@ export const MockedMessages = {
     >
       <chx-message-list slot="message-list"></chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
-        <chx-paste-long-text slot="paste-long-text"></chx-paste-long-text>
+        <chx-paste-long-text></chx-paste-long-text>
       </chx-message-composer>
     </chx-chat>
   `,
@@ -436,7 +436,7 @@ export const PasteRecognizesCode = {
     >
       <chx-message-list slot="message-list"></chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Paste some code...">
-        <chx-paste-long-text slot="paste-long-text"></chx-paste-long-text>
+        <chx-paste-long-text></chx-paste-long-text>
       </chx-message-composer>
     </chx-chat>
   `,

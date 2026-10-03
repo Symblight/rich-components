@@ -1,224 +1,163 @@
-/**
- * @typedef {import("lit").ReactiveController} ReactiveController
- * @typedef {import("lit").ReactiveControllerHost} ReactiveControllerHost
- */
-
 /** @import { ChxMessage } from "../../types/message.js" */
 /** @import { ChxChatAdapter } from "../../types/adapter.js" */
 
 /**
- * @typedef {Object} ConversationPageState
- * @property {string} [cursor]
- * @property {boolean} hasMore
- * @property {boolean} loading
- * @property {AbortController} [loadAbort]
+ * @typedef {import("lit").ReactiveController} ReactiveController
+ * @typedef {import("lit").ReactiveControllerHost} ReactiveControllerHost
+ * @typedef {{cursor?: string, hasMore: boolean, loading: boolean, loadAbort?: AbortController}} PageState
+ * @typedef {{
+ *   getAdapter: () => ChxChatAdapter | undefined,
+ *   getMessages: () => ChxMessage[],
+ *   applyMessages: (messages: ChxMessage[], conversationId?: string) => void,
+ *   getConversationId?: () => string | undefined,
+ * }} PaginationConfig
  */
 
 /**
- * Owns pagination state (cursor/hasMore/in-flight) and the prepend-merge for older history, scoped
- * per conversation (`conversationId`, `undefined` for a single-conversation chx-chat — behaves exactly
- * as a single global state in that case). A real `ReactiveController` so `hostDisconnected()` can abort
- * every in-flight fetch.
+ * Cursor/hasMore/in-flight state and history merging, per conversation (`undefined` for a
+ * single-conversation chat). Host-bound so a disconnect aborts every in-flight fetch.
  * @implements {ReactiveController}
  */
 export class PaginationController {
   /** @type {ReactiveControllerHost} */
   #host;
-  /** @type {() => ChxChatAdapter | undefined} */
-  #getAdapter;
-  /** @type {() => ChxMessage[]} */
-  #getMessages;
-  /** @type {(messages: ChxMessage[], conversationId?: string) => void} */
-  #applyMessages;
-  /** @type {() => string | undefined} */
-  #getConversationId;
-  /** @type {Map<string | undefined, ConversationPageState>} */
+  /** @type {PaginationConfig} */
+  #config;
+  /** @type {Map<string | undefined, PageState>} */
   #state = new Map();
-  /** @type {Set<string | undefined>} loadInitial() has been dispatched at least once — see hasVisited/forget */
+  /** `loadInitial()` dispatched at least once — see `hasVisited`/`forget`. @type {Set<string | undefined>} */
   #visited = new Set();
 
-  /**
-   * @param {ReactiveControllerHost} host
-   * @param {{
-   *   getAdapter: () => ChxChatAdapter | undefined,
-   *   getMessages: () => ChxMessage[],
-   *   applyMessages: (messages: ChxMessage[], conversationId?: string) => void,
-   *   getConversationId?: () => string | undefined,
-   * }} options
-   */
-  constructor(host, { getAdapter, getMessages, applyMessages, getConversationId }) {
+  /** @param {ReactiveControllerHost} host @param {PaginationConfig} config */
+  constructor(host, config) {
     this.#host = host;
-    this.#getAdapter = getAdapter;
-    this.#getMessages = getMessages;
-    this.#applyMessages = applyMessages;
-    this.#getConversationId = getConversationId ?? (() => undefined);
+    this.#config = config;
     host.addController(this);
   }
 
-  /**
-   * @param {string | undefined} conversationId
-   * @returns {ConversationPageState}
-   */
-  #stateFor(conversationId) {
-    let entry = this.#state.get(conversationId);
-    if (!entry) {
-      entry = { hasMore: true, loading: false }; // optimistic hasMore until a listMessages result says otherwise
-      this.#state.set(conversationId, entry);
-    }
-    return entry;
-  }
-
-  /** Whether older history can still be loaded for the active conversation — pushed down to `chx-infinity-scroll`'s `hasMore`. */
+  /** Older history left for the active conversation. */
   get hasMore() {
-    return this.#stateFor(this.#getConversationId()).hasMore;
+    return this.hasMoreFor(this.#activeId());
   }
 
-  /** Whether a page fetch is in flight for the active conversation — pushed down to `chx-infinity-scroll`'s `loading`. */
+  /** A page fetch in flight for the active conversation. */
   get loading() {
-    return this.#stateFor(this.#getConversationId()).loading;
+    return this.isLoadingFor(this.#activeId());
   }
 
-  /**
-   * Whether `loadInitial()` has ever been dispatched for `conversationId` — see `forget()`/chx-chat's
-   * `refresh()`.
-   * @param {string | undefined} conversationId
-   */
+  /** @param {string | undefined} conversationId */
+  hasMoreFor(conversationId) {
+    return this.#state.get(conversationId)?.hasMore ?? true;
+  }
+
+  /** @param {string | undefined} conversationId */
+  isLoadingFor(conversationId) {
+    return this.#state.get(conversationId)?.loading ?? false;
+  }
+
+  /** @param {string | undefined} conversationId */
   hasVisited(conversationId) {
     return this.#visited.has(conversationId);
   }
 
   /**
-   * Mutates in-flight/exhausted state for one conversation and re-renders the host so the new values
-   * reach the list (only meaningful when that conversation is the active one, but cheap enough to
-   * always trigger — matches the previous unconditional `requestUpdate()`).
-   * @param {string | undefined} conversationId
-   * @param {{loading?: boolean, hasMore?: boolean}} patch
+   * First page for one conversation, replacing its cached slice. Never retried on its own after a
+   * failure — `forget()` + a new call (chx-chat's `store.refresh()`) does that.
+   * @param {string | undefined} [conversationId]
    */
-  #setState(conversationId, patch) {
-    Object.assign(this.#stateFor(conversationId), patch);
-    this.#host.requestUpdate();
-  }
-
-  /**
-   * Prepends an older page into `conversationId`'s own slice of `messages`, deduped by id — other
-   * conversations' entries are left exactly where they are; cross-conversation ordering in the
-   * underlying array is otherwise irrelevant, everything downstream filters by `conversationId`
-   * before rendering.
-   * @param {ChxMessage[]} messages
-   * @param {ChxMessage[]} incoming
-   * @param {string | undefined} conversationId
-   * @returns {ChxMessage[]}
-   */
-  #mergeHistory(messages, incoming, conversationId) {
-    const stamped = incoming.map((message) =>
-      message.conversationId === conversationId ? message : { ...message, conversationId },
-    );
-    const existingIds = new Set(messages.map((message) => message.id));
-    const deduped = stamped.filter((message) => !existingIds.has(message.id));
-    const firstOwnIndex = messages.findIndex(
-      (message) => message.conversationId === conversationId,
-    );
-    if (firstOwnIndex === -1) return [...messages, ...deduped];
-    return [...messages.slice(0, firstOwnIndex), ...deduped, ...messages.slice(firstOwnIndex)];
-  }
-
-  /**
-   * Replaces `conversationId`'s own slice of `messages` wholesale with `incoming` — other
-   * conversations' cached entries are left untouched.
-   * @param {ChxMessage[]} messages
-   * @param {ChxMessage[]} incoming
-   * @param {string | undefined} conversationId
-   * @returns {ChxMessage[]}
-   */
-  #replaceConversation(messages, incoming, conversationId) {
-    const stamped = incoming.map((message) =>
-      message.conversationId === conversationId ? message : { ...message, conversationId },
-    );
-    const others = messages.filter((message) => message.conversationId !== conversationId);
-    return [...others, ...stamped];
-  }
-
-  /**
-   * Initial page for one conversation — called once per conversation, either from chx-chat's own
-   * `conversationId` switch (a cache miss, see `hasVisited`) or `refresh()` (after `forget()` clears
-   * the visited mark). No-op if `adapter.listMessages` is unset or already loading. Never silently
-   * retried on its own after a failure — see `forget()`/chx-chat's `refresh()`.
-   * @param {string | undefined} [conversationId] defaults to the currently active conversation
-   */
-  async loadInitial(conversationId = this.#getConversationId()) {
-    const adapter = this.#getAdapter();
-    const entry = this.#stateFor(conversationId);
-    if (!adapter?.listMessages || entry.loading) return;
+  async loadInitial(conversationId = this.#activeId()) {
+    if (!this.#config.getAdapter()?.listMessages || this.#stateFor(conversationId).loading) return;
     this.#visited.add(conversationId);
-    this.#setState(conversationId, { loading: true });
-    const controller = new AbortController();
-    entry.loadAbort = controller;
-    try {
-      const result = await adapter.listMessages({ conversationId, signal: controller.signal });
-      entry.cursor = result.cursor;
-      this.#setState(conversationId, { hasMore: result.hasMore ?? false });
-      this.#applyMessages(
-        this.#replaceConversation(this.#getMessages(), result.messages, conversationId),
-        conversationId,
-      );
-    } catch (error) {
-      if (!controller.signal.aborted) throw error; // a genuine adapter error still propagates
-    } finally {
-      this.#setState(conversationId, { loading: false });
-    }
+    await this.#fetchPage(conversationId, {}, (messages, incoming) => [
+      ...messages.filter((message) => message.conversationId !== conversationId),
+      ...incoming,
+    ]);
   }
 
-  /**
-   * Fetches one older page for the active conversation and merges it in. No-op if unset, already
-   * loading, or hasMore is false.
-   */
+  /** One older page for the active conversation, prepended to its slice. */
   async loadMore() {
-    const conversationId = this.#getConversationId();
-    const adapter = this.#getAdapter();
+    const conversationId = this.#activeId();
     const entry = this.#stateFor(conversationId);
-    if (!adapter?.listMessages || entry.loading || !entry.hasMore) return;
-    this.#setState(conversationId, { loading: true });
-    const controller = new AbortController();
-    entry.loadAbort = controller;
-    try {
-      const result = await adapter.listMessages({
-        conversationId,
-        cursor: entry.cursor,
-        direction: "backward",
-        signal: controller.signal,
-      });
-      entry.cursor = result.cursor;
-      this.#setState(conversationId, { hasMore: result.hasMore ?? false });
-      this.#applyMessages(
-        this.#mergeHistory(this.#getMessages(), result.messages, conversationId),
-        conversationId,
-      );
-    } catch (error) {
-      if (!controller.signal.aborted) throw error; // a genuine adapter error still propagates
-    } finally {
-      this.#setState(conversationId, { loading: false });
-    }
+    if (!this.#config.getAdapter()?.listMessages || entry.loading || !entry.hasMore) return;
+    await this.#fetchPage(
+      conversationId,
+      { cursor: entry.cursor, direction: "backward" },
+      (messages, incoming) => {
+        const existingIds = new Set(messages.map((message) => message.id));
+        const deduped = incoming.filter((message) => !existingIds.has(message.id));
+        // other conversations stay where they are — everything downstream filters by conversation
+        const firstOwn = messages.findIndex((message) => message.conversationId === conversationId);
+        if (firstOwn === -1) return [...messages, ...deduped];
+        return [...messages.slice(0, firstOwn), ...deduped, ...messages.slice(firstOwn)];
+      },
+    );
   }
 
-  /**
-   * Drops cached pagination state for a conversation so the next `loadInitial()` re-fetches from
-   * scratch — the mechanism behind chx-chat's `refresh()`. Does not touch `#getMessages()`'s own
-   * cached array; the caller is responsible for clearing that conversation's messages too.
-   * @param {string | undefined} conversationId
-   */
+  /** Drops a conversation's page state; its cached messages are the caller's to clear. @param {string | undefined} conversationId */
   forget(conversationId) {
     this.#visited.delete(conversationId);
     this.#state.delete(conversationId);
   }
 
-  /** Drops cached pagination state for every conversation at once — the "clear everything" half of chx-chat's `cache.clear()`. */
   forgetAll() {
     this.#visited.clear();
     this.#state.clear();
   }
 
-  /** Aborts every in-flight fetch, across every conversation — a disconnected host must not later call applyMessages. */
+  /** A disconnected host must not later call `applyMessages`. */
   hostDisconnected() {
     for (const entry of this.#state.values()) entry.loadAbort?.abort();
+  }
+
+  /**
+   * @param {string | undefined} conversationId
+   * @param {{cursor?: string, direction?: "backward"}} request
+   * @param {(messages: ChxMessage[], incoming: ChxMessage[]) => ChxMessage[]} merge
+   */
+  async #fetchPage(conversationId, request, merge) {
+    const adapter = /** @type {ChxChatAdapter & {listMessages: Function}} */ (
+      this.#config.getAdapter()
+    );
+    const entry = this.#stateFor(conversationId);
+    const controller = new AbortController();
+    entry.loadAbort = controller;
+    this.#setState(conversationId, { loading: true });
+    try {
+      const result = await adapter.listMessages({
+        conversationId,
+        ...request,
+        signal: controller.signal,
+      });
+      entry.cursor = result.cursor;
+      this.#setState(conversationId, { hasMore: result.hasMore ?? false });
+      const incoming = result.messages.map((message) =>
+        message.conversationId === conversationId ? message : { ...message, conversationId },
+      );
+      this.#config.applyMessages(merge(this.#config.getMessages(), incoming), conversationId);
+    } catch (error) {
+      if (!controller.signal.aborted) throw error;
+    } finally {
+      this.#setState(conversationId, { loading: false });
+    }
+  }
+
+  #activeId() {
+    return this.#config.getConversationId?.();
+  }
+
+  /** @param {string | undefined} conversationId @returns {PageState} */
+  #stateFor(conversationId) {
+    let entry = this.#state.get(conversationId);
+    if (!entry) {
+      entry = { hasMore: true, loading: false }; // optimistic until a result says otherwise
+      this.#state.set(conversationId, entry);
+    }
+    return entry;
+  }
+
+  /** @param {string | undefined} conversationId @param {{loading?: boolean, hasMore?: boolean}} patch */
+  #setState(conversationId, patch) {
+    Object.assign(this.#stateFor(conversationId), patch);
+    this.#host.requestUpdate();
   }
 }

@@ -1,125 +1,106 @@
 /**
- * Watches rendered rows for viewport intersection and calls `onItemVisible(key)` on every
- * `false → true` transition — no memory of which keys have already fired (that dedup is one layer
- * up, see `chx-message-list`'s `ReadTrackingController`). A row is only ever registered once, at
- * the moment it first passes `getShouldObserveItem()`, never re-checked afterwards.
- *
- * Gated on `document.visibilityState`: an intersection while the tab is hidden/backgrounded isn't a
- * real "the user saw this" signal. `takeRecords()` on the way back to `"visible"` catches anything
- * that was already intersecting the whole time the tab was hidden, since no new transition occurs
- * for a row that stays intersecting throughout.
+ * @typedef {{
+ *   rows: () => Iterable<HTMLElement>,
+ *   getScrollElement: () => Element | undefined,
+ *   getThreshold: () => number,
+ *   getData: () => unknown[],
+ *   getShouldObserveItem: () => (item: unknown, index: number) => boolean,
+ *   onItemVisible: (key: string) => void,
+ * }} VisibilityConfig
+ */
+
+/**
+ * Calls `onItemVisible(key)` on every row's `false → true` intersection (dedup is one layer up, in
+ * `ReadTrackingController`). Ignored while the tab is hidden; `takeRecords()` on return catches rows
+ * that stayed intersecting the whole time.
  */
 export class VisibilityController {
-  /** @type {() => Iterable<HTMLElement>} */
-  #rows;
-  /** @type {() => Element | undefined} */
-  #getScrollElement;
-  /** @type {() => number} */
-  #getThreshold;
-  /** @type {() => unknown[]} */
-  #getData;
-  /** @type {() => (item: unknown, index: number) => boolean} */
-  #getShouldObserveItem;
-  /** @type {(key: string) => void} */
-  #onItemVisible;
+  /** @type {VisibilityConfig} */
+  #config;
   /** @type {IntersectionObserver | null} */
-  #intersectionObserver = null;
+  #observer = null;
   /** @type {Set<Element>} */
   #observed = new Set();
   #disposed = false;
 
-  /**
-   * @param {{
-   *   rows: () => Iterable<HTMLElement>,
-   *   getScrollElement: () => Element | undefined,
-   *   getThreshold: () => number,
-   *   getData: () => unknown[],
-   *   getShouldObserveItem: () => (item: unknown, index: number) => boolean,
-   *   onItemVisible: (key: string) => void,
-   * }} config
-   */
+  /** @param {VisibilityConfig} config */
   constructor(config) {
-    this.#rows = config.rows;
-    this.#getScrollElement = config.getScrollElement;
-    this.#getThreshold = config.getThreshold;
-    this.#getData = config.getData;
-    this.#getShouldObserveItem = config.getShouldObserveItem;
-    this.#onItemVisible = config.onItemVisible;
+    this.#config = config;
   }
 
-  /** Registers any newly-rendered, eligible row. Call from the composing controller's `hostUpdated()`. */
+  /** Registers newly rendered, eligible rows — once each. Call from `hostUpdated`. */
   schedule() {
     if (this.#disposed) return;
     const observer = this.#ensureObserver();
     if (!observer) return;
 
-    const data = this.#getData();
-    const shouldObserveItem = this.#getShouldObserveItem();
-    for (const row of this.#rows()) {
+    const data = this.#config.getData();
+    const shouldObserveItem = this.#config.getShouldObserveItem();
+    for (const row of this.#config.rows()) {
       if (this.#observed.has(row)) continue;
-      const index = Number(/** @type {HTMLElement} */ (row).dataset.index);
+      const index = Number(row.dataset.index);
       if (!shouldObserveItem(data[index], index)) continue;
       this.#observed.add(row);
       observer.observe(row);
     }
   }
 
-  /** Created lazily, once — SSR-safe, mirrors `RowMeasurer`'s own `ResizeObserver` guard. */
-  #ensureObserver() {
-    if (this.#intersectionObserver) return this.#intersectionObserver;
-    if (typeof IntersectionObserver === "undefined") return null;
-    this.#intersectionObserver = new IntersectionObserver(this.#handleIntersect, {
-      root: this.#getScrollElement(),
-      threshold: this.#getThreshold(),
-    });
-    document.addEventListener("visibilitychange", this.#handleVisibilityChange);
-    return this.#intersectionObserver;
-  }
-
-  #handleIntersect = (/** @type {IntersectionObserverEntry[]} */ entries) => {
-    if (document.visibilityState !== "visible") return;
-    for (const entry of entries) this.#reportIfIntersecting(entry);
-  };
-
-  #handleVisibilityChange = () => {
-    if (document.visibilityState !== "visible" || !this.#intersectionObserver) return;
-    for (const entry of this.#intersectionObserver.takeRecords()) this.#reportIfIntersecting(entry);
-  };
-
-  /** @param {IntersectionObserverEntry} entry */
-  #reportIfIntersecting(entry) {
-    if (!entry.isIntersecting) return;
-    const key = /** @type {HTMLElement} */ (entry.target).dataset.itemKey;
-    if (key !== undefined) this.#onItemVisible(key);
-  }
-
-  /** Drops observer registrations for rows that left the DOM. Call from the row `ref` on removal. */
+  /** Drops rows that left the DOM. Call from the row `ref` on removal. */
   releaseRows() {
-    if (!this.#intersectionObserver) return;
+    if (!this.#observer) return;
     for (const row of this.#observed) {
       if (row.isConnected) continue;
       this.#observed.delete(row);
-      this.#intersectionObserver.unobserve(row);
+      this.#observer.unobserve(row);
     }
   }
 
-  /** Forgets which rows are observed; the observer itself is re-armed lazily on the next `schedule()`. */
+  /** The observer is re-armed lazily on the next `schedule()`. */
   reset() {
     this.#disposed = false;
     this.#observed.clear();
-    this.#teardownObserver();
+    this.#teardown();
   }
 
-  /** Tears the observer and listener down; call from `hostDisconnected`. */
   dispose() {
     this.#disposed = true;
     this.#observed.clear();
-    this.#teardownObserver();
+    this.#teardown();
   }
 
-  #teardownObserver() {
-    this.#intersectionObserver?.disconnect();
-    this.#intersectionObserver = null;
+  /** Lazy, once — SSR-safe. */
+  #ensureObserver() {
+    if (this.#observer) return this.#observer;
+    if (typeof IntersectionObserver === "undefined") return null;
+    this.#observer = new IntersectionObserver(this.#handleIntersect, {
+      root: this.#config.getScrollElement(),
+      threshold: this.#config.getThreshold(),
+    });
+    document.addEventListener("visibilitychange", this.#handleVisibilityChange);
+    return this.#observer;
+  }
+
+  /** @param {IntersectionObserverEntry[]} entries */
+  #handleIntersect = (entries) => {
+    if (document.visibilityState !== "visible") return;
+    for (const entry of entries) this.#report(entry);
+  };
+
+  #handleVisibilityChange = () => {
+    if (document.visibilityState !== "visible" || !this.#observer) return;
+    for (const entry of this.#observer.takeRecords()) this.#report(entry);
+  };
+
+  /** @param {IntersectionObserverEntry} entry */
+  #report(entry) {
+    if (!entry.isIntersecting) return;
+    const key = /** @type {HTMLElement} */ (entry.target).dataset.itemKey;
+    if (key !== undefined) this.#config.onItemVisible(key);
+  }
+
+  #teardown() {
+    this.#observer?.disconnect();
+    this.#observer = null;
     document.removeEventListener("visibilitychange", this.#handleVisibilityChange);
   }
 }

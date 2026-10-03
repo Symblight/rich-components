@@ -12,3 +12,20 @@ export function reconcileMessages(messages, incoming, userId) {
   if (index === -1) return [...messages, resolved];
   return messages.with(index, resolved);
 }
+
+/** @type {WeakMap<import("../types/message.js").ChxMessage[], Map<string, number>>} */
+const indexCache = new WeakMap();
+
+/**
+ * Message id → index, memoized per array reference — O(1) lookups across repeated reads.
+ * @param {import("../types/message.js").ChxMessage[]} messages
+ * @returns {Map<string, number>}
+ */
+export function indexById(messages) {
+  let index = indexCache.get(messages);
+  if (!index) {
+    index = new Map(messages.map((message, i) => [message.id, i]));
+    indexCache.set(messages, index);
+  }
+  return index;
+}

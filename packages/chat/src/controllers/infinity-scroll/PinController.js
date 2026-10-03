@@ -1,3 +1,5 @@
+import { distanceToBottom } from "../../utils/dom.js";
+
 /** px from the true bottom that counts as "the very bottom" for resuming the follow. */
 const FOLLOW_THRESHOLD = 8;
 /** without `scrollend` (Safari < 26) a smooth scroll counts as done after this long with no `scroll` event */
@@ -7,11 +9,25 @@ const GESTURES = /** @type {const} */ (["wheel", "touchstart", "keydown", "point
 const PINNED_CLASS = "infinity-scroll__content_pinned";
 
 /**
+ * @typedef {{
+ *   getScrollElement: () => HTMLElement | undefined,
+ *   getContentElement: () => HTMLElement | undefined,
+ *   getEnabled: () => boolean,
+ *   indexOfKey: (key: string | number) => number,
+ *   getOffset: (index: number) => number | undefined,
+ *   scrollTo: (offset: number, behavior: "auto" | "smooth" | "instant") => void,
+ *   getScrollBehavior: () => "auto" | "smooth" | "instant",
+ *   onFollowChange: (following: boolean) => void,
+ * }} PinConfig
+ */
+
+/**
  * `scroll-mode="pin-top"`: scrolls a sent item to the top once and reserves the space below it in
  * CSS (`PINNED_CLASS` + `--_chx-pin-offset`), so layout never clamps the scroll. Also owns whether
- * the list follows new content: off after a pin and on any upward scroll, back on at the very bottom.
+ * the list follows new content: off after a pin or any upward scroll, back on at the very bottom.
  */
 export class PinController {
+  /** @type {PinConfig} */
   #config;
 
   /** @type {string | number | undefined} */
@@ -31,18 +47,7 @@ export class PinController {
   /** @type {HTMLElement | undefined} */
   #attachedTo;
 
-  /**
-   * @param {{
-   *   getScrollElement: () => HTMLElement | undefined,
-   *   getContentElement: () => HTMLElement | undefined,
-   *   getEnabled: () => boolean,
-   *   indexOfKey: (key: string | number) => number,
-   *   getOffset: (index: number) => number | undefined,
-   *   scrollTo: (offset: number, behavior: "auto" | "smooth" | "instant") => void,
-   *   getScrollBehavior: () => "auto" | "smooth" | "instant",
-   *   onFollowChange: (following: boolean) => void,
-   * }} config
-   */
+  /** @param {PinConfig} config */
   constructor(config) {
     this.#config = config;
   }
@@ -115,7 +120,7 @@ export class PinController {
     if (this.#pinning && !SCROLLEND_SUPPORTED) this.#restartPinningTimer();
     if (!this.#config.getEnabled() || this.#pinning) return;
 
-    const atVeryBottom = el.scrollHeight - el.clientHeight - top <= FOLLOW_THRESHOLD;
+    const atVeryBottom = distanceToBottom(el) <= FOLLOW_THRESHOLD;
     if (scrolledUp) this.#setFollowing(false);
     else if (atVeryBottom && !this.#suppressResume) this.#setFollowing(true);
   }

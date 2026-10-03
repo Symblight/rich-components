@@ -13,7 +13,7 @@ import { ConversationModeController } from "../../controllers/chat/ConversationM
 import { DeliveryController } from "../../controllers/chat/DeliveryController.js";
 import { PaginationController } from "../../controllers/chat/PaginationController.js";
 import { ScrollMemoryController } from "../../controllers/chat/ScrollMemoryController.js";
-import { TypingController } from "../../controllers/chat/TypingController.js";
+import { PresenceController } from "../../controllers/chat/PresenceController.js";
 import { RealtimeSyncController } from "../../controllers/chat/RealtimeSyncController.js";
 import { DEFAULT_CONVERSATION_ID } from "../../constants.js";
 import { ApiRegistry } from "../../api/ApiRegistry.js";
@@ -81,10 +81,8 @@ export class ChxChat extends LitElement {
   #visibleCache; // memo for #visibleMessages, invalidated by reference on every #internalMessages write
   /** @type {PaginationController} */
   #pagination; // assigned in the constructor
-  /** @type {string | undefined} */
-  #unkeyedTypingId; // conversation the last conversation-less #setTyping/onTyping was attributed to
-  /** @type {TypingController} */
-  #typing; // assigned in the constructor
+  /** @type {PresenceController} */
+  #presence; // assigned in the constructor
   /** @type {RealtimeSyncController} */
   #realtimeSync; // assigned in the constructor
   /** @type {DropTargetController} */
@@ -209,11 +207,11 @@ export class ChxChat extends LitElement {
       getConversationId: () => this.activeConversationId,
     });
 
-    this.#typing = new TypingController(this);
+    this.#presence = new PresenceController(this, () => this.activeConversationId);
 
     this.#realtimeSync = new RealtimeSyncController({
       getActiveConversationId: () => this.activeConversationId,
-      setTyping: (isTyping, conversationId) => this.#setTyping(isTyping, conversationId),
+      setTyping: (isTyping, conversationId) => this.#presence.setTyping(isTyping, conversationId),
       clearActiveConversation: () => {
         this.activeConversationId = undefined;
         this.dispatchEvent(
@@ -306,11 +304,10 @@ export class ChxChat extends LitElement {
       "presence",
       this,
       {
-        setTyping: (isTyping, conversationId) => this.#setTyping(isTyping, conversationId),
-        isTyping: (conversationId) =>
-          this.#typing.isTyping(conversationId ?? this.activeConversationId),
+        setTyping: (isTyping, conversationId) => this.#presence.setTyping(isTyping, conversationId),
+        isTyping: (conversationId) => this.#presence.isTyping(conversationId),
       },
-      () => [this.#typing.isTyping(this.activeConversationId)],
+      () => [this.#presence.isTyping()],
     );
   }
 
@@ -392,7 +389,7 @@ export class ChxChat extends LitElement {
     return this.adapter?.subscribe?.({
       onMessage: (message) => this.#addMessage(message),
       onChunk: (item) => this.#stream.applyChunk(item),
-      onTyping: (isTyping) => this.#setTyping(isTyping), // unkeyed hook (no conversationId) → active conversation, see #setTyping
+      onTyping: (isTyping) => this.#presence.setTyping(isTyping), // unkeyed hook (no conversationId) → active conversation, see PresenceController
       onEvent: (event) => this.#realtimeSync.handleEvent(event),
       onConnectionChange: (state, error) => {
         this.connectionState = state;
@@ -479,33 +476,6 @@ export class ChxChat extends LitElement {
       this.#internalMessages.filter((m) => m.conversationId !== conversationId),
       conversationId,
     );
-  }
-
-  /** @param {boolean} isTyping @param {string} [conversationId] */
-  #setTyping(isTyping, conversationId) {
-    if (conversationId !== undefined) {
-      this.#typing.setTyping(conversationId, isTyping);
-      return;
-    }
-    // Conversation-less signal (this method's own 1-arg form, or adapter.subscribe's onTyping, which
-    // carries no conversationId): it only ever means "in whatever is active right now", so drop the
-    // attribution the previous one latched — nothing else would ever reset it.
-    this.#clearUnkeyedTyping(this.activeConversationId);
-    this.#unkeyedTypingId = isTyping ? this.activeConversationId : undefined;
-    this.#typing.setTyping(this.activeConversationId, isTyping);
-  }
-
-  /**
-   * Clears the conversation a conversation-less `setTyping(true)` was attributed to — on the next
-   * unkeyed signal and on an `activeConversationId` switch. Keyed (realtime `typing` event) state is
-   * untouched, which is the whole point of `TypingController` being per-conversation.
-   * @param {string} [except] skip when it's still the same conversation — it's about to be re-set
-   */
-  #clearUnkeyedTyping(except) {
-    const previous = this.#unkeyedTypingId;
-    if (previous === undefined || previous === except) return;
-    this.#unkeyedTypingId = undefined;
-    this.#typing.setTyping(previous, false);
   }
 
   /**
@@ -716,7 +686,7 @@ export class ChxChat extends LitElement {
     list.dragging = this.#dropTarget.dragging;
     list.messages = this.#visibleMessages;
     list.partElements = this.partElements;
-    list.typing = this.#typing.isTyping(this.activeConversationId);
+    list.typing = this.#presence.isTyping();
     list.streaming = this.#delivery.isWaitingForReply();
     list.loading = this.#pagination.loading;
     list.emptyState = this.#conversationMode.isEmptyState;
@@ -749,11 +719,11 @@ export class ChxChat extends LitElement {
         changedProperties.get("activeConversationId")
       );
       this.#scrollMemory.handleConversationChange(previousId);
-      // Keyed typing state survives a switch untouched (TypingController is per-conversation, so
+      // Keyed typing state survives a switch untouched (PresenceController is per-conversation, so
       // switching just reads the now-active conversation's own value) — only an unkeyed signal's
       // attribution to the conversation being left is dropped, since it was never about that
-      // conversation in the first place. See #setTyping.
-      this.#clearUnkeyedTyping();
+      // conversation in the first place. See PresenceController.
+      this.#presence.handleConversationChange();
       if (
         this.activeConversationId !== undefined &&
         !this.#conversationMode.isEmptyState &&

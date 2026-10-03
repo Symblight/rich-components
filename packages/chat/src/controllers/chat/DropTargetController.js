@@ -4,65 +4,46 @@ import { getFiles } from "@atlaskit/pragmatic-drag-and-drop/utils/get-files";
 
 /**
  * @typedef {import("lit").ReactiveController} ReactiveController
- * @typedef {import("lit").ReactiveControllerHost} ReactiveControllerHost
+ * @typedef {import("lit").ReactiveControllerHost & HTMLElement} Host
+ * @typedef {{onDrop: (files: File[]) => void, canDrop?: () => boolean}} DropTargetConfig
  */
 
 /**
- * Wraps @atlaskit/pragmatic-drag-and-drop's external (OS file) drop target
- * for a single host element — registers on `hostConnected`/tears down on
- * `hostDisconnected`, tracks `dragging` for a dashed-border/hint visual
- * state, and hands accepted files to `onDrop`. Deliberately generic — it
- * doesn't know about `chx-attachments`/slots, that's the host's job (see
- * `chx-chat`'s own `onDrop`/`canDrop` wiring). Must be registered on a host
- * that's reachable via `Element.closest()` from a `window`-level listener —
- * i.e. not nested inside another component's shadow root, found live while
- * chasing why a drop target inside a shadow-nested host never fired.
+ * OS file drop target (pragmatic-drag-and-drop) for one host, tracking `dragging`. The host must be
+ * reachable via `closest()` from a window-level listener — not nested in another shadow root.
  * @implements {ReactiveController}
  */
 export class DropTargetController {
+  /** @type {Host} */
+  #host;
+  /** @type {DropTargetConfig} */
+  #config;
   /** @type {(() => void) | undefined} */
   #cleanup;
+  #dragging = false;
 
-  /**
-   * @param {ReactiveControllerHost & HTMLElement} host
-   * @param {{onDrop: (files: File[]) => void, canDrop?: () => boolean}} options
-   */
-  constructor(host, options) {
-    /** @type {ReactiveControllerHost & HTMLElement} */
-    this.host = host;
-
-    /** @type {(files: File[]) => void} */
-    this.onDrop = options.onDrop;
-
-    /** @type {() => boolean} Extra host-level gate alongside the built-in "carries files" check. */
-    this.canDrop = options.canDrop ?? (() => true);
-
-    /** @type {boolean} True while an OS file drag carrying files is over the host. */
-    this.dragging = false;
-
-    /** @type {(() => void) | undefined} */
-    this.#cleanup = undefined;
-
+  /** @param {Host} host @param {DropTargetConfig} config */
+  constructor(host, config) {
+    this.#host = host;
+    this.#config = config;
     host.addController(this);
   }
 
-  /** @param {boolean} value */
-  setDragging(value) {
-    if (this.dragging === value) return;
-    this.dragging = value;
-    this.host.requestUpdate();
+  /** An OS file drag carrying files is over the host. */
+  get dragging() {
+    return this.#dragging;
   }
 
   hostConnected() {
     this.#cleanup = dropTargetForExternal({
-      element: this.host,
-      canDrop: ({ source }) => containsFiles({ source }) && this.canDrop(),
-      onDragEnter: () => this.setDragging(true),
-      onDragLeave: () => this.setDragging(false),
+      element: this.#host,
+      canDrop: ({ source }) => containsFiles({ source }) && (this.#config.canDrop?.() ?? true),
+      onDragEnter: () => this.#setDragging(true),
+      onDragLeave: () => this.#setDragging(false),
       onDrop: ({ source }) => {
-        this.setDragging(false);
+        this.#setDragging(false);
         const files = getFiles({ source });
-        if (files.length > 0) this.onDrop(files);
+        if (files.length > 0) this.#config.onDrop(files);
       },
     });
   }
@@ -70,5 +51,12 @@ export class DropTargetController {
   hostDisconnected() {
     this.#cleanup?.();
     this.#cleanup = undefined;
+  }
+
+  /** @param {boolean} value */
+  #setDragging(value) {
+    if (this.#dragging === value) return;
+    this.#dragging = value;
+    this.#host.requestUpdate();
   }
 }

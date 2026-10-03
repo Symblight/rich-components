@@ -162,7 +162,7 @@ function createConversationsAdapter() {
  *
  * The "Simulate…" buttons drive `adapter.subscribe`'s `onEvent` via `emitEvent`:
  * - "Simulate typing" — fires a `typing` event for the active conversation. Typing is now
- *   per-conversation in `chx-chat` (`TypingController` keyed by `conversationId`), so this single event
+ *   per-conversation in `chx-chat` (`PresenceController` keyed by `conversationId`), so this single event
  *   lights up both indicators with no story glue: the chat one (`RealtimeSyncController` →
  *   `setTyping(isTyping, conversationId)` → `<chx-typing-indicator slot="typing">` in
  *   `chx-message-list` for the active conversation) and the sidebar row's own `typing` slot
@@ -248,7 +248,7 @@ export const ConversationsList = {
         // already-cached conversation isn't a message mutation, so chx-messages-change won't fire for it.
         const messages = chatEl?.store.getMessages() ?? [];
         if (messages.length) setPreview(id, formatPreview(messages[messages.length - 1]));
-        // Typing needs no story reconciliation anymore — chx-chat's TypingController is per-conversation,
+        // Typing needs no story reconciliation anymore — chx-chat's PresenceController is per-conversation,
         // so switching back to a still-typing conversation restores its chat indicator on its own.
       });
     };

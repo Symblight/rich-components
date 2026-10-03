@@ -8,7 +8,7 @@ import "@symblight/wc-material/icon";
 import thoughtIcon from "@material-design-icons/svg/outlined/psychology.svg?raw";
 import chevronIcon from "@material-design-icons/svg/outlined/expand_more.svg?raw";
 
-import { RowCompactController } from "../../../controllers/agent/RowCompactController.js";
+import { consumeRowCompact } from "../../../context/message-row-context.js";
 import tokens from "../../../styles/tokens.css?inline";
 import rowStyles from "../agent-row.css?inline";
 import styles from "./thought.css?inline";
@@ -62,7 +62,7 @@ export class ChxThought extends LitElement {
     /** Follows the message row's `compact` inside a chat. @type {boolean} */
     this.compact = false;
 
-    new RowCompactController(this);
+    consumeRowCompact(this);
   }
 
   /** @returns {import("lit").CSSResultGroup} */

@@ -2,107 +2,75 @@
 const LOAD_THRESHOLD = 450;
 
 /**
- * Decides *when* to ask for an older page. Fetching itself is the consumer's `onLoadMore` — awaited
- * directly (same contract as v2, unlike v1's fire-and-forget `chx-load-more` event). Owns `loading`;
- * the host mirrors it for rendering.
- *
- * Does **not** auto-chain another `maybeLoad()` after a load completes, even for a page that leaves
- * `scrollTop` still under `LOAD_THRESHOLD` (e.g. one shorter than the viewport) — an earlier version
- * did, via its own `requestAnimationFrame(() => this.maybeLoad())`, but that re-check ran before the
- * list's own scroll-position correction for the just-landed page could land (deferred a frame or more
- * under `noVirtualization`, see `PlainListController`), so it routinely read a stale, still-near-top
- * `scrollTop` and fired a second, spurious fetch — confirmed live by removing exactly that block.
- * Whatever legitimate re-check a short page still needs happens through the host's own normal
- * `hostUpdated()`/scroll-driven `maybeLoad()` calls instead, once a real render/scroll event happens
- * to land after the correction — not guaranteed as eager, but never spuriously wrong.
+ * @typedef {{
+ *   getScrollElement: () => Element | undefined,
+ *   getData: () => unknown[],
+ *   getHasMore: () => boolean,
+ *   getOnLoadMore: () => () => Promise<unknown>,
+ *   settled: () => Promise<unknown>,
+ *   emit: (type: string, detail?: unknown) => void,
+ * }} LoadMoreConfig
+ */
+
+/**
+ * Decides *when* to ask for an older page; the consumer's awaited `onLoadMore` fetches it. Never
+ * re-checks on its own after a load — that ran before the list's scroll correction landed and
+ * fired a spurious second fetch. The host's next render/scroll does the re-check instead.
  */
 export class LoadMoreController {
-  /** @type {() => Element | undefined} */
-  #getScrollElement;
-  /** @type {() => unknown[]} */
-  #getData;
-  /** @type {() => boolean} */
-  #getHasMore;
-  /** @type {() => () => Promise<unknown>} */
-  #getOnLoadMore;
-  /** @type {() => Promise<unknown>} */
-  #settled;
-  /** @type {(type: string, detail?: unknown) => void} */
-  #emit;
-
-  /** Item count at which a load produced nothing — blocks a re-check until the list actually
-   *  changes, rather than until the offset happens to move. @type {number | null} */
+  /** @type {LoadMoreConfig} */
+  #config;
+  /** Count at which a load produced nothing — blocks re-checks until the list changes. @type {number | null} */
   #blockedAtCount = null;
   #disposed = false;
 
-  /** Whether a page fetch is in flight — the host mirrors this for rendering. */
+  /** A page fetch is in flight — mirrored by the host for rendering. */
   loading = false;
 
-  /**
-   * @param {{
-   *   getScrollElement: () => Element | undefined,
-   *   getData: () => unknown[],
-   *   getHasMore: () => boolean,
-   *   getOnLoadMore: () => () => Promise<unknown>,
-   *   settled: () => Promise<unknown>,
-   *   emit: (type: string, detail?: unknown) => void,
-   * }} config
-   */
+  /** @param {LoadMoreConfig} config */
   constructor(config) {
-    this.#getScrollElement = config.getScrollElement;
-    this.#getData = config.getData;
-    this.#getHasMore = config.getHasMore;
-    this.#getOnLoadMore = config.getOnLoadMore;
-    this.#settled = config.settled;
-    this.#emit = config.emit;
+    this.#config = config;
   }
 
-  /**
-   * Safe to call from anywhere, as often as you like: `loading` is set synchronously before the
-   * first await, so it cannot run twice at once.
-   */
+  /** Safe to call as often as you like: `loading` is set before the first await. */
   async maybeLoad() {
-    if (this.#disposed || this.loading || !this.#getHasMore()) return;
+    const config = this.#config;
+    if (this.#disposed || this.loading || !config.getHasMore()) return;
 
-    const count = this.#getData().length;
+    const count = config.getData().length;
     if (this.#blockedAtCount === count) return;
 
-    const el = this.#getScrollElement();
-
+    const el = config.getScrollElement();
     if ((el ? el.scrollTop : Infinity) > LOAD_THRESHOLD) return;
 
     this.#blockedAtCount = null;
     this.loading = true;
-    this.#emit("chx-load-more-start");
+    config.emit("chx-load-more-start");
 
     try {
-      await this.#getOnLoadMore()();
+      await config.getOnLoadMore()();
     } catch (error) {
       if (!this.#disposed) {
-        // an unheard error would otherwise stop the list growing in silence
         console.error("[chx-infinity-scroll] onLoadMore failed", error);
-        this.#emit("chx-load-more-error", error);
+        config.emit("chx-load-more-error", error);
       }
     } finally {
       this.loading = false;
-
-      // everything past here touches the host, so a disconnect stops it
-      if (!this.#disposed) await this.#settled();
+      if (!this.#disposed) await config.settled();
       if (!this.#disposed) {
-        this.#emit("chx-load-more-end");
-        const grown = this.#getData().length > count;
-        this.#blockedAtCount = grown ? null : this.#getData().length;
+        config.emit("chx-load-more-end");
+        const length = config.getData().length;
+        this.#blockedAtCount = length > count ? null : length;
       }
     }
   }
 
-  /** re-arms the loader after the host is re-attached to the DOM */
+  /** Re-arms after the host is re-attached. */
   revive() {
     this.#disposed = false;
     this.#blockedAtCount = null;
   }
 
-  /** Stops `maybeLoad()` acting past this point. */
   dispose() {
     this.#disposed = true;
   }

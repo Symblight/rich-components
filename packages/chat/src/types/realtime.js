@@ -5,7 +5,7 @@
  * @property {"typing"} type
  * @property {string} conversationId
  * @property {string} userId - carried for forward-compat; not yet distinguished by `chx-chat` —
- *   TypingController is still one global boolean per conversation, not per-user
+ *   PresenceController is still one boolean per conversation, not per-user
  * @property {boolean} isTyping
  */
 

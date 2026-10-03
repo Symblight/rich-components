@@ -16,11 +16,13 @@ import { FocusBehaviorController } from "../../controllers/message-list/FocusBeh
 import { BottomAnchorController } from "../../controllers/message-list/BottomAnchorController.js";
 import { ReadTrackingController } from "../../controllers/message-list/ReadTrackingController.js";
 import { DividerController } from "../../controllers/message-list/DividerController.js";
-import { GroupController } from "../../controllers/message-list/GroupController.js";
+import { groupAt } from "./group.js";
 import { PartRenderer } from "./PartRenderer.js";
 import { StatusController } from "../../controllers/message-list/StatusController.js";
 import { StickyController } from "../../controllers/message-list/StickyController.js";
 import { CONNECT_REGISTRY } from "../../api/keys.js";
+import { indexById } from "../../utils/messages.js";
+import { pollFrames } from "../../utils/dom.js";
 import tokens from "../../styles/tokens.css?inline";
 import styles from "./message-list.css?inline";
 
@@ -185,8 +187,6 @@ export class ChxMessageList extends LitElement {
   /** Last known author per authorId, rebuilt when `messages` changes by reference.
    *  @type {{messages: ChxMessage[], byId: Map<string, import("../../types/message.js").ChxMessageAuthor>} | undefined} */
   #knownAuthors;
-  /** @type {GroupController} */
-  #groups; // same-author runs — assigned in the constructor, below
   /** @type {StickyController} */
   #stickyController; // floating stuck-section date label — assigned in the constructor, below
   /** @type {StatusController} */
@@ -226,6 +226,9 @@ export class ChxMessageList extends LitElement {
   };
   #itemKey = (/** @type {ChxMessage} */ message, /** @type {number} */ index) =>
     message?.id ?? index;
+  /** @param {number} index */
+  #groupAt = (index) =>
+    groupAt(this.messages, index, (message, i) => this.#dividerController.shouldShow(message, i));
   /** @type {import("../../context/chat-api-context.js").ChatApiRegistry | undefined} */
   #registry; // pushed by chx-chat, see [CONNECT_REGISTRY]
   /** @type {(() => void) | undefined} */
@@ -341,11 +344,6 @@ export class ChxMessageList extends LitElement {
 
     this.#dividerController = new DividerController({ getMessages: () => this.messages });
 
-    this.#groups = new GroupController({
-      getMessages: () => this.messages,
-      hasDividerBefore: (message, index) => this.#dividerController.shouldShow(message, index),
-    });
-
     this.#partRenderer = new PartRenderer({ getPartElements: () => this.partElements });
 
     this.#status = new StatusController(this, {
@@ -424,21 +422,16 @@ export class ChxMessageList extends LitElement {
    * @returns {Promise<boolean>}
    */
   async #scrollToMessage(messageId, { align = "start", behavior } = {}) {
-    const index = this.messages.findIndex((message) => message.id === messageId);
-    if (index === -1) return false;
+    const index = indexById(this.messages).get(messageId);
+    if (index === undefined) return false;
     await this.updateComplete;
     const list = this.#infinityScrollElement;
     if (!list) return false;
     list.scrollToIndex(index, { align, behavior });
     const selector = `[data-message-id="${CSS.escape(messageId)}"]`;
-    for (let frame = 0; frame < 30; frame++) {
-      if (list.renderRoot.querySelector(selector)) {
-        list.scrollToIndex(index, { align, behavior }); // re-align at the measured size
-        return true;
-      }
-      await new Promise((resolve) => requestAnimationFrame(resolve));
-    }
-    return false;
+    if (!(await pollFrames(() => list.renderRoot.querySelector(selector)))) return false;
+    list.scrollToIndex(index, { align, behavior }); // re-align at the measured size
+    return true;
   }
 
   /** Discovers the app's `<chx-message slot="message">` pattern; renders nothing itself.
@@ -512,7 +505,7 @@ export class ChxMessageList extends LitElement {
     let size = lines * density.lineHeight + density.padding;
     if (parts.some((part) => part.type === "attachment")) size += ESTIMATE.attachments;
 
-    const { groupStart, groupEnd } = this.#groups.at(index);
+    const { groupStart, groupEnd } = this.#groupAt(index);
     // regular own rows hide their meta and avatar in CSS, so their author adds no height
     const authorShown = this.#authorFor(message) !== undefined && (this.compact || !message.own);
     if (groupStart && authorShown) size += density.meta;
@@ -584,7 +577,7 @@ export class ChxMessageList extends LitElement {
       selected,
       compact: this.compact,
       actionable: this.#focusBehavior.isActionable(message.id),
-      ...this.#groups.at(index),
+      ...this.#groupAt(index),
     };
     const partNames = messagePartNames(message, { streaming, compact: this.compact, selected });
     // a part missing `id` was already console.error'd by validateMessages — excluded here too

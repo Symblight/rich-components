@@ -4,73 +4,54 @@ import {
   setCaretOffset,
   isCaretCollapsed,
 } from "../../components/code-block/caret.js";
-import { UndoController } from "./UndoController.js";
+import { UndoStack } from "../../components/code-block/undo-stack.js";
 
-/** A trailing `\n` in a contenteditable renders no empty line, so there's nowhere for the caret to
- *  go after Enter at the end. A last `<br>` gives that line its height; `textContent` and the
- *  caret's character offsets both skip it.
- *  @param {HTMLElement} container */
+/** A trailing `\n` renders no empty line in a contenteditable; a last `<br>` gives the caret one
+ *  (`textContent` and caret offsets both skip it). @param {HTMLElement} container */
 function ensureTrailingBreak(container) {
   if (container.lastChild instanceof HTMLBRElement) return;
   container.appendChild(document.createElement("br"));
 }
 
-/** Coalesces re-highlighting while typing — a full Lezer reparse per keystroke on a large file is
- *  wasted work otherwise, since only the last one in a burst is ever shown. */
+/** Coalesces re-highlighting while typing — only the last reparse in a burst is ever shown. */
 const HIGHLIGHT_DEBOUNCE_MS = 150;
 
 /**
- * Owns chx-code-block's editable contenteditable body: composition-safe input handling, debounced
- * re-highlighting with caret preservation, undo/redo (via UndoController), and arrow-key/Backspace
- * boundary detection that hands focus back to the outer textbox. Only exercised while `editable`
- * is true — the host stays a thin rendering shell for everything else.
+ * @typedef {import("lit").ReactiveControllerHost & EventTarget} Host
+ * @typedef {{
+ *   getContainer: () => HTMLElement | null,
+ *   getCode: () => string,
+ *   setCode: (code: string) => void,
+ *   getHighlightedHTML: () => string,
+ *   setHighlightedHTML: (html: string) => void,
+ *   highlight: () => string,
+ * }} EditableBodyConfig
+ */
+
+/**
+ * chx-code-block's editable body: composition-safe input, debounced re-highlighting with caret
+ * preservation, undo/redo, and boundary keys that hand focus back to the outer textbox.
  */
 export class EditableBodyController {
-  /** @type {import("lit").ReactiveControllerHost & EventTarget} */
+  /** @type {Host} */
   #host;
-  /** @type {() => HTMLElement | null} */
-  #getContainer;
-  /** @type {() => string} */
-  #getCode;
-  /** @type {(code: string) => void} */
-  #setCode;
-  /** @type {() => string} */
-  #getHighlightedHTML;
-  /** @type {(html: string) => void} */
-  #setHighlightedHTML;
-  /** @type {() => string} */
-  #highlight;
-
-  #undo = new UndoController();
+  /** @type {EditableBodyConfig} */
+  #config;
+  #undo = new UndoStack();
   #isComposing = false;
   /** @type {number | null} */
   #pendingCaretOffset = null;
   /** @type {ReturnType<typeof setTimeout> | undefined} */
   #debounceTimer;
 
-  /**
-   * @param {import("lit").ReactiveControllerHost & EventTarget} host
-   * @param {{
-   *   getContainer: () => HTMLElement | null,
-   *   getCode: () => string,
-   *   setCode: (code: string) => void,
-   *   getHighlightedHTML: () => string,
-   *   setHighlightedHTML: (html: string) => void,
-   *   highlight: () => string,
-   * }} config
-   */
+  /** @param {Host} host @param {EditableBodyConfig} config */
   constructor(host, config) {
     this.#host = host;
-    this.#getContainer = config.getContainer;
-    this.#getCode = config.getCode;
-    this.#setCode = config.setCode;
-    this.#getHighlightedHTML = config.getHighlightedHTML;
-    this.#setHighlightedHTML = config.setHighlightedHTML;
-    this.#highlight = config.highlight;
+    this.#config = config;
     host.addController(this);
   }
 
-  /** Cancels a pending debounced re-highlight so it doesn't fire against a gone host. */
+  /** A pending re-highlight must not fire against a gone host. */
   hostDisconnected() {
     clearTimeout(this.#debounceTimer);
   }
@@ -79,18 +60,17 @@ export class EditableBodyController {
   scheduleHighlight() {
     clearTimeout(this.#debounceTimer);
     this.#debounceTimer = setTimeout(() => {
-      this.#setHighlightedHTML(this.#highlight());
+      this.#config.setHighlightedHTML(this.#config.highlight());
     }, HIGHLIGHT_DEBOUNCE_MS);
   }
 
-  /** Sets the contenteditable's innerHTML imperatively and restores the caret — a lit-html binding
-   *  there would fight the browser's own DOM mutations from typing. Call from the host's updated()
-   *  whenever highlightedHTML/editable changed. */
+  /** Imperative innerHTML + caret restore — a binding would fight the browser's typing mutations.
+   *  Call from `updated()` when highlightedHTML/editable changed. */
   syncDOM() {
-    const container = this.#getContainer();
+    const container = this.#config.getContainer();
     if (!container) return;
     // Trust boundary: safe only because highlightToHTML/escapeHtml escapes every text run.
-    container.innerHTML = this.#getHighlightedHTML();
+    container.innerHTML = this.#config.getHighlightedHTML();
     ensureTrailingBreak(container);
     if (this.#pendingCaretOffset === null) return;
     setCaretOffset(container, this.#pendingCaretOffset);
@@ -105,34 +85,30 @@ export class EditableBodyController {
   /** Re-derives code from the contenteditable's plain-text content.
    * @param {HTMLElement} container */
   #applyEdit(container) {
-    this.#undo.push(this.#getCode());
+    this.#undo.push(this.#config.getCode());
     this.#pendingCaretOffset = getCaretOffset(container);
-    this.#setCode(container.textContent ?? "");
-    this.#emit("chx-code-block-change", { code: this.#getCode() });
+    this.#config.setCode(container.textContent ?? "");
+    this.#emit("chx-code-block-change", { code: this.#config.getCode() });
   }
 
-  /** Restores the previous undo step, if any, placing the caret at the end. */
   undo() {
-    const value = this.#undo.undo(this.#getCode());
-    if (value === undefined) return;
-    this.#setCode(value);
-    this.#pendingCaretOffset = value.length;
-    this.#emit("chx-code-block-change", { code: value });
+    this.#restore(this.#undo.undo(this.#config.getCode()));
   }
 
-  /** Re-applies the next redo step, if any, placing the caret at the end. */
   redo() {
-    const value = this.#undo.redo(this.#getCode());
+    this.#restore(this.#undo.redo(this.#config.getCode()));
+  }
+
+  /** Applies an undo/redo step, caret at the end. @param {string | undefined} value */
+  #restore(value) {
     if (value === undefined) return;
-    this.#setCode(value);
+    this.#config.setCode(value);
     this.#pendingCaretOffset = value.length;
     this.#emit("chx-code-block-change", { code: value });
   }
 
-  /** Inserts `text` as a plain text node at the caret, replacing any active selection. No-ops if
-   *  the live selection isn't actually inside `container` — a stale/foreign selection would
-   *  otherwise land the text wherever that selection happens to be.
-   * @param {string} text @param {HTMLElement} container */
+  /** Replaces the selection with plain `text` — only if the selection is inside `container`.
+   *  @param {string} text @param {HTMLElement} container */
   #insertPlainText(text, container) {
     const selection = getSelectionFor(container);
     if (!selection || selection.rangeCount === 0) return;
@@ -156,7 +132,7 @@ export class EditableBodyController {
     this.#applyEdit(/** @type {HTMLElement} */ (event.currentTarget));
   };
 
-  /** Marks an IME composition as in progress, so `handleInput` defers to `handleCompositionEnd`. */
+  /** `handleInput` defers to `handleCompositionEnd` while composing. */
   handleCompositionStart = () => {
     this.#isComposing = true;
   };
@@ -167,10 +143,8 @@ export class EditableBodyController {
     this.#applyEdit(/** @type {HTMLElement} */ (event.currentTarget));
   };
 
-  /** Enter inserts a literal "\n"; arrow keys and Backspace at a boundary hand focus back to the
-   *  outer textbox instead of doing nothing (see PasteNodeView's #handleBoundary); Mod-Z/Mod-Y run
-   *  this component's own undo/redo — stopEvent keeps them from ever reaching the outer editor.
-   * @param {KeyboardEvent} event */
+  /** Enter inserts "\n"; arrows/Backspace at a boundary hand focus back to the outer textbox;
+   *  Mod-Z/Mod-Y are this block's own undo/redo. @param {KeyboardEvent} event */
   handleKeydown = (event) => {
     const container = /** @type {HTMLElement} */ (event.currentTarget);
     const mod = event.metaKey || event.ctrlKey;
@@ -202,7 +176,7 @@ export class EditableBodyController {
   /** @param {KeyboardEvent} event @param {HTMLElement} container @returns {"start" | "end" | null} */
   #boundaryDirection(event, container) {
     if (event.shiftKey || !isCaretCollapsed(container)) return null;
-    const code = this.#getCode();
+    const code = this.#config.getCode();
     const offset = getCaretOffset(container);
     switch (event.key) {
       case "ArrowLeft":

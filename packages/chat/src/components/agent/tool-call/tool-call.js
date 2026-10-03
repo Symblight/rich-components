@@ -24,7 +24,7 @@ import cancelledIcon from "@material-design-icons/svg/outlined/cancel.svg?raw";
 import rejectedIcon from "@material-design-icons/svg/outlined/block.svg?raw";
 import chevronIcon from "@material-design-icons/svg/outlined/expand_more.svg?raw";
 
-import { RowCompactController } from "../../../controllers/agent/RowCompactController.js";
+import { consumeRowCompact } from "../../../context/message-row-context.js";
 import tokens from "../../../styles/tokens.css?inline";
 import visuallyHidden from "../../../styles/visually-hidden.css?inline";
 import rowStyles from "../agent-row.css?inline";
@@ -148,7 +148,7 @@ export class ChxToolCall extends LitElement {
      *  @type {boolean} */
     this.hasContent = false;
 
-    new RowCompactController(this);
+    consumeRowCompact(this);
   }
 
   /** @returns {import("lit").CSSResultGroup} */

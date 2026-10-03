@@ -30,6 +30,14 @@
   justify-content: flex-start;
 }
 
+/* scroll-mode="pin-top", toggled by PinController while a pin is active: everything from the pinned
+   row down fills at least one viewport, in layout, never a frame late. Top-aligned regardless of
+   content-align, so the reserved space always falls below. */
+.infinity-scroll__content_pinned {
+  justify-content: flex-start;
+  min-height: calc(100% + var(--_chx-pin-offset, 0px));
+}
+
 /* footer slot follows the content: sits right under the last item, pinned to the bottom with it */
 .infinity-scroll__content > slot[name="footer"] {
   display: block;

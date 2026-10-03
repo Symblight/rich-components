@@ -6,6 +6,14 @@ import { ref } from "lit/directives/ref.js";
 import { InfinityScrollController } from "../../controllers/infinity-scroll/InfinityScrollController.js";
 import styles from "./infinity-scroll.css?inline";
 
+/** `"smooth"` drops to `"auto"` under prefers-reduced-motion.
+ * @param {"auto" | "smooth" | "instant"} behavior @returns {"auto" | "smooth" | "instant"} */
+function motionSafe(behavior) {
+  return behavior === "smooth" && matchMedia("(prefers-reduced-motion: reduce)").matches
+    ? "auto"
+    : behavior;
+}
+
 /**
  * @tag chx-infinity-scroll
  * @summary Generic virtualized, load-more-aware scroll container, message-agnostic.
@@ -25,6 +33,7 @@ export class ChxInfinityScroll extends LitElement {
     useScrollendEvent: { type: Boolean, attribute: "use-scrollend-event" },
     scrollBehavior: { type: String, attribute: "scroll-behavior" },
     contentAlign: { type: String, attribute: "content-align", reflect: true },
+    scrollMode: { type: String, attribute: "scroll-mode", reflect: true },
     noVirtualization: { type: Boolean, attribute: "no-virtualization", reflect: true },
     buffer: { type: Number },
     hasMore: { type: Boolean },
@@ -44,6 +53,10 @@ export class ChxInfinityScroll extends LitElement {
   #scrollElement;
   /** @type {HTMLElement | undefined} */
   #canvasElement;
+  /** @type {HTMLElement | undefined} */
+  #contentElement;
+  /** @type {Element | undefined} */
+  #endElement;
 
   /** `ref()` fires only on create/remove; `undefined` means the row left the DOM. @param {Element | undefined} row */
   #rowRef = (row) => {
@@ -87,8 +100,13 @@ export class ChxInfinityScroll extends LitElement {
     /** Governs `scrollToBottom()` only. @type {"auto" | "smooth"} */
     this.scrollBehavior = "auto";
 
-    /** `"start"` rests a short list at the top, `"end"` at the bottom. @type {"start" | "end"} */
+    /** `"start"` rests a short list at the top and enables `pinToStart()`; `"end"` rests it at the
+     *  bottom and always follows new content. @type {"start" | "end"} */
     this.contentAlign = "end";
+
+    /** `"pin-top"` enables `pinToStart()` and stops following new content until the user returns to
+     *  the bottom; `"stick-bottom"` always follows. @type {"pin-top" | "stick-bottom"} */
+    this.scrollMode = "stick-bottom";
 
     /** Real-DOM mode — every row renders in full, in normal document flow, no windowing/measurement. @type {boolean} */
     this.noVirtualization = false;
@@ -128,6 +146,10 @@ export class ChxInfinityScroll extends LitElement {
       getScrollElement: () => this.#scrollElement,
       getCanvasElement: () => this.#canvasElement,
       getNoVirtualization: () => this.noVirtualization,
+      getPinEnabled: () => this.scrollMode === "pin-top",
+      getContentElement: () => this.#contentElement,
+      getEndElement: () => this.#endElement,
+      getScrollBehavior: () => motionSafe(this.scrollBehavior),
       getData: () => this.data,
       getItemKey: (item, index) => this.itemKey(item, index),
       getEstimateItemSize: () => this.estimateItemSize,
@@ -170,6 +192,32 @@ export class ChxInfinityScroll extends LitElement {
     this.#canvasElement = /** @type {HTMLElement | undefined} */ (el);
   };
 
+  /** @param {Element | undefined} el */
+  #setEndElement = (el) => {
+    this.#endElement = el;
+  };
+
+  /** @param {Element | undefined} el */
+  #setContentElement = (el) => {
+    this.#contentElement = /** @type {HTMLElement | undefined} */ (el);
+  };
+
+  /** Whether growth at the end is currently followed — always `true` unless `scroll-mode="pin-top"`. */
+  get following() {
+    return this.#controller.following;
+  }
+
+  /**
+   * Scrolls the item with `key` to the top of the viewport once it has rendered, reserving trailing
+   * space so it can sit there, and stops following until the user scrolls back to the bottom. Only
+   * under `scroll-mode="pin-top"`, a no-op otherwise. Call it before the `data` carrying the item is
+   * set, so the virtualizer doesn't follow the append first.
+   * @param {string | number} key
+   */
+  pinToStart(key) {
+    this.#controller.pinToStart(key);
+  }
+
   /**
    * Scrolls to a specific item index — forwarded to whichever strategy is active.
    * @param {number} index
@@ -184,7 +232,8 @@ export class ChxInfinityScroll extends LitElement {
    * @param {"auto" | "smooth" | "instant"} [behavior]
    */
   scrollToBottom(behavior) {
-    const resolvedBehavior = behavior ?? this.scrollBehavior;
+    const resolvedBehavior = motionSafe(behavior ?? this.scrollBehavior);
+    this.#controller.noteScrollToBottom();
     if (this.noVirtualization) {
       // PlainListController scrolls the real scroll element to its actual scrollHeight, which
       // already includes the footer — no separate correction needed, unlike the virtualized branch.
@@ -271,7 +320,7 @@ export class ChxInfinityScroll extends LitElement {
         ${ref(this.#setScrollElement)}
       >
         <div class="infinity-scroll__sticky" part="sticky"><slot name="sticky"></slot></div>
-        <div class="infinity-scroll__content">
+        <div class="infinity-scroll__content" ${ref(this.#setContentElement)}>
           <div
             class="infinity-scroll__canvas"
             part="viewport"
@@ -304,6 +353,7 @@ export class ChxInfinityScroll extends LitElement {
             )}
           </div>
           <slot name="footer"></slot>
+          <div class="infinity-scroll__end" aria-hidden="true" ${ref(this.#setEndElement)}></div>
         </div>
       </div>
     `;

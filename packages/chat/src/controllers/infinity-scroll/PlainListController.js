@@ -10,8 +10,7 @@ import { RowMeasurer } from "../../components/infinity-scroll/RowMeasurer.js";
  *    intersecting the scroll element's top edge and its offset from it; after the change, re-apply
  *    that offset so a prepend doesn't shove the row the user is reading off screen.
  *  - **stick to bottom**: while the user is within `buffer` px of the bottom, growth at the end keeps
- *    the view pinned there. Reuses the existing `buffer` prop rather than a second threshold, so it
- *    doubles as the same "near the bottom" band that already gates `onAwayFromBottomChange`.
+ *    the view pinned there. Reuses the existing `buffer` prop rather than a second threshold.
  *
  * The reference's own rows are plain, synchronously-rendered elements, so it can safely read their
  * layout the instant its `MutationObserver` fires. This package's rows are usually `<chx-message>` (or
@@ -42,10 +41,14 @@ export class PlainListController {
   #rows;
   /** @type {() => number} */
   #getBuffer;
-  /** @type {(awayFromBottom: boolean) => void} */
-  #onAwayFromBottomChange;
   /** @type {() => void} */
   #onReconciled;
+  /** @type {() => boolean} */
+  #getFollowing;
+  /** @type {() => boolean} */
+  #getHold;
+  /** @type {() => void} */
+  #beforeReconcile;
   #measurer;
 
   /** @type {{element: HTMLElement, offset: number, bottomOffset: number, index: string | undefined} | null} */
@@ -71,8 +74,10 @@ export class PlainListController {
    *   getCanvasElement: () => Element | undefined,
    *   rows: () => Iterable<HTMLElement>,
    *   getBuffer: () => number,
-   *   onAwayFromBottomChange: (awayFromBottom: boolean) => void,
    *   onReconciled?: () => void,
+   *   getFollowing?: () => boolean,
+   *   getHold?: () => boolean,
+   *   beforeReconcile?: () => void,
    * }} config
    */
   constructor(config) {
@@ -80,8 +85,11 @@ export class PlainListController {
     this.#getCanvasElement = config.getCanvasElement;
     this.#rows = config.rows;
     this.#getBuffer = config.getBuffer;
-    this.#onAwayFromBottomChange = config.onAwayFromBottomChange;
     this.#onReconciled = config.onReconciled ?? (() => {});
+    this.#getFollowing = config.getFollowing ?? (() => true);
+    // a smooth scroll in flight: restoring a mid-animation anchor would cancel it halfway
+    this.#getHold = config.getHold ?? (() => false);
+    this.#beforeReconcile = config.beforeReconcile ?? (() => {});
     this.#measurer = new RowMeasurer({
       rows: config.rows,
       // real DOM already has its real height once ready — nothing to cache, unlike the virtualizer
@@ -155,9 +163,8 @@ export class PlainListController {
   // ---------------------------------------------------------------- commands
 
   /**
-   * Recomputes `atBottom` against `buffer` and fires `onAwayFromBottomChange` on an actual flip —
-   * call synchronously from the scroll handler, so a stale value can't let a later reconcile yank the
-   * view back down mid-gesture.
+   * Recomputes `atBottom` against `buffer` — call synchronously from the scroll handler, so a stale
+   * value can't let a later reconcile yank the view back down mid-gesture.
    */
   handleScroll = () => {
     this.#updateAtBottom();
@@ -178,7 +185,7 @@ export class PlainListController {
     if (!el) return;
     if (behavior === "auto") {
       el.scrollTop = el.scrollHeight;
-      this.#setAtBottom(true);
+      this.#atBottom = true;
     } else {
       el.scrollTo({ top: el.scrollHeight, behavior });
     }
@@ -352,7 +359,13 @@ export class PlainListController {
 
   /** Either hold the bottom or hold the reading position — then re-baseline against the new layout. */
   #reconcile() {
-    if (this.#atBottom) {
+    this.#beforeReconcile();
+    if (this.#getHold()) {
+      this.#updateAtBottom();
+      this.#onReconciled();
+      return;
+    }
+    if (this.#atBottom && this.#getFollowing()) {
       this.scrollToBottom();
     } else {
       this.restoreAnchor();
@@ -378,15 +391,7 @@ export class PlainListController {
 
   #updateAtBottom() {
     const el = this.#getScrollElement();
-    // no scroll element yet counts as "at the bottom", so an initial load never flashes the affordance
     const distance = el ? el.scrollHeight - el.clientHeight - el.scrollTop : 0;
-    this.#setAtBottom(distance <= this.#getBuffer());
-  }
-
-  /** @param {boolean} atBottom */
-  #setAtBottom(atBottom) {
-    if (this.#atBottom === atBottom) return;
-    this.#atBottom = atBottom;
-    this.#onAwayFromBottomChange(!atBottom);
+    this.#atBottom = distance <= this.#getBuffer();
   }
 }

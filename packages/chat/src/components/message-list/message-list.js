@@ -151,6 +151,7 @@ export class ChxMessageList extends LitElement {
     messagesLabel: { type: String, attribute: "messages-label" },
     scrollBehavior: { type: String, attribute: "scroll-behavior" },
     contentAlign: { type: String, attribute: "content-align" },
+    scrollMode: { type: String, attribute: "scroll-mode" },
     noVirtualization: { type: Boolean, attribute: "no-virtualization" },
     buffer: { type: Number },
     estimateItemSize: { attribute: false },
@@ -174,6 +175,8 @@ export class ChxMessageList extends LitElement {
 
   /** @type {Set<string> | undefined} */
   #pendingRenderedMessageIds;
+  /** An own message appended before chx-infinity-scroll existed, pinned once it does. @type {string | undefined} */
+  #pendingPinId;
   /** @type {PartRenderer} */
   #partRenderer; // per-part element rendering + cache — assigned in the constructor, below
   /** @type {DividerController} */
@@ -246,6 +249,10 @@ export class ChxMessageList extends LitElement {
 
     /** Forwarded straight through to chx-infinity-scroll. @type {"start" | "end"} */
     this.contentAlign = "end";
+
+    /** Forwarded to chx-infinity-scroll. `"pin-top"` pins each sent message to the top of the
+     *  viewport and doesn't follow the reply (agent chats). @type {"pin-top" | "stick-bottom"} */
+    this.scrollMode = "stick-bottom";
 
     /** Forwarded straight through to chx-infinity-scroll — real-DOM mode, no windowing/measurement.
      *  @type {boolean} */
@@ -565,7 +572,10 @@ export class ChxMessageList extends LitElement {
 
   /** @param {import("lit").PropertyValues} changedProperties */
   willUpdate(changedProperties) {
-    if (changedProperties.has("messages")) this.#readTracking.syncReadStates();
+    if (changedProperties.has("messages")) {
+      this.#readTracking.syncReadStates();
+      this.#pinSentMessage(changedProperties.get("messages"));
+    }
     // rows only re-render when infinity-scroll does, which a plain host update doesn't trigger
     if (
       changedProperties.has("compact") ||
@@ -577,6 +587,27 @@ export class ChxMessageList extends LitElement {
   }
 
   /**
+   * `scroll-mode="pin-top"`: a send is an own message appended at the tail. Runs before
+   * chx-infinity-scroll receives the new `messages`, which `pinToStart()` requires.
+   * @param {ChxMessage[] | undefined} previous
+   */
+  #pinSentMessage(previous) {
+    if (this.scrollMode !== "pin-top" || !previous) return;
+    const last = this.messages.at(-1);
+    if (!last?.own || !this.#isAppendTo(previous)) return;
+    if (this.#infinityScrollElement) this.#infinityScrollElement.pinToStart(last.id);
+    else this.#pendingPinId = last.id;
+  }
+
+  /** `messages` only grew at the tail — a conversation switch never counts as a send.
+   *  @param {ChxMessage[]} previous */
+  #isAppendTo(previous) {
+    if (this.messages.length <= previous.length) return false;
+    if (previous.length === 0) return this.messages.length === 1;
+    return this.messages[previous.length - 1]?.id === previous.at(-1)?.id;
+  }
+
+  /**
    * `typing`/`streaming` land in chx-infinity-scroll's `footer` slot, which the virtualizer has no
    * concept of (see `scrollToBottom()`'s own doc) — appearing/growing there doesn't move
    * `chx-infinity-scroll`'s own reactive properties, so nothing auto-follows it the way a new message
@@ -585,9 +616,14 @@ export class ChxMessageList extends LitElement {
    * @param {import("lit").PropertyValues} changedProperties
    */
   updated(changedProperties) {
+    if (this.#pendingPinId !== undefined && this.#infinityScrollElement) {
+      this.#infinityScrollElement.pinToStart(this.#pendingPinId);
+      this.#pendingPinId = undefined;
+    }
     if (
       (changedProperties.has("typing") || changedProperties.has("streaming")) &&
-      !this.#bottomAnchor.awayFromBottom
+      !this.#bottomAnchor.awayFromBottom &&
+      (this.#infinityScrollElement?.following ?? true)
     ) {
       this.#bottomAnchor.scrollToBottom(this.scrollBehavior);
     }
@@ -644,6 +680,7 @@ export class ChxMessageList extends LitElement {
             .onItemVisible=${this.#readTracking.handleItemVisible}
             .scrollBehavior=${this.scrollBehavior}
             .contentAlign=${this.contentAlign}
+            .scrollMode=${this.scrollMode}
             .noVirtualization=${this.noVirtualization}
             .buffer=${this.buffer}
             .hasMore=${this.hasMore}

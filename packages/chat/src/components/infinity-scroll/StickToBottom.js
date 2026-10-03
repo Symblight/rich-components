@@ -15,10 +15,14 @@ export class StickToBottom {
   /** last seen `getTotalSize()`, so `follow()` only acts on an actual increase. @type {number} */
   #lastTotalSize = -1;
 
-  /** @param {{getVirtualizer: () => any, getBuffer: () => number}} config */
+  /** @type {() => boolean} */
+  #getFollowing;
+
+  /** @param {{getVirtualizer: () => any, getBuffer: () => number, getFollowing?: () => boolean}} config */
   constructor(config) {
     this.#getVirtualizer = config.getVirtualizer;
     this.#getBuffer = config.getBuffer;
+    this.#getFollowing = config.getFollowing ?? (() => true);
   }
 
   /** Forget the last known size — call on reconnect, so a stale pre-disconnect snapshot can't be
@@ -55,7 +59,7 @@ export class StickToBottom {
     const grew = total > this.#lastTotalSize;
     this.#lastTotalSize = total;
 
-    if (!this.atBottom || !grew) return;
+    if (!this.atBottom || !grew || !this.#getFollowing()) return;
 
     // Never argue with a gesture in progress — without this guard, the first pixels of an upward
     // scroll still read as "at the bottom" and this would pull the view straight back down.

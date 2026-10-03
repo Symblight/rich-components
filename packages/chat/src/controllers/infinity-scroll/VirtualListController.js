@@ -107,6 +107,20 @@ export class VirtualListController {
     return item.start + size <= offset && instance.scrollDirection !== "backward";
   };
 
+  /**
+   * Turns virtual-core's own end-following (`followOnAppend` and the `wasAtEnd` resize compensation)
+   * on or off. Both are gated on `scrollEndThreshold`, and a negative threshold never matches.
+   * Applied immediately rather than in `sync()`: the append check reads the *previous* options, so
+   * the threshold has to change before the data does.
+   * @param {boolean} following
+   */
+  setFollowing(following) {
+    const threshold = following ? SCROLL_END_THRESHOLD : -1;
+    const virtualizer = this.virtualizer;
+    if (virtualizer.options.scrollEndThreshold === threshold) return;
+    virtualizer.setOptions({ ...virtualizer.options, scrollEndThreshold: threshold });
+  }
+
   /** The underlying `@tanstack/virtual-core` instance. */
   get virtualizer() {
     return this.#controller.getVirtualizer();

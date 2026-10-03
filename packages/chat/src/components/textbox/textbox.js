@@ -34,7 +34,7 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     dropHint: { type: String, attribute: "drop-hint" },
     dragging: { type: Boolean, reflect: true, attribute: true },
     getTriggerFields: { attribute: false },
-    getPasteLongText: { attribute: false },
+    getExtensions: { attribute: false },
     loading: { type: Boolean, reflect: true, attribute: true },
     disabled: { type: Boolean, reflect: true, attribute: true },
     compact: { type: Boolean, reflect: true, attribute: true },
@@ -69,8 +69,8 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
 
     /** @type {() => Map<string, Element>} */
     this.getTriggerFields = () => new Map();
-    /** @type {() => import("../../editor/Editor.js").PasteLongTextConfig | undefined} */
-    this.getPasteLongText = () => undefined;
+    /** @type {() => import("../../editor/extension.js").EditorExtension[]} */
+    this.getExtensions = () => [];
 
     /** @type {Editor | undefined} */
     this.editor = undefined;
@@ -145,7 +145,7 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
         this.closest("form")?.requestSubmit();
       },
       getCommandFields: () => this.getTriggerFields(),
-      getPasteLongText: () => this.getPasteLongText(),
+      getExtensions: () => this.getExtensions(),
       onCommandSelected: this.handleCommandSelected,
       placeholder: this.placeholder,
       attributes: {

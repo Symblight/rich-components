@@ -36,15 +36,6 @@ function fixMacDoubleSpacePeriod(tr, oldState, view) {
   return oldState.tr.insertText(inserted.replace(".", " "), step.from, step.to);
 }
 
-/**
- * What `chx-paste-long-text` provides — read live at paste/render time, so a later change needs no remount.
- * @typedef {{
- *   pasteThreshold: number,
- *   classify: (text: string, lines: number) => Record<string, unknown> | null,
- *   buildElement: (attrs: {text: string, lines: number, data: Record<string, unknown>}, source: "composer") => HTMLElement,
- * }} PasteLongTextConfig
- */
-
 /** Facade over the composer's editing engine — constructed by chx-textbox (textbox.js) against its own mount div; chx-message-composer never touches ProseMirror directly. */
 export class Editor {
   // real private fields must be declared here, in the class body — a bare `this.#foo = ...`
@@ -60,7 +51,7 @@ export class Editor {
    *   onSubmit: () => void,
    *   getCommandFields?: () => Map<string, Element>,
    *   onCommandSelected?: (detail: {target: string | null, id: string | undefined}) => void,
-   *   getPasteLongText?: () => PasteLongTextConfig | undefined,
+   *   getExtensions?: () => import("./extension.js").EditorExtension[],
    *   attributes?: Record<string, string>,
    *   placeholder?: string,
    * }} options
@@ -72,7 +63,7 @@ export class Editor {
       onSubmit,
       getCommandFields,
       onCommandSelected,
-      getPasteLongText = () => undefined,
+      getExtensions = () => [],
       attributes,
       placeholder,
     },
@@ -86,13 +77,7 @@ export class Editor {
         createCommandPlugin({ getCommandFields: getCommandFields ?? (() => new Map()) }),
         history(),
         createKeymap({ onSubmit }),
-        createPastePlugin({
-          getPasteThreshold: () => getPasteLongText()?.pasteThreshold ?? 0,
-          getClassify: () => {
-            const config = getPasteLongText();
-            return config && ((text, lines) => config.classify(text, lines));
-          },
-        }),
+        createPastePlugin({ getExtensions }),
         createPlaceholderPlugin(placeholder ?? ""),
       ],
     });
@@ -104,10 +89,8 @@ export class Editor {
         chip: (node) => new ChipNodeView(node),
         paste: (node, view, getPos) =>
           new PasteNodeView(node, view, getPos, {
-            getBuildElement: () => {
-              const config = getPasteLongText();
-              return config && ((attrs, source) => config.buildElement(attrs, source));
-            },
+            getBuildElement: () =>
+              getExtensions().find((extension) => extension.buildPasteElement)?.buildPasteElement,
           }),
       },
       dispatchTransaction: (tr) => {

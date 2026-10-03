@@ -12,17 +12,17 @@ The chip is a purely visual collapse — it carries the full pasted text interna
 (Backspace/Delete/selecting across it) removes the whole thing at once, same as any other atomic
 inline element. There's no click behavior in this version.
 
-Entirely opt-in, same connection as `<chx-command-field>`/`<chx-command-picker>`: `chx-message-
-composer`/`chx-textbox` know nothing about paste collapsing at all — slot a `<chx-paste-long-text>`
-into `<chx-message-composer>` and it reaches into the composer's editor directly; without it,
-pasting never collapses into anything, full stop.
+Entirely opt-in: `chx-message-composer`/`chx-textbox` know nothing about paste collapsing.
+`<chx-paste-long-text>` is an editor extension — put it inside `<chx-message-composer>` as a direct
+child (no slot needed, it renders nothing) and the composer picks it up; without it, pasting never
+collapses into anything, full stop.
 
 ## Quick start
 
 ```html
 <chx-chat>
   <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
-    <chx-paste-long-text slot="paste-long-text"></chx-paste-long-text>
+    <chx-paste-long-text></chx-paste-long-text>
   </chx-message-composer>
 </chx-chat>
 ```

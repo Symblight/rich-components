@@ -11,6 +11,7 @@ import styles from "./message-composer.css?inline";
 
 import "../textbox/textbox.js";
 import { CONNECT_REGISTRY } from "../../api/keys.js";
+import { EDITOR_EXTENSION } from "../../editor/extension.js";
 
 /**
  * @tag chx-message-composer
@@ -142,20 +143,18 @@ export class ChxMessageComposer extends LitElement {
     else this.#textbox?.insertAtRange(target, node);
   }
 
-  /** @type {import("../paste-long-text/paste-long-text.js").ChxPasteLongText | undefined} */
-  #pasteLongText;
-
-  /** Stable identity, read by chx-textbox at paste time; `undefined` until the element is upgraded. */
-  #getPasteLongText = () =>
-    typeof this.#pasteLongText?.classify === "function" ? this.#pasteLongText : undefined;
-
-  /** @param {Event} event */
-  #handlePasteLongTextSlotchange = (event) => {
-    const slot = /** @type {HTMLSlotElement} */ (event.target);
-    this.#pasteLongText = /** @type {any} */ (
-      slot.assignedElements({ flatten: true }).find((el) => el.localName === "chx-paste-long-text")
+  /**
+   * Editor extensions from direct children, read live at paste/render time — a child upgraded later
+   * counts from its first paste on. Stable identity, so chx-textbox isn't dirtied on every render.
+   * @returns {import("../../editor/extension.js").EditorExtension[]}
+   */
+  #getExtensions = () =>
+    [...this.children].flatMap(
+      (child) =>
+        /** @type {{[EDITOR_EXTENSION]?: import("../../editor/extension.js").EditorExtension}} */ (
+          child
+        )[EDITOR_EXTENSION] ?? [],
     );
-  };
 
   /** Registers `attachments` on behalf of the slotted `<chx-attachments>`, following slot changes. */
   async #syncAttachmentsOwner() {
@@ -385,7 +384,6 @@ export class ChxMessageComposer extends LitElement {
         @chx-suggestion-select=${this.#handleSuggestionSelect}
       ></slot>
       <slot name="command-field" @slotchange=${this.#handleCommandFieldSlotchange}></slot>
-      <slot name="paste-long-text" @slotchange=${this.#handlePasteLongTextSlotchange}></slot>
       <form class="message-composer__form" @submit=${this.#handleSend}>
         <chx-textbox
           name="message"
@@ -396,7 +394,7 @@ export class ChxMessageComposer extends LitElement {
           .stopLabel=${this.stopLabel}
           .dropHint=${this.dropHint}
           .getTriggerFields=${this.#getTriggerFields}
-          .getPasteLongText=${this.#getPasteLongText}
+          .getExtensions=${this.#getExtensions}
           ?loading=${this.loading}
           ?disabled=${this.disabled}
           ?dragging=${this.dragging}

@@ -846,7 +846,7 @@ export const PasteChip = {
     >
       <chx-message-list slot="message-list"></chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
-        <chx-paste-long-text slot="paste-long-text" paste-threshold="200"></chx-paste-long-text>
+        <chx-paste-long-text paste-threshold="200"></chx-paste-long-text>
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
       </chx-message-composer>
     </chx-chat>

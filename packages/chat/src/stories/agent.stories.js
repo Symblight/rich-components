@@ -868,7 +868,7 @@ export const AgenticComposerKit = {
             </md-icon-button>
             <md-button slot="actions" variant="text">Opus 4.8</md-button>
             <chx-attachments slot="attachments"></chx-attachments>
-            <chx-paste-long-text slot="paste-long-text" paste-threshold="200"></chx-paste-long-text>
+            <chx-paste-long-text paste-threshold="200"></chx-paste-long-text>
             <chx-command-picker
               commandCharacter="@"
               maxQuerySpaces="1"

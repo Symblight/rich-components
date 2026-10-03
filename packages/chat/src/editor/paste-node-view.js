@@ -3,8 +3,7 @@ import { Selection } from "prosemirror-state";
 import "../components/paste-chip/paste-chip.js";
 
 /**
- * Last-resort default — only reached if a `paste` node exists (e.g. a restored draft, or undo)
- * without a chx-paste-long-text slotted into the composer.
+ * Last-resort default — a `paste` node (a restored draft, undo) with no extension to render it.
  * @param {{lines: number}} detail
  * @returns {HTMLElement}
  */
@@ -17,8 +16,8 @@ function defaultBuildElement({ lines }) {
 }
 
 /**
- * Renders a collapsed `paste` node — chx-paste-long-text's own `buildElement()` once registered (see
- * Editor.js's `getPasteLongText`), or `defaultBuildElement` above otherwise. Named generically,
+ * Renders a collapsed `paste` node — an editor extension's `buildPasteElement`, or
+ * `defaultBuildElement` above otherwise. Named generically,
  * not `buildChip`: the resolved element can be anything (e.g. `chx-code-block` for a detected code
  * paste), not just a chip. `source` is always `"composer"`: paste chips have no historical form,
  * they unfold to full text once sent. Syncs `chx-code-block-change`/`chx-code-block-lang-change`/

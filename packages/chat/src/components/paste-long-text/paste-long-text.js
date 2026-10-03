@@ -4,15 +4,15 @@ import { customElement } from "lit/decorators.js";
 import "../paste-chip/paste-chip.js";
 import "../code-block/code-block.js";
 import { detectLanguage } from "./detect-language.js";
+import { EDITOR_EXTENSION } from "../../editor/extension.js";
 
 import styles from "./paste-long-text.css?inline";
 
 /**
  * @tag chx-paste-long-text
  * @summary Collapses a long paste in chx-message-composer into a chip — a plain "N lines" chip by
- * default, or a `chx-code-block` chip when the pasted text looks like code. Renders nothing itself;
- * the composer tracks it through its `paste-long-text` slot and the editor reads `pasteThreshold`/
- * `classify`/`buildElement` off it at paste time.
+ * default, or a `chx-code-block` chip when the pasted text looks like code. Renders nothing; an
+ * editor extension (`EDITOR_EXTENSION`) picked up by its parent chx-message-composer.
  */
 @customElement("chx-paste-long-text")
 export class ChxPasteLongText extends LitElement {
@@ -45,10 +45,26 @@ export class ChxPasteLongText extends LitElement {
     return [styles];
   }
 
+  /** Editor hooks — picked up by the parent chx-message-composer. @returns {import("../../editor/extension.js").EditorExtension} */
+  get [EDITOR_EXTENSION]() {
+    return {
+      handlePaste: (text, lines) => this.#collapse(text, lines),
+      buildPasteElement: (attrs, source) => this.buildElement(attrs, source),
+    };
+  }
+
   /**
-   * Is `text` code? Called synchronously during the original paste — a paste at or over
-   * `pasteThreshold` always wins first and never reaches this (see paste-plugin.js's own
-   * precedence doc).
+   * A paste at or over `pasteThreshold` lines is always the plain chip (`classify()` never runs);
+   * below it, `classify()` decides. `pasteThreshold <= 0` leaves only `classify()`.
+   * @param {string} text @param {number} lines
+   */
+  #collapse(text, lines) {
+    if (this.pasteThreshold > 0 && lines >= this.pasteThreshold) return {};
+    return this.classify(text, lines);
+  }
+
+  /**
+   * Is `text` code? Called synchronously during the paste, only below `pasteThreshold`.
    * @param {string} text
    * @param {number} lines
    * @returns {{lang: string} | null}

@@ -1,7 +1,7 @@
 import { html, LitElement } from "lit";
 
 import { TreeViewController } from "../index.js";
-import { buildFileTree, createTree, hintText, stack } from "./shared.js";
+import { buildFileTree, renderFileIcon, renderTrailingIcon, storyStyles } from "./shared.js";
 
 /** A toolbar next to a tree: reads reactive state, calls the namespaces. */
 class DemoTreeToolbar extends LitElement {
@@ -54,14 +54,21 @@ export default meta;
 
 /** @type {Story} */
 export const SiblingToolbar = {
-  render: () => {
-    const toolbar = document.createElement("demo-tree-toolbar");
-    const tree = createTree({ items: buildFileTree(), multiSelect: true });
-    const row = document.createElement("div");
-    row.append(toolbar, tree);
-    return stack(
-      hintText("The toolbar is a sibling of the tree; it finds it through a getter target."),
-      row,
-    );
-  },
+  render: () => html`
+    ${storyStyles}
+    <div class="story">
+      <p class="story__hint">
+        The toolbar is a sibling of the tree; it finds it through a getter target.
+      </p>
+      <div>
+        <demo-tree-toolbar></demo-tree-toolbar>
+        <tvx-tree-view
+          multi-select
+          .items=${buildFileTree()}
+          .renderItemLeading=${renderFileIcon}
+          .renderItemTrailing=${renderTrailingIcon}
+        ></tvx-tree-view>
+      </div>
+    </div>
+  `,
 };

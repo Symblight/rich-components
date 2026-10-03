@@ -1,4 +1,13 @@
-import { buildFileTree, createTree, hintText, logPanel, stack } from "./shared.js";
+import { html } from "lit";
+import { createRef, ref } from "lit/directives/ref.js";
+
+import {
+  buildFileTree,
+  renderFileIcon,
+  renderTrailingIcon,
+  storyStyles,
+  writeLog,
+} from "./shared.js";
 
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
@@ -25,20 +34,29 @@ export default meta;
 /** @type {Story} */
 export const FullKeyboardTable = {
   render: () => {
-    const tree = createTree({ items: buildFileTree() });
-    const log = logPanel();
-    tree.addEventListener("tvx-selection-change", (event) => {
-      const ids = [.../** @type {CustomEvent} */ (event).detail.selectedItems];
-      log.textContent = `tvx-selection-change: ${JSON.stringify(ids)}`;
-    });
-    tree.addEventListener("tvx-expand-change", (event) => {
-      log.textContent = `tvx-expand-change: ${JSON.stringify(/** @type {CustomEvent} */ (event).detail)}`;
-    });
-    return stack(
-      hintText('Click a row, then try the keys above — typing "rea" jumps to "README.md".'),
-      tree,
-      log,
-    );
+    /** @type {import("lit/directives/ref.js").Ref<HTMLElement>} */
+    const log = createRef();
+    return html`
+      ${storyStyles}
+      <div class="story">
+        <p class="story__hint">
+          Click a row, then try the keys above — typing "rea" jumps to "README.md".
+        </p>
+        <tvx-tree-view
+          .items=${buildFileTree()}
+          .renderItemLeading=${renderFileIcon}
+          .renderItemTrailing=${renderTrailingIcon}
+          @tvx-selection-change=${(/** @type {CustomEvent} */ event) =>
+            writeLog(
+              log,
+              `tvx-selection-change: ${JSON.stringify([...event.detail.selectedItems])}`,
+            )}
+          @tvx-expand-change=${(/** @type {CustomEvent} */ event) =>
+            writeLog(log, `tvx-expand-change: ${JSON.stringify(event.detail)}`)}
+        ></tvx-tree-view>
+        <pre class="story__log" ${ref(log)}></pre>
+      </div>
+    `;
   },
 };
 
@@ -47,12 +65,19 @@ export const DisabledItem = {
   render: () => {
     const items = buildFileTree();
     items[1].disabled = true;
-    return stack(
-      hintText(
-        'Arrow past the disabled ".gitignore" — focus can land on it and move on, but Enter/Space ' +
-          "and clicks there do nothing.",
-      ),
-      createTree({ items }),
-    );
+    return html`
+      ${storyStyles}
+      <div class="story">
+        <p class="story__hint">
+          Arrow past the disabled ".gitignore" — focus can land on it and move on, but Enter/Space
+          and clicks there do nothing.
+        </p>
+        <tvx-tree-view
+          .items=${items}
+          .renderItemLeading=${renderFileIcon}
+          .renderItemTrailing=${renderTrailingIcon}
+        ></tvx-tree-view>
+      </div>
+    `;
   },
 };

@@ -1,11 +1,12 @@
+import { html } from "lit";
+import { createRef, ref } from "lit/directives/ref.js";
+
 import {
   buildFileTree,
-  button,
-  controls,
-  createTree,
-  hintText,
-  logPanel,
-  stack,
+  renderFileIcon,
+  renderTrailingIcon,
+  storyStyles,
+  writeLog,
 } from "./shared.js";
 
 /** @type {import("@storybook/web-components").Meta} */
@@ -19,8 +20,8 @@ const meta = {
         component:
           "Three ways to drive expand/select state from outside, in increasing order of control: " +
           "`defaultExpandedItems`/`defaultSelectedItems` apply once; the `expandedItems`/" +
-          "`selectedItems` properties re-sync on every write; and `setItemExpansion()`/" +
-          "`setItemSelection()`/`isItemExpanded()`/`expandAll()`/`collapseAll()` are imperative calls.",
+          "`selectedItems` properties re-sync on every write; and the `tree.expansion` / " +
+          "`tree.selection` / `tree.navigation` / `tree.nodes` namespaces are imperative calls.",
       },
     },
   },
@@ -28,90 +29,130 @@ const meta = {
 export default meta;
 
 /** @typedef {import("@storybook/web-components").StoryObj} Story */
+/** @typedef {import("../base/tree-view.js").TvxTreeView} TvxTreeView */
 
 /** @type {Story} */
 export const UncontrolledDefaults = {
-  render: () =>
-    stack(
-      hintText(
-        "defaultExpandedItems/defaultSelectedItems apply exactly once, when the first items exist — " +
-          "later writes have no effect.",
-      ),
-      createTree({
-        items: buildFileTree(),
-        defaultExpandedItems: new Set(["src"]),
-        defaultSelectedItems: new Set(["readme"]),
-      }),
-    ),
+  render: () => html`
+    ${storyStyles}
+    <div class="story">
+      <p class="story__hint">
+        defaultExpandedItems/defaultSelectedItems apply exactly once, when the first items exist —
+        later writes have no effect.
+      </p>
+      <tvx-tree-view
+        .items=${buildFileTree()}
+        .defaultExpandedItems=${new Set(["src"])}
+        .defaultSelectedItems=${new Set(["readme"])}
+        .renderItemLeading=${renderFileIcon}
+        .renderItemTrailing=${renderTrailingIcon}
+      ></tvx-tree-view>
+    </div>
+  `,
 };
 
 /** @type {Story} */
 export const ControlledState = {
   render: () => {
-    const tree = createTree({ items: buildFileTree(), multiSelect: true });
-    const log = logPanel();
-    const renderLog = () => {
-      log.textContent =
-        `expandedItems: ${JSON.stringify([...tree.expandedItems])}\n` +
-        `selectedItems: ${JSON.stringify([...tree.selectedItems])}`;
-    };
-    tree.addEventListener("tvx-expansion-change", renderLog);
-    tree.addEventListener("tvx-selection-change", renderLog);
-    renderLog();
+    /** @type {import("lit/directives/ref.js").Ref<TvxTreeView>} */
+    const tree = createRef();
+    /** @type {import("lit/directives/ref.js").Ref<HTMLElement>} */
+    const log = createRef();
+    const renderLog = () =>
+      writeLog(
+        log,
+        `expandedItems: ${JSON.stringify([...(tree.value?.expandedItems ?? [])])}\n` +
+          `selectedItems: ${JSON.stringify([...(tree.value?.selectedItems ?? [])])}`,
+      );
+    /** @param {(tree: TvxTreeView) => void} update */
+    const set = (update) => () => tree.value && update(tree.value);
 
-    return stack(
-      hintText(
-        "expandedItems/selectedItems are live getters/setters — assigning a new Set re-syncs the " +
-          "tree, and interacting with the tree updates what they return.",
-      ),
-      controls(
-        button("Set expandedItems([src, components])", () => {
-          tree.expandedItems = new Set(["src", "components"]);
-        }),
-        button("Set selectedItems([readme, gitignore])", () => {
-          tree.selectedItems = new Set(["readme", "gitignore"]);
-        }),
-        button("Clear both", () => {
-          tree.expandedItems = new Set();
-          tree.selectedItems = new Set();
-        }),
-      ),
-      tree,
-      log,
-    );
+    return html`
+      ${storyStyles}
+      <div class="story">
+        <p class="story__hint">
+          expandedItems/selectedItems are live getters/setters — assigning a new Set re-syncs the
+          tree, and interacting with the tree updates what they return.
+        </p>
+        <div class="story__controls">
+          <button @click=${set((t) => (t.expandedItems = new Set(["src", "components"])))}>
+            Set expandedItems([src, components])
+          </button>
+          <button @click=${set((t) => (t.selectedItems = new Set(["readme", "gitignore"])))}>
+            Set selectedItems([readme, gitignore])
+          </button>
+          <button
+            @click=${set((t) => {
+              t.expandedItems = new Set();
+              t.selectedItems = new Set();
+            })}
+          >
+            Clear both
+          </button>
+        </div>
+        <tvx-tree-view
+          ${ref(tree)}
+          multi-select
+          .items=${buildFileTree()}
+          .renderItemLeading=${renderFileIcon}
+          .renderItemTrailing=${renderTrailingIcon}
+          @tvx-expansion-change=${renderLog}
+          @tvx-selection-change=${renderLog}
+        ></tvx-tree-view>
+        <pre class="story__log" ${ref(log)}>
+expandedItems: []
+selectedItems: []</pre>
+      </div>
+    `;
   },
 };
 
 /** @type {Story} */
 export const ProgrammaticControls = {
   render: () => {
-    const tree = createTree({ items: buildFileTree(), multiSelect: true });
-    const status = logPanel();
-    const renderStatus = () => {
-      status.textContent = `"src" expanded: ${tree.expansion.isExpanded("src")}`;
-    };
-    tree.addEventListener("tvx-expansion-change", renderStatus);
-    renderStatus();
+    /** @type {import("lit/directives/ref.js").Ref<TvxTreeView>} */
+    const tree = createRef();
+    /** @type {import("lit/directives/ref.js").Ref<HTMLElement>} */
+    const status = createRef();
+    /** @param {(tree: TvxTreeView) => unknown} call */
+    const run = (call) => () => tree.value && call(tree.value);
 
-    return stack(
-      hintText(
-        "tree.expansion / tree.selection / tree.navigation work for any id the tree knows — " +
-          "expanded or not; ids inside a lazy branch that hasn't loaded yet are ignored.",
-      ),
-      controls(
-        button("expansion.expand('src')", () => tree.expansion.expand("src")),
-        button("expansion.collapse('src')", () => tree.expansion.collapse("src")),
-        button("expansion.expandAll()", () => tree.expansion.expandAll()),
-        button("expansion.collapseAll()", () => tree.expansion.collapseAll()),
-        button("selection.select('button')", () => tree.selection.select("button")),
-        button("selection.clear()", () => tree.selection.clear()),
-        button("navigation.reveal('button')", () => tree.navigation.reveal("button")),
-        button("nodes.move('readme', {parentId: 'src', index: 0})", () =>
-          tree.nodes.move("readme", { parentId: "src", index: 0 }),
-        ),
-      ),
-      tree,
-      status,
-    );
+    return html`
+      ${storyStyles}
+      <div class="story">
+        <p class="story__hint">
+          tree.expansion / tree.selection / tree.navigation work for any id the tree knows —
+          expanded or not; ids inside a lazy branch that hasn't loaded yet are ignored.
+        </p>
+        <div class="story__controls">
+          <button @click=${run((t) => t.expansion.expand("src"))}>expansion.expand('src')</button>
+          <button @click=${run((t) => t.expansion.collapse("src"))}>
+            expansion.collapse('src')
+          </button>
+          <button @click=${run((t) => t.expansion.expandAll())}>expansion.expandAll()</button>
+          <button @click=${run((t) => t.expansion.collapseAll())}>expansion.collapseAll()</button>
+          <button @click=${run((t) => t.selection.select("button"))}>
+            selection.select('button')
+          </button>
+          <button @click=${run((t) => t.selection.clear())}>selection.clear()</button>
+          <button @click=${run((t) => t.navigation.reveal("button"))}>
+            navigation.reveal('button')
+          </button>
+          <button @click=${run((t) => t.nodes.move("readme", { parentId: "src", index: 0 }))}>
+            nodes.move('readme', {parentId: 'src', index: 0})
+          </button>
+        </div>
+        <tvx-tree-view
+          ${ref(tree)}
+          multi-select
+          .items=${buildFileTree()}
+          .renderItemLeading=${renderFileIcon}
+          .renderItemTrailing=${renderTrailingIcon}
+          @tvx-expansion-change=${() =>
+            writeLog(status, `"src" expanded: ${tree.value?.expansion.isExpanded("src")}`)}
+        ></tvx-tree-view>
+        <pre class="story__log" ${ref(status)}>"src" expanded: false</pre>
+      </div>
+    `;
   },
 };

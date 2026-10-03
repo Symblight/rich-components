@@ -1,4 +1,13 @@
-import { buildFileTree, createTree, hintText, logPanel, stack } from "./shared.js";
+import { html } from "lit";
+import { createRef, ref } from "lit/directives/ref.js";
+
+import {
+  buildFileTree,
+  renderFileIcon,
+  renderTrailingIcon,
+  storyStyles,
+  writeLog,
+} from "./shared.js";
 
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
@@ -25,47 +34,61 @@ export default meta;
 /** @type {Story} */
 export const DragAndDropAndKeyboard = {
   render: () => {
-    const tree = createTree({
-      items: buildFileTree(),
-      reordering: true,
-      multiSelect: true,
-      isItemReorderable: (item) => item.id !== "gitignore",
-    });
-    const log = logPanel();
-    tree.addEventListener("tvx-item-position-change", (event) => {
-      log.textContent = `tvx-item-position-change: ${JSON.stringify(/** @type {CustomEvent} */ (event).detail)}`;
-    });
-    return stack(
-      hintText(
-        'Drag a row above/below/onto a folder, or focus one and press Alt+↑/↓. ".gitignore" can\'t ' +
-          "be dragged, but others can still drop next to it.",
-      ),
-      tree,
-      log,
-    );
+    /** @type {import("lit/directives/ref.js").Ref<HTMLElement>} */
+    const log = createRef();
+    return html`
+      ${storyStyles}
+      <div class="story">
+        <p class="story__hint">
+          Drag a row above/below/onto a folder, or focus one and press Alt+↑/↓. ".gitignore" can't
+          be dragged, but others can still drop next to it.
+        </p>
+        <tvx-tree-view
+          reordering
+          multi-select
+          .items=${buildFileTree()}
+          .isItemReorderable=${(/** @type {any} */ item) => item.id !== "gitignore"}
+          .renderItemLeading=${renderFileIcon}
+          .renderItemTrailing=${renderTrailingIcon}
+          @tvx-item-position-change=${(/** @type {CustomEvent} */ event) =>
+            writeLog(log, `tvx-item-position-change: ${JSON.stringify(event.detail)}`)}
+        ></tvx-tree-view>
+        <pre class="story__log" ${ref(log)}></pre>
+      </div>
+    `;
   },
 };
 
 /** @type {Story} */
 export const VetoedMove = {
   render: () => {
-    const tree = createTree({ items: buildFileTree(), reordering: true });
-    const log = logPanel();
-    tree.addEventListener("tvx-item-position-change", (event) => {
-      const detail = /** @type {CustomEvent} */ (event).detail;
+    /** @type {import("lit/directives/ref.js").Ref<HTMLElement>} */
+    const log = createRef();
+    /** @param {CustomEvent} event */
+    const onPositionChange = (event) => {
+      const { detail } = event;
       if (detail.newPosition.parentId !== detail.oldPosition.parentId) {
         event.preventDefault();
-        log.textContent = `Blocked re-parent of "${detail.id}" — nothing moved.`;
+        writeLog(log, `Blocked re-parent of "${detail.id}" — nothing moved.`);
         return;
       }
-      log.textContent = `Allowed reorder: ${JSON.stringify(detail)}`;
-    });
-    return stack(
-      hintText(
-        "preventDefault() on any move that changes the parent; sibling reorders still go through.",
-      ),
-      tree,
-      log,
-    );
+      writeLog(log, `Allowed reorder: ${JSON.stringify(detail)}`);
+    };
+    return html`
+      ${storyStyles}
+      <div class="story">
+        <p class="story__hint">
+          preventDefault() on any move that changes the parent; sibling reorders still go through.
+        </p>
+        <tvx-tree-view
+          reordering
+          .items=${buildFileTree()}
+          .renderItemLeading=${renderFileIcon}
+          .renderItemTrailing=${renderTrailingIcon}
+          @tvx-item-position-change=${onPositionChange}
+        ></tvx-tree-view>
+        <pre class="story__log" ${ref(log)}></pre>
+      </div>
+    `;
   },
 };

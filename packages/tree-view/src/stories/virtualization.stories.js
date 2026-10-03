@@ -1,4 +1,7 @@
-import { button, controls, createTree, hintText, stack } from "./shared.js";
+import { html } from "lit";
+import { createRef, ref } from "lit/directives/ref.js";
+
+import { renderFileIcon, renderTrailingIcon, storyStyles } from "./shared.js";
 
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
@@ -48,43 +51,66 @@ function buildLargeTree(folders, files) {
   }));
 }
 
+/** @typedef {import("../base/tree-view.js").TvxTreeView} TvxTreeView */
+
 /** @type {Story} */
 export const LargeTree = {
   render: () => {
-    const items = buildLargeTree(1000, 100);
-    const tree = createTree({ items, multiSelect: true });
-    tree.style.height = "480px";
-    tree.style.border = "1px solid var(--md-sys-color-outline-variant, #ccc)";
-
-    return stack(
-      hintText(
-        "1,000 folders × 100 files (~100k items). Expand all, then scroll or hold ArrowDown — only " +
-          "the visible rows exist in the DOM.",
-      ),
-      controls(
-        button("Expand all", () => tree.expansion.expandAll()),
-        button("Collapse all", () => tree.expansion.collapseAll()),
-        button("Reveal file-500-50", () =>
-          tree.navigation.reveal("f500-50", { align: "center", behavior: "smooth" }),
-        ),
-        button("Focus file-500-50", () => {
-          tree.expansion.expand("f500");
-          tree.navigation.focusItem("f500-50");
-        }),
-      ),
-      tree,
-    );
+    /** @type {import("lit/directives/ref.js").Ref<TvxTreeView>} */
+    const tree = createRef();
+    return html`
+      ${storyStyles}
+      <div class="story">
+        <p class="story__hint">
+          1,000 folders × 100 files (~100k items). Expand all, then scroll or hold ArrowDown — only
+          the visible rows exist in the DOM.
+        </p>
+        <div class="story__controls">
+          <button @click=${() => tree.value?.expansion.expandAll()}>Expand all</button>
+          <button @click=${() => tree.value?.expansion.collapseAll()}>Collapse all</button>
+          <button
+            @click=${() =>
+              tree.value?.navigation.reveal("f500-50", { align: "center", behavior: "smooth" })}
+          >
+            Reveal file-500-50
+          </button>
+          <button
+            @click=${() => {
+              tree.value?.expansion.expand("f500");
+              tree.value?.navigation.focusItem("f500-50");
+            }}
+          >
+            Focus file-500-50
+          </button>
+        </div>
+        <tvx-tree-view
+          ${ref(tree)}
+          multi-select
+          style="height: 480px; border: 1px solid var(--md-sys-color-outline-variant, #ccc);"
+          .items=${buildLargeTree(1000, 100)}
+          .renderItemLeading=${renderFileIcon}
+          .renderItemTrailing=${renderTrailingIcon}
+        ></tvx-tree-view>
+      </div>
+    `;
   },
 };
 
 /** @type {Story} */
 export const NoVirtualization = {
-  render: () => {
-    const tree = createTree({ items: buildLargeTree(20, 10), noVirtualization: true });
-    tree.style.maxHeight = "480px";
-    return stack(
-      hintText("`no-virtualization` renders every visible row — fine for small trees."),
-      tree,
-    );
-  },
+  render: () => html`
+    ${storyStyles}
+    <div class="story">
+      <p class="story__hint">
+        <code>no-virtualization</code> renders every visible row — fine for small trees.
+      </p>
+      <tvx-tree-view
+        no-virtualization
+        style="max-height: 480px;"
+        .items=${buildLargeTree(20, 10)}
+        .renderItemLeading=${renderFileIcon}
+        .renderItemTrailing=${renderTrailingIcon}
+      ></tvx-tree-view>
+    </div>
+  `,
 };

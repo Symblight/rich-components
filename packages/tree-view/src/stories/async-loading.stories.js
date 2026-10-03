@@ -1,4 +1,7 @@
-import { button, controls, createTree, hintText, logPanel, stack } from "./shared.js";
+import { html } from "lit";
+import { createRef, ref } from "lit/directives/ref.js";
+
+import { renderFileIcon, renderTrailingIcon, storyStyles, writeLog } from "./shared.js";
 
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
@@ -74,67 +77,100 @@ function makeDataSource() {
   };
 }
 
+/** @typedef {import("../base/tree-view.js").TvxTreeView} TvxTreeView */
+
 /** @type {Story} */
 export const LazyLoadedDataSource = {
-  render: () =>
-    stack(
-      hintText(
-        '"src/" reports a known count (3) — expanding shows shimmer rows. "node_modules/" reports ' +
-          "an unknown count — expanding shows a spinner row, then it resolves empty and loses its chevron.",
-      ),
-      createTree({ dataSource: makeDataSource() }),
-    ),
+  render: () => html`
+    ${storyStyles}
+    <div class="story">
+      <p class="story__hint">
+        "src/" reports a known count (3) — expanding shows shimmer rows. "node_modules/" reports an
+        unknown count — expanding shows a spinner row, then it resolves empty and loses its chevron.
+      </p>
+      <tvx-tree-view
+        .dataSource=${makeDataSource()}
+        .renderItemLeading=${renderFileIcon}
+        .renderItemTrailing=${renderTrailingIcon}
+      ></tvx-tree-view>
+    </div>
+  `,
 };
 
 /** @type {Story} */
 export const ExpandAllAndSelect = {
   render: () => {
-    const tree = createTree({ dataSource: makeDataSource() });
-
+    /** @type {import("lit/directives/ref.js").Ref<TvxTreeView>} */
+    const tree = createRef();
+    /** @type {import("lit/directives/ref.js").Ref<HTMLElement>} */
+    const log = createRef();
     // expansion.expandAll() only reaches loaded branches; re-running it per batch walks the whole tree
     let expandingAll = false;
-    tree.addEventListener("tvx-children-loaded", () => {
-      if (expandingAll) tree.expansion.expandAll();
-    });
 
-    const log = logPanel();
-    tree.addEventListener("tvx-selection-change", (event) => {
-      const ids = [.../** @type {CustomEvent} */ (event).detail.selectedItems];
-      log.textContent = `tvx-selection-change: ${JSON.stringify(ids)}`;
-    });
-
-    return stack(
-      controls(
-        button("Expand all", () => {
-          expandingAll = true;
-          tree.expansion.expandAll();
-        }),
-        button("Select README.md", () => tree.selection.select("README.md")),
-        button("Reload root", () => tree.loading.reload()),
-      ),
-      tree,
-      log,
-    );
+    return html`
+      ${storyStyles}
+      <div class="story">
+        <div class="story__controls">
+          <button
+            @click=${() => {
+              expandingAll = true;
+              tree.value?.expansion.expandAll();
+            }}
+          >
+            Expand all
+          </button>
+          <button @click=${() => tree.value?.selection.select("README.md")}>
+            Select README.md
+          </button>
+          <button @click=${() => tree.value?.loading.reload()}>Reload root</button>
+        </div>
+        <tvx-tree-view
+          ${ref(tree)}
+          .dataSource=${makeDataSource()}
+          .renderItemLeading=${renderFileIcon}
+          .renderItemTrailing=${renderTrailingIcon}
+          @tvx-children-loaded=${() => expandingAll && tree.value?.expansion.expandAll()}
+          @tvx-selection-change=${(/** @type {CustomEvent} */ event) =>
+            writeLog(
+              log,
+              `tvx-selection-change: ${JSON.stringify([...event.detail.selectedItems])}`,
+            )}
+        ></tvx-tree-view>
+        <pre class="story__log" ${ref(log)}></pre>
+      </div>
+    `;
   },
 };
 
 /** @type {Story} */
 export const ChildrenLoadedEvent = {
   render: () => {
-    const tree = createTree({ dataSource: makeDataSource() });
-    const log = logPanel();
-    tree.addEventListener("tvx-children-loaded", (event) => {
-      const { id, items } = /** @type {CustomEvent} */ (event).detail;
+    /** @type {import("lit/directives/ref.js").Ref<HTMLElement>} */
+    const log = createRef();
+    /** @param {CustomEvent} event */
+    const onChildrenLoaded = (event) => {
+      const { id, items } = event.detail;
       const names = /** @type {any[]} */ (items).map((item) => item.label);
-      log.textContent = `tvx-children-loaded: parent=${JSON.stringify(id)} items=${JSON.stringify(names)}`;
-    });
-    return stack(
-      hintText(
-        "Fires once a batch lands (id is null for the root) — unlike tvx-expand-change, which fires " +
-          "the instant a branch opens, before its fetch starts.",
-      ),
-      tree,
-      log,
-    );
+      writeLog(
+        log,
+        `tvx-children-loaded: parent=${JSON.stringify(id)} items=${JSON.stringify(names)}`,
+      );
+    };
+    return html`
+      ${storyStyles}
+      <div class="story">
+        <p class="story__hint">
+          Fires once a batch lands (id is null for the root) — unlike tvx-expand-change, which fires
+          the instant a branch opens, before its fetch starts.
+        </p>
+        <tvx-tree-view
+          .dataSource=${makeDataSource()}
+          .renderItemLeading=${renderFileIcon}
+          .renderItemTrailing=${renderTrailingIcon}
+          @tvx-children-loaded=${onChildrenLoaded}
+        ></tvx-tree-view>
+        <pre class="story__log" ${ref(log)}></pre>
+      </div>
+    `;
   },
 };

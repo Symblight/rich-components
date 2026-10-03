@@ -1,6 +1,7 @@
+import { html } from "lit";
 import starIcon from "@material-design-icons/svg/outlined/star_border.svg?raw";
 
-import { buildFileTree, createTree, file, folder } from "./shared.js";
+import { buildFileTree, file, folder, renderFileIcon, renderTrailingIcon } from "./shared.js";
 
 /** @type {import("@storybook/web-components").Meta} */
 const meta = {
@@ -27,23 +28,29 @@ export default meta;
 
 /** @type {Story} */
 export const ItemsProperty = {
-  render: () => createTree({ items: buildFileTree() }),
+  render: () => html`
+    <tvx-tree-view
+      .items=${buildFileTree()}
+      .renderItemLeading=${renderFileIcon}
+      .renderItemTrailing=${renderTrailingIcon}
+    ></tvx-tree-view>
+  `,
 };
 
 /** @type {Story} */
 export const CustomDataShape = {
-  render: () =>
-    createTree({
-      items: [
+  render: () => html`
+    <tvx-tree-view
+      .items=${[
         { uuid: "1", name: "Inbox", entries: [{ uuid: "2", name: "Invoices" }] },
         { uuid: "3", name: "Archive", locked: true },
-      ],
-      getItemId: (item) => item.uuid,
-      getItemLabel: (item) => item.name,
-      getItemChildren: (item) => item.entries,
-      isItemDisabled: (item) => !!item.locked,
-      renderItemLeading: undefined,
-    }),
+      ]}
+      .getItemId=${(/** @type {any} */ item) => item.uuid}
+      .getItemLabel=${(/** @type {any} */ item) => item.name}
+      .getItemChildren=${(/** @type {any} */ item) => item.entries}
+      .isItemDisabled=${(/** @type {any} */ item) => !!item.locked}
+    ></tvx-tree-view>
+  `,
 };
 CustomDataShape.parameters = {
   docs: {
@@ -57,29 +64,35 @@ CustomDataShape.parameters = {
 
 /** @type {Story} */
 export const LeadingAndTrailing = {
-  render: () =>
-    createTree({
-      items: [
+  render: () => html`
+    <tvx-tree-view
+      .items=${[
         folder({
           id: "src",
           label: "src/",
           children: [file({ id: "button", label: "Button.tsx", trailingIcon: starIcon })],
         }),
         file({ id: "package", label: "package.json", trailingIcon: starIcon }),
-      ],
-      defaultExpandedItems: ["src"],
-    }),
+      ]}
+      .defaultExpandedItems=${["src"]}
+      .renderItemLeading=${renderFileIcon}
+      .renderItemTrailing=${renderTrailingIcon}
+    ></tvx-tree-view>
+  `,
 };
 
 /** @type {Story} */
 export const Compact = {
-  render: () =>
-    createTree({
-      items: buildFileTree(),
-      compact: true,
-      defaultExpandedItems: ["src", "components"],
-      defaultSelectedItems: ["button"],
-    }),
+  render: () => html`
+    <tvx-tree-view
+      compact
+      .items=${buildFileTree()}
+      .defaultExpandedItems=${["src", "components"]}
+      .defaultSelectedItems=${["button"]}
+      .renderItemLeading=${renderFileIcon}
+      .renderItemTrailing=${renderTrailingIcon}
+    ></tvx-tree-view>
+  `,
 };
 Compact.parameters = {
   docs: {
@@ -93,12 +106,15 @@ Compact.parameters = {
 
 /** @type {Story} */
 export const IndentGuides = {
-  render: () =>
-    createTree({
-      items: buildFileTree(),
-      indentGuides: true,
-      defaultExpandedItems: ["src", "components"],
-    }),
+  render: () => html`
+    <tvx-tree-view
+      indent-guides
+      .items=${buildFileTree()}
+      .defaultExpandedItems=${["src", "components"]}
+      .renderItemLeading=${renderFileIcon}
+      .renderItemTrailing=${renderTrailingIcon}
+    ></tvx-tree-view>
+  `,
 };
 IndentGuides.parameters = {
   docs: {

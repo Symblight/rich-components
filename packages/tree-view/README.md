@@ -76,25 +76,115 @@ tree.addEventListener("tvx-selection-change", (event) => {
 | `compact`                                                      | `compact`            | `false`                     | Dense rows: 28px instead of 36px, 18px icons, 13px text, 12px indent per level.                                                                                                                                  |
 | `indentGuides`                                                 | `indent-guides`      | `false`                     | A vertical line under each ancestor's chevron. All show while the tree is hovered or focused; at rest only the focused row's parent keeps its line.                                                              |
 | `isItemReorderable`                                            | —                    | `undefined`                 | `(item) => boolean` — vetoes picking an item up; it can still be a drop target.                                                                                                                                  |
-| `isItemEditable`                                               | —                    | `false`                     | `true`, or `(item) => boolean` — items `setEditedItem()` may edit. Disabled items never are.                                                                                                                     |
+| `isItemEditable`                                               | —                    | `false`                     | `true`, or `(item) => boolean` — items `editing.start()` may edit. Disabled items never are.                                                                                                                     |
 | `getHref`                                                      | —                    | `undefined`                 | `(item) => string \| undefined` — URL opened by middle-click / Ctrl+Enter.                                                                                                                                       |
 | `defaultExpandedItems` / `defaultSelectedItems`                | —                    | `undefined`                 | Ids applied once, when the first items exist.                                                                                                                                                                    |
 | `expandedItems` / `selectedItems`                              | —                    | —                           | Live `Set<PropertyKey>` snapshots; assigning a new set replaces the state.                                                                                                                                       |
 
-### Methods
+### Imperative API
 
-| Method                               | Description                                                                                                                                                                                                                                                                |
-| ------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `setItemExpansion({ id, expand })`   | Expands or collapses one branch.                                                                                                                                                                                                                                           |
-| `isItemExpanded(id)`                 | `false` for unknown ids and leaves.                                                                                                                                                                                                                                        |
-| `expandAll()` / `collapseAll()`      | Every loaded branch; lazily loaded children arrive collapsed.                                                                                                                                                                                                              |
-| `setItemSelection({ id, selected })` | Selects or deselects one item, no cascade.                                                                                                                                                                                                                                 |
-| `updateItemLabel({ id, label })`     | Relabels an item until the next `.items`; fires cancelable `tvx-item-label-change` first. Returns whether the label changed.                                                                                                                                               |
-| `setEditedItem(id \| null)`          | Swaps an editable item's label for a text input (or your `slot="edit"` element), focused with its text selected. Enter saves, Escape cancels, focus leaving it saves a non-empty value. `null` leaves without saving. Starting it (F2, double-click, a menu) is up to you. |
-| `editedItem`                         | Id of the item being edited, or `null`.                                                                                                                                                                                                                                    |
-| `getItem(id)`                        | The data item for an id, or `null`.                                                                                                                                                                                                                                        |
-| `focusItem(id)`                      | Scrolls a row into view and focuses it.                                                                                                                                                                                                                                    |
-| `focusedKey`                         | Id of the row holding the Tab stop.                                                                                                                                                                                                                                        |
+The imperative API is grouped into **namespaces** — getters on the element (and on
+[`TreeViewController`](#treeviewcontroller)):
+
+```js
+const tree = document.querySelector("tvx-tree-view");
+
+tree.expansion.collapseAll();
+tree.selection.clear();
+await tree.navigation.reveal(searchHitId, { align: "center" });
+tree.editing.start(id);
+tree.nodes.move(id, { parentId: archiveId, index: 0 });
+await tree.loading.reload(folderId);
+```
+
+- Reads are `get*` / `is*`; everything else is an action. Ids are positional.
+- An unknown id reads as the empty value (`false`, `null`, `[]`) and actions ignore it.
+- Namespace objects are frozen and stable — destructuring (`const { selection } = tree`) is fine.
+- `expandedItems` / `selectedItems` stay as properties for controlled use.
+
+#### `expansion`
+
+| Method                          | Notes                                                         |
+| ------------------------------- | ------------------------------------------------------------- |
+| `expand(id)` / `collapse(id)`   |                                                               |
+| `toggle(id)`                    |                                                               |
+| `expandAll()` / `collapseAll()` | Every loaded branch; lazily loaded children arrive collapsed. |
+| `set(ids)` / `get()`            | Same as assigning / reading `expandedItems`.                  |
+| `isExpanded(id)`                | `false` for unknown ids and leaves.                           |
+
+#### `selection`
+
+| Method                        | Notes                                                                               |
+| ----------------------------- | ----------------------------------------------------------------------------------- |
+| `select(id)` / `deselect(id)` | No cascade. Ignored under `disableSelection` and on disabled items.                 |
+| `set(ids)` / `get()`          | Same as assigning / reading `selectedItems`.                                        |
+| `clear()`                     | No event when nothing was selected.                                                 |
+| `isSelected(id)`              |                                                                                     |
+| `getState(id)`                | `{ selected, indeterminate }` — derived from the subtree under `checkboxSelection`. |
+
+#### `nodes`
+
+| Method                   | Notes                                                                                                                                                                                       |
+| ------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `getItem(id)`            | Your data item, or `null`.                                                                                                                                                                  |
+| `getParentId(id)`        | `null` at the root.                                                                                                                                                                         |
+| `getChildIds(parentId?)` | The root without an argument; `[]` for a leaf or an unloaded branch.                                                                                                                        |
+| `getPosition(id)`        | `{ parentId, index }`, or `null`.                                                                                                                                                           |
+| `move(id, position)`     | Fires cancelable `tvx-item-position-change`, then moves; returns whether it moved. Not gated by `reordering` / `isItemReorderable`. `false` without an event for impossible or no-op moves. |
+
+#### `editing`
+
+| Method                   | Notes                                                                                                                                                                                                                                        |
+| ------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `start(id)`              | Swaps an editable item's label for a text input (or your `slot="edit"` element), focused with its text selected. Enter saves, Escape cancels, focus leaving it saves a non-empty value. Starting it (F2, double-click, a menu) is up to you. |
+| `cancel()`               | Leaves without saving.                                                                                                                                                                                                                       |
+| `getEdited()`            | Id of the item being edited, or `null`.                                                                                                                                                                                                      |
+| `updateLabel(id, label)` | Relabels until the next `.items`; fires cancelable `tvx-item-label-change` first. Returns whether the label changed.                                                                                                                         |
+| `isEditable(id)`         |                                                                                                                                                                                                                                              |
+
+#### `navigation`
+
+| Method                       | Notes                                                                                         |
+| ---------------------------- | --------------------------------------------------------------------------------------------- |
+| `focusItem(id)`              | Moves the Tab stop, focuses and scrolls. `false` when the row isn't visible.                  |
+| `getFocused()`               | Id of the row holding the Tab stop.                                                           |
+| `scrollToItem(id, options?)` | No focus change. `options`: `{ align: "start" \| "center" \| "end" \| "nearest", behavior }`. |
+| `reveal(id, options?)`       | Expands the loaded ancestors, then scrolls; `false` when the id isn't loaded.                 |
+
+`"smooth"` drops to `"auto"` under `prefers-reduced-motion`.
+
+#### `loading`
+
+| Method           | Notes                                                                                                                   |
+| ---------------- | ----------------------------------------------------------------------------------------------------------------------- |
+| `reload(id?)`    | Refetches a branch's children (the root without an id). A collapsed branch is only unloaded and fetches on next expand. |
+| `isLoading(id?)` | The root without an id.                                                                                                 |
+
+### `TreeViewController`
+
+For your own Lit element next to (or inside) a tree — a toolbar, a status line:
+
+```js
+import { TreeViewController } from "@symblight/tree-view";
+
+class TreeToolbar extends LitElement {
+  // a sibling tree: pass it, or a getter re-run on every update; omit it inside a <tvx-tree-view>
+  #tree = new TreeViewController(this, () => this.nextElementSibling);
+
+  render() {
+    const { selection } = this.#tree;
+    return html`
+      <span>${this.#tree.selectedItems.size} selected</span>
+      <button @click=${() => selection.clear()}>Clear</button>
+    `;
+  }
+}
+```
+
+Reactive properties — read them in `render()`; the element re-renders only when one it read
+changed: `selectedItems`, `expandedItems`, `focusedItem`, `editedItem`, `isLoading` (the root or
+any branch). Namespace `get*` calls are not tracked. Also `connected` and the six namespaces, which
+are no-ops until a tree is found.
 
 ### Events
 
@@ -102,12 +192,12 @@ tree.addEventListener("tvx-selection-change", (event) => {
 | -------------------------- | ------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `tvx-selection-change`     | `{ selectedItems: Set<PropertyKey> }` | Whole-tree snapshot after any selection change.                                                                                                                                  |
 | `tvx-expansion-change`     | `{ expandedItems: Set<PropertyKey> }` | Whole-tree snapshot after any expand/collapse.                                                                                                                                   |
-| `tvx-expand-change`        | `{ key, expanded }`                   | One item's expansion toggled.                                                                                                                                                    |
-| `tvx-item-position-change` | `{ key, oldPosition, newPosition }`   | **Cancelable**, fires before a reorder moves an item; `preventDefault()` blocks it. A position is `{ parentId: PropertyKey \| null, index }` (`parentId` is `null` at the root). |
-| `tvx-item-label-change`    | `{ key, oldLabel, newLabel }`         | **Cancelable**, fires before `updateItemLabel()` changes a label; `preventDefault()` blocks it.                                                                                  |
-| `tvx-children-loaded`      | `{ key, node, items }`                | A `dataSource` batch landed; `key`/`node` are `null` for the root.                                                                                                               |
-| `tvx-load-error`           | `{ key, node, error }`                | `dataSource.getTreeItems()` rejected.                                                                                                                                            |
-| `tvx-open`                 | `{ key, node, newTab: true }`         | **Cancelable**; middle-click / Ctrl+Enter on an item `getHref` didn't give a URL for.                                                                                            |
+| `tvx-expand-change`        | `{ id, expanded }`                    | One item's expansion toggled.                                                                                                                                                    |
+| `tvx-item-position-change` | `{ id, oldPosition, newPosition }`    | **Cancelable**, fires before a reorder moves an item; `preventDefault()` blocks it. A position is `{ parentId: PropertyKey \| null, index }` (`parentId` is `null` at the root). |
+| `tvx-item-label-change`    | `{ id, oldLabel, newLabel }`          | **Cancelable**, fires before `editing.updateLabel()` changes a label; `preventDefault()` blocks it.                                                                              |
+| `tvx-children-loaded`      | `{ id, item, items }`                 | A `dataSource` batch landed; `id`/`item` are `null` for the root.                                                                                                                |
+| `tvx-load-error`           | `{ id, item, error }`                 | `dataSource.getTreeItems()` rejected.                                                                                                                                            |
+| `tvx-open`                 | `{ id, item, newTab: true }`          | **Cancelable**; middle-click / Ctrl+Enter on an item `getHref` didn't give a URL for.                                                                                            |
 
 ### Keyboard
 
@@ -141,6 +231,7 @@ tree.dataSource = {
   rows while loading; an unknown count shows one spinner row.
 - A branch that loads empty becomes a leaf ("{label} is empty." is announced).
 - A failed load fires `tvx-load-error`; the next expand tries again.
+- `tree.loading.reload(id?)` refetches a branch (or the root); expansion and selection are kept by id.
 - `getChildrenCount` is called once per item, when the item is added.
 
 ## Custom label editor
@@ -151,13 +242,30 @@ property), focuses it — or its first `input`/`textarea` — and selects the te
 focus leaving the element work as with the built-in input; the saved value is read from the
 control the key or focus event came from. Moving focus between controls inside the element (e.g. a
 save button) doesn't end editing; such a button can save with
-`tree.updateItemLabel({ id: tree.editedItem, label })` and `tree.setEditedItem(null)`.
+`tree.editing.updateLabel(tree.editing.getEdited(), label)` and `tree.editing.cancel()`.
 
 ```html
 <tvx-tree-view>
   <md-text-field slot="edit" variant="filled"></md-text-field>
 </tvx-tree-view>
 ```
+
+## Migrating to the namespaces
+
+| Before                                      | After                                               |
+| ------------------------------------------- | --------------------------------------------------- |
+| `setItemExpansion({ id, expand })`          | `expansion.expand(id)` / `expansion.collapse(id)`   |
+| `isItemExpanded(id)`                        | `expansion.isExpanded(id)`                          |
+| `expandAll()` / `collapseAll()`             | `expansion.expandAll()` / `expansion.collapseAll()` |
+| `setItemSelection({ id, selected })`        | `selection.select(id)` / `selection.deselect(id)`   |
+| `getItem(id)`                               | `nodes.getItem(id)`                                 |
+| `updateItemLabel({ id, label })`            | `editing.updateLabel(id, label)`                    |
+| `setEditedItem(id)` / `setEditedItem(null)` | `editing.start(id)` / `editing.cancel()`            |
+| `editedItem`                                | `editing.getEdited()`                               |
+| `focusItem(id)`                             | `navigation.focusItem(id)`                          |
+| `focusedKey`                                | `navigation.getFocused()`                           |
+| event `detail.key` / `detail.node`          | `detail.id` / `detail.item`                         |
+| `buildIndexTree` & co. from the package     | removed — internal                                  |
 
 ## Install
 

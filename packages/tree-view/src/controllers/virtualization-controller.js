@@ -19,15 +19,19 @@ export class VirtualizationController {
   #getFocusedIndex;
   /** @type {WeakSet<Element>} */
   #measured = new WeakSet();
+  /** @type {(index: number) => HTMLElement | null} */
+  #rowElement;
 
   /**
    * @param {import("../base/tree-view.js").TvxTreeView} host
    * @param {() => import("./tree-model-controller.js").TreeRow[]} getRows
    * @param {() => number} getFocusedIndex this row stays rendered even when scrolled out, so focus isn't lost
+   * @param {(index: number) => HTMLElement | null} rowElement host seam: the rendered row at `index`
    */
-  constructor(host, getRows, getFocusedIndex) {
+  constructor(host, getRows, getFocusedIndex, rowElement) {
     this.host = host;
     this.#getFocusedIndex = getFocusedIndex;
+    this.#rowElement = rowElement;
     this.#controller = new VirtualizerController(host, {
       count: 0,
       enabled: false,
@@ -89,10 +93,22 @@ export class VirtualizationController {
     if (measuredNew) this.#virtualizer.measureElement(null); // forget rows that were unmounted
   }
 
-  /** Scrolls just enough to show row `index`. @param {number} index */
-  scrollToIndex(index) {
-    if (this.enabled) this.#virtualizer.scrollToIndex(index, { align: "auto" });
-    else this.host.rowElement(index)?.scrollIntoView({ block: "nearest" });
+  /** Scrolls row `index` into view — by default just enough to show it. `"smooth"` drops to
+   * `"auto"` under `prefers-reduced-motion`.
+   * @param {number} index
+   * @param {import("../types/api.js").TvxScrollToItemOptions} [options] */
+  scrollToIndex(index, { align = "nearest", behavior = "auto" } = {}) {
+    if (behavior === "smooth" && matchMedia("(prefers-reduced-motion: reduce)").matches) {
+      behavior = "auto";
+    }
+    if (this.enabled) {
+      this.#virtualizer.scrollToIndex(index, {
+        align: align === "nearest" ? "auto" : align,
+        behavior,
+      });
+    } else {
+      this.#rowElement(index)?.scrollIntoView({ block: align, behavior });
+    }
   }
 }
 

@@ -1,17 +1,19 @@
 import { emit } from "../core/emit.js";
+import {
+  buildIndexTree,
+  createEmptyIndexTree,
+  findIndexTree,
+  isAncestorIndexTree,
+  moveIndexTree,
+  positionIndexTree,
+  setIndexTreeChildren,
+  walkIndexTree,
+} from "../core/index-tree.js";
 
 /** A branch reporting a huge child count still shows at most this many skeleton rows. */
 const MAX_SKELETON_ROWS = 8;
 
-/**
- * @typedef {object} TreeNode
- * @property {PropertyKey} id
- * @property {any} item
- * @property {PropertyKey | null} parentId
- * @property {PropertyKey[] | null} childIds `null` while a lazy branch's children aren't loaded
- * @property {string} [label] set by `updateItemLabel`; wins over `getItemLabel` until the next `.items`
- * @property {number | undefined} childCount `dataSource.getChildrenCount()`, asked once when the node is added
- */
+/** @typedef {import("../core/index-tree.js").IndexTree<any>} TreeNode */
 
 /**
  * One rendered line: a real item, or a placeholder shown while a branch loads.
@@ -25,15 +27,14 @@ const MAX_SKELETON_ROWS = 8;
  */
 
 /**
- * The tree's state: nodes by id, expanded/loading branches, and `rows` — the flat list of visible
- * lines that gets rendered. Every change rebuilds `rows` and re-renders the host.
+ * The tree's state: the structure (an `IndexTree` of the consumer's items), expanded/loading
+ * branches, and `rows` — the flat list of visible lines that gets rendered. Every change rebuilds
+ * `rows` and re-renders the host.
  */
 export class TreeModelController {
-  /** @type {Map<PropertyKey, TreeNode>} */
-  nodes = new Map();
-  /** @type {PropertyKey[]} */
-  rootIds = [];
-  /** @type {Set<PropertyKey>} */
+  /** Synthetic root; a node's `children` is `null` while a lazy branch isn't loaded. @type {TreeNode} */
+  tree = createEmptyIndexTree();
+  /** A new Set after every change, so comparing references spots one. @type {Set<PropertyKey>} */
   expanded = new Set();
   /** Branches being fetched; `null` = the root. @type {Set<PropertyKey | null>} */
   loading = new Set();
@@ -41,6 +42,10 @@ export class TreeModelController {
   rows = [];
   /** @type {Map<PropertyKey, number>} */
   #rowIndex = new Map();
+  /** Set by `editing.updateLabel`; wins over `getItemLabel` until the next `.items`. @type {Map<PropertyKey, string>} */
+  #labels = new Map();
+  /** `dataSource.getChildrenCount()` per unloaded node, asked once when it's added. @type {Map<PropertyKey, number | undefined>} */
+  #childCounts = new Map();
   /** Bumped when nodes are added or moved (not on expand/collapse), so selection knows to recount. */
   structureVersion = 0;
 
@@ -55,10 +60,16 @@ export class TreeModelController {
 
   // ─── items ───
 
+  get #treeOptions() {
+    return { getKey: this.host.getItemId, getChildren: this.host.getItemChildren };
+  }
+
   /** @param {any[]} items */
   setItems(items) {
-    this.nodes.clear();
-    this.rootIds = this.#addNodes(items, null);
+    this.tree = buildIndexTree(items, this.#treeOptions);
+    this.#labels.clear();
+    this.#childCounts.clear();
+    this.#countChildren(this.tree);
     this.structureVersion++;
     this.#refresh();
     this.#loadExpandedBranches();
@@ -67,113 +78,145 @@ export class TreeModelController {
   /** @param {PropertyKey} id
    * @param {any[]} items */
   setChildren(id, items) {
-    const node = this.nodes.get(id);
+    const node = this.node(id);
     if (!node) return;
-    node.childIds = this.#addNodes(items, id);
-    if (items.length === 0) this.expanded.delete(id); // turned out to be a leaf
+    this.#forgetDescendants(node);
+    setIndexTreeChildren(node, items, this.#treeOptions);
+    this.#countChildren(node);
+    if (items.length === 0 && this.expanded.has(id)) {
+      this.expanded = new Set(this.expanded); // turned out to be a leaf
+      this.expanded.delete(id);
+    }
     this.structureVersion++;
     this.#refresh();
     this.#loadExpandedBranches();
   }
 
-  /** Expanded branches whose children aren't loaded yet (e.g. after a new `.items`) get fetched. */
-  #loadExpandedBranches() {
-    for (const id of this.expanded) {
-      if (this.nodes.get(id)?.childIds === null && this.hasChildren(id)) this.onExpand(id);
+  /** Drops a branch's loaded children; it's fetched again on expand. Expansion and selection of
+   * the dropped ids are kept, and re-apply if they come back.
+   * @param {PropertyKey} id */
+  unloadChildren(id) {
+    const node = this.node(id);
+    if (!node?.children) return;
+    this.#forgetDescendants(node);
+    setIndexTreeChildren(node, null, this.#treeOptions);
+    this.#countChildren(node);
+    this.structureVersion++;
+    this.#refresh();
+  }
+
+  /** @param {TreeNode} node */
+  #forgetDescendants(node) {
+    for (const descendant of walkIndexTree(node)) {
+      if (descendant === node || descendant.key === null) continue;
+      this.#labels.delete(descendant.key);
+      this.#childCounts.delete(descendant.key);
     }
   }
 
-  /** @param {any[]} items
-   * @param {PropertyKey | null} parentId
-   * @returns {PropertyKey[]} */
-  #addNodes(items, parentId) {
-    return items.map((item) => {
-      const id = this.host.getItemId(item);
-      const children = this.host.getItemChildren(item);
-      /** @type {TreeNode} */
-      const node = { id, item, parentId, childIds: null, childCount: undefined };
-      this.nodes.set(id, node);
-      if (children?.length) node.childIds = this.#addNodes(children, id);
-      else node.childCount = this.host.dataSource?.getChildrenCount(item);
-      return id;
-    });
+  /** Asks `dataSource` for the child count of every unloaded node under `node`. @param {TreeNode} node */
+  #countChildren(node) {
+    const dataSource = this.host.dataSource;
+    for (const descendant of walkIndexTree(node)) {
+      if (descendant.children === null && descendant.key !== null) {
+        this.#childCounts.set(descendant.key, dataSource?.getChildrenCount(descendant.value));
+      }
+    }
+  }
+
+  /** Expanded branches whose children aren't loaded yet (e.g. after a new `.items`) get fetched. */
+  #loadExpandedBranches() {
+    for (const id of this.expanded) {
+      if (this.node(id)?.children === null && this.hasChildren(id)) this.onExpand(id);
+    }
+  }
+
+  /** @param {PropertyKey} id */
+  node(id) {
+    return findIndexTree(this.tree, id);
+  }
+
+  /** @param {PropertyKey} id */
+  has(id) {
+    return this.tree.byKey.has(id);
+  }
+
+  /** Whether a branch's children are in the tree (a lazy one's arrive on expand). @param {PropertyKey} id */
+  isLoaded(id) {
+    return !!this.node(id)?.children;
+  }
+
+  /** No root items yet. */
+  get empty() {
+    return !this.tree.children?.length;
   }
 
   /** @param {PropertyKey} id */
   item(id) {
-    return this.nodes.get(id)?.item;
+    return this.node(id)?.value;
   }
 
   /** @param {PropertyKey | null} parentId
    * @returns {PropertyKey[]} */
   childIds(parentId) {
-    if (parentId === null) return this.rootIds;
-    return this.nodes.get(parentId)?.childIds ?? [];
+    const parent = parentId === null ? this.tree : this.node(parentId);
+    return parent?.children?.map((child) => /** @type {PropertyKey} */ (child.key)) ?? [];
   }
 
   /** @param {PropertyKey} id
    * @returns {PropertyKey | null} */
   parentId(id) {
-    return this.nodes.get(id)?.parentId ?? null;
+    return this.node(id)?.parent?.key ?? null;
   }
 
   /** @param {PropertyKey} id */
   label(id) {
-    const node = this.nodes.get(id);
+    const node = this.node(id);
     if (!node) return "";
-    return node.label ?? String(this.host.getItemLabel(node.item) ?? "");
+    return this.#labels.get(id) ?? String(this.host.getItemLabel(node.value) ?? "");
   }
 
   /** @param {PropertyKey} id
    * @param {string} label */
   setLabel(id, label) {
-    const node = this.nodes.get(id);
-    if (!node) return;
-    node.label = label;
+    if (!this.has(id)) return;
+    this.#labels.set(id, label);
     this.host.requestUpdate();
   }
 
   /** @param {PropertyKey} id */
   isDisabled(id) {
-    const node = this.nodes.get(id);
-    return !!node && !!this.host.isItemDisabled(node.item);
+    const node = this.node(id);
+    return !!node && !!this.host.isItemDisabled(node.value);
   }
 
   /** Loaded children decide; an unloaded lazy branch uses its `childCount` (`0` = leaf).
    * @param {PropertyKey} id */
   hasChildren(id) {
-    const node = this.nodes.get(id);
+    const node = this.node(id);
     if (!node) return false;
-    if (node.childIds) return node.childIds.length > 0;
-    return !!this.host.dataSource && node.childCount !== 0;
+    if (node.children) return node.children.length > 0;
+    return !!this.host.dataSource && this.#childCounts.get(id) !== 0;
   }
 
   /** @param {PropertyKey} id */
   childCount(id) {
-    return this.nodes.get(id)?.childCount;
-  }
-
-  /** `id` and all its loaded descendants.
-   * @param {PropertyKey} id
-   * @returns {IterableIterator<PropertyKey>} */
-  *subtree(id) {
-    yield id;
-    for (const childId of this.childIds(id)) yield* this.subtree(childId);
+    return this.#childCounts.get(id);
   }
 
   /** @param {PropertyKey} ancestorId
    * @param {PropertyKey} id */
   isAncestor(ancestorId, id) {
-    for (let p = this.parentId(id); p !== null; p = this.parentId(p)) {
-      if (p === ancestorId) return true;
-    }
-    return false;
+    const ancestor = this.node(ancestorId);
+    const node = this.node(id);
+    return !!ancestor && !!node && isAncestorIndexTree(ancestor, node);
   }
 
   /** @param {PropertyKey} id */
   position(id) {
-    const parentId = this.parentId(id);
-    return { parentId, index: this.childIds(parentId).indexOf(id) };
+    const node = this.node(id);
+    const { parent, index } = node ? positionIndexTree(node) : { parent: null, index: -1 };
+    return { parentId: parent?.key ?? null, index };
   }
 
   /** Moves `id` under `parentId` at `index` (counted without `id` itself).
@@ -181,19 +224,9 @@ export class TreeModelController {
    * @param {PropertyKey | null} parentId
    * @param {number} index */
   move(id, parentId, index) {
-    const node = this.nodes.get(id);
-    if (!node) return;
-    const oldSiblings = this.childIds(node.parentId);
-    oldSiblings.splice(oldSiblings.indexOf(id), 1);
-
-    let newSiblings = this.rootIds;
-    if (parentId !== null) {
-      const parent = /** @type {TreeNode} */ (this.nodes.get(parentId));
-      parent.childIds ??= [];
-      newSiblings = parent.childIds;
-    }
-    newSiblings.splice(index, 0, id);
-    node.parentId = parentId;
+    const node = this.node(id);
+    const parent = parentId === null ? this.tree : this.node(parentId);
+    if (!node || !parent || !moveIndexTree(node, parent, index)) return;
     this.structureVersion++;
     this.#refresh();
   }
@@ -221,23 +254,37 @@ export class TreeModelController {
     if (this.#setExpanded(id, false)) this.#expansionChanged();
   }
 
+  /** Expands every ancestor of `id`, with one `tvx-expansion-change`. @param {PropertyKey} id */
+  expandAncestors(id) {
+    let changed = false;
+    for (let p = this.parentId(id); p !== null; p = this.parentId(p)) {
+      changed = this.#setExpanded(p, true) || changed;
+    }
+    if (changed) this.#expansionChanged();
+  }
+
   /** Expands every loaded branch; lazily loaded children arrive collapsed. */
   expandAll() {
-    for (const id of this.nodes.keys()) this.#setExpanded(id, true);
-    this.#expansionChanged();
+    let changed = false;
+    for (const id of this.tree.byKey.keys()) changed = this.#setExpanded(id, true) || changed;
+    if (changed) this.#expansionChanged();
   }
 
   collapseAll() {
-    for (const id of [...this.expanded]) this.#setExpanded(id, false);
-    this.#expansionChanged();
+    let changed = false;
+    for (const id of [...this.expanded]) changed = this.#setExpanded(id, false) || changed;
+    if (changed) this.#expansionChanged();
   }
 
   /** Makes exactly `ids` expanded (unknown ids are skipped). @param {Iterable<PropertyKey>} ids */
   setExpandedItems(ids) {
     const next = new Set(ids);
-    for (const id of [...this.expanded]) if (!next.has(id)) this.#setExpanded(id, false);
-    for (const id of next) this.#setExpanded(id, true);
-    this.#expansionChanged();
+    let changed = false;
+    for (const id of [...this.expanded]) {
+      if (!next.has(id)) changed = this.#setExpanded(id, false) || changed;
+    }
+    for (const id of next) changed = this.#setExpanded(id, true) || changed;
+    if (changed) this.#expansionChanged();
   }
 
   /** @param {PropertyKey} id
@@ -248,12 +295,14 @@ export class TreeModelController {
     if (expanded && !this.hasChildren(id)) return false;
     if (expanded) this.expanded.add(id);
     else this.expanded.delete(id);
-    emit(this.host, "tvx-expand-change", { key: id, expanded });
+    emit(this.host, "tvx-expand-change", { id, expanded });
     if (expanded) this.onExpand(id);
     return true;
   }
 
+  /** Ends a batch of `#setExpanded` calls. */
   #expansionChanged() {
+    this.expanded = new Set(this.expanded);
     this.#refresh();
     emit(this.host, "tvx-expansion-change", { expandedItems: new Set(this.expanded) });
   }
@@ -303,15 +352,16 @@ export class TreeModelController {
     const rows = [];
     this.#rowIndex = new Map();
 
-    /** @param {PropertyKey[]} ids
+    /** @param {TreeNode[]} nodes
      * @param {number} level */
-    const addLevel = (ids, level) => {
-      ids.forEach((id, i) => {
+    const addLevel = (nodes, level) => {
+      nodes.forEach((node, i) => {
+        const id = /** @type {PropertyKey} */ (node.key);
         this.#rowIndex.set(id, rows.length);
-        rows.push({ kind: "item", key: id, id, level, posinset: i + 1, setsize: ids.length });
+        rows.push({ kind: "item", key: id, id, level, posinset: i + 1, setsize: nodes.length });
         if (!this.isExpanded(id)) return;
         if (this.loading.has(id)) addPlaceholders(id, level + 1);
-        else addLevel(this.childIds(id), level + 1);
+        else addLevel(node.children ?? [], level + 1);
       });
     };
 
@@ -335,7 +385,7 @@ export class TreeModelController {
       }
     };
 
-    if (this.rootIds.length === 0 && this.loading.has(null)) {
+    if (this.empty && this.loading.has(null)) {
       rows.push({
         kind: "loading",
         key: "\0loading:root",
@@ -345,7 +395,7 @@ export class TreeModelController {
         setsize: 1,
       });
     }
-    addLevel(this.rootIds, 1);
+    addLevel(this.tree.children ?? [], 1);
     this.rows = rows;
   }
 }

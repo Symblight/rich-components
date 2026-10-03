@@ -24,7 +24,7 @@ export class OpenController {
     if (href && isSafeUrl(href)) {
       window.open(href, "_blank", "noopener,noreferrer"); // no `window.opener` back to this page
     } else {
-      emit(this.host, "tvx-open", { key: id, node: item, newTab: true }, true);
+      emit(this.host, "tvx-open", { id, item, newTab: true }, true);
     }
   }
 }

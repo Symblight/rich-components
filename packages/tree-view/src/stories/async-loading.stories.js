@@ -91,10 +91,10 @@ export const ExpandAllAndSelect = {
   render: () => {
     const tree = createTree({ dataSource: makeDataSource() });
 
-    // expandAll() only reaches loaded branches; re-running it per batch walks the whole tree
+    // expansion.expandAll() only reaches loaded branches; re-running it per batch walks the whole tree
     let expandingAll = false;
     tree.addEventListener("tvx-children-loaded", () => {
-      if (expandingAll) tree.expandAll();
+      if (expandingAll) tree.expansion.expandAll();
     });
 
     const log = logPanel();
@@ -107,11 +107,10 @@ export const ExpandAllAndSelect = {
       controls(
         button("Expand all", () => {
           expandingAll = true;
-          tree.expandAll();
+          tree.expansion.expandAll();
         }),
-        button("Select README.md", () =>
-          tree.setItemSelection({ id: "README.md", selected: true }),
-        ),
+        button("Select README.md", () => tree.selection.select("README.md")),
+        button("Reload root", () => tree.loading.reload()),
       ),
       tree,
       log,
@@ -125,13 +124,13 @@ export const ChildrenLoadedEvent = {
     const tree = createTree({ dataSource: makeDataSource() });
     const log = logPanel();
     tree.addEventListener("tvx-children-loaded", (event) => {
-      const { key, items } = /** @type {CustomEvent} */ (event).detail;
+      const { id, items } = /** @type {CustomEvent} */ (event).detail;
       const names = /** @type {any[]} */ (items).map((item) => item.label);
-      log.textContent = `tvx-children-loaded: parent=${JSON.stringify(key)} items=${JSON.stringify(names)}`;
+      log.textContent = `tvx-children-loaded: parent=${JSON.stringify(id)} items=${JSON.stringify(names)}`;
     });
     return stack(
       hintText(
-        "Fires once a batch lands (key is null for the root) — unlike tvx-expand-change, which fires " +
+        "Fires once a batch lands (id is null for the root) — unlike tvx-expand-change, which fires " +
           "the instant a branch opens, before its fetch starts.",
       ),
       tree,

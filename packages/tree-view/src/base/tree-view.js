@@ -4,6 +4,7 @@ import { classMap } from "lit/directives/class-map.js";
 import { repeat } from "lit/directives/repeat.js";
 import { styleMap } from "lit/directives/style-map.js";
 import { createRef, ref } from "lit/directives/ref.js";
+import { ContextProvider } from "@lit/context";
 
 import "@symblight/wc-material/checkbox";
 import "@symblight/wc-material/progress-circular";
@@ -17,6 +18,9 @@ import { KeyboardNavController } from "../controllers/keyboard-nav-controller.js
 import { OpenController } from "../controllers/open-controller.js";
 import { ReorderController } from "../controllers/reorder-controller.js";
 import { emit } from "../core/emit.js";
+import { freezeApi } from "../api/tree-view-api-defaults.js";
+import { TREE_VIEW_INTERNALS } from "../api/keys.js";
+import { treeViewContext } from "../context/tree-view-context.js";
 import tokens from "../styles/tokens.css?inline";
 import styles from "./tree-view.css?inline";
 
@@ -29,7 +33,7 @@ import styles from "./tree-view.css?inline";
  * What the `renderItem*` callbacks receive alongside the item.
  * @typedef {object} TvxTreeItemState
  * @property {PropertyKey} id
- * @property {string} label current label, including one set by `updateItemLabel`
+ * @property {string} label current label, including one set by `editing.updateLabel`
  * @property {number} level 1-indexed depth
  * @property {boolean} expanded
  * @property {boolean} selected
@@ -65,20 +69,20 @@ const SKELETON_WIDTHS = ["60%", "45%", "72%"];
  * @csspart checkbox - Checkbox wrapper (under `checkboxSelection`).
  * @csspart leading - `renderItemLeading` output.
  * @csspart label - Label (or `renderItemLabel` output).
- * @csspart label-input - The built-in text input shown by `setEditedItem`.
+ * @csspart label-input - The built-in text input shown by `editing.start`.
  *
- * @slot edit - Replaces the built-in text field while an item is edited; see `setEditedItem`.
+ * @slot edit - Replaces the built-in text field while an item is edited; see `editing.start`.
  * @csspart trailing - `renderItemTrailing` output.
  * @csspart placeholder - A loading/skeleton row.
  *
  * @fires {CustomEvent<{ selectedItems: Set<PropertyKey> }>} tvx-selection-change - Whole-tree snapshot after any selection change.
  * @fires {CustomEvent<{ expandedItems: Set<PropertyKey> }>} tvx-expansion-change - Whole-tree snapshot after any expand/collapse.
- * @fires {CustomEvent<{ key: PropertyKey, expanded: boolean }>} tvx-expand-change - One item's expansion toggled.
- * @fires {CustomEvent<{ key: PropertyKey, oldPosition: TvxTreeItemPosition, newPosition: TvxTreeItemPosition }>} tvx-item-position-change - Cancelable; fires before a reorder moves an item.
- * @fires {CustomEvent<{ key: PropertyKey, oldLabel: string, newLabel: string }>} tvx-item-label-change - Cancelable; fires before `updateItemLabel` changes a label.
- * @fires {CustomEvent<{ key: PropertyKey | null, node: TvxTreeItemData | null, items: TvxTreeItemData[] }>} tvx-children-loaded - A `dataSource` batch landed (`key`/`node` null for the root).
- * @fires {CustomEvent<{ key: PropertyKey | null, node: TvxTreeItemData | null, error: unknown }>} tvx-load-error - `dataSource.getTreeItems()` rejected.
- * @fires {CustomEvent<{ key: PropertyKey, node: TvxTreeItemData, newTab: true }>} tvx-open - Cancelable; middle-click / Ctrl+Enter on an item `getHref` didn't resolve.
+ * @fires {CustomEvent<{ id: PropertyKey, expanded: boolean }>} tvx-expand-change - One item's expansion toggled.
+ * @fires {CustomEvent<{ id: PropertyKey, oldPosition: TvxTreeItemPosition, newPosition: TvxTreeItemPosition }>} tvx-item-position-change - Cancelable; fires before a reorder moves an item.
+ * @fires {CustomEvent<{ id: PropertyKey, oldLabel: string, newLabel: string }>} tvx-item-label-change - Cancelable; fires before `editing.updateLabel` changes a label.
+ * @fires {CustomEvent<{ id: PropertyKey | null, item: TvxTreeItemData | null, items: TvxTreeItemData[] }>} tvx-children-loaded - A `dataSource` batch landed (`id`/`item` null for the root).
+ * @fires {CustomEvent<{ id: PropertyKey | null, item: TvxTreeItemData | null, error: unknown }>} tvx-load-error - `dataSource.getTreeItems()` rejected.
+ * @fires {CustomEvent<{ id: PropertyKey, item: TvxTreeItemData, newTab: true }>} tvx-open - Cancelable; middle-click / Ctrl+Enter on an item `getHref` didn't resolve.
  */
 @customElement("tvx-tree-view")
 export class TvxTreeView extends LitElement {
@@ -113,9 +117,9 @@ export class TvxTreeView extends LitElement {
   }
 
   #model = new TreeModelController(this, (id) => this.#dataSource.loadChildren(id));
-  #dataSource = new DataSourceController(this, this.#model);
+  #dataSource = new DataSourceController(this, this.#model, (message) => this.#announce(message));
   #selection = new SelectionController(this, this.#model);
-  #reorder = new ReorderController(this, this.#model);
+  #reorder = new ReorderController(this, this.#model, (id) => this.#focusItem(id));
   #open = new OpenController(this, this.#model);
   #keyboard = new KeyboardNavController(
     this,
@@ -123,11 +127,13 @@ export class TvxTreeView extends LitElement {
     this.#selection,
     this.#reorder,
     this.#open,
+    { focusItem: (id) => this.#focusItem(id), rowElement: (index) => this.#rowElement(index) },
   );
   #virtualization = new VirtualizationController(
     this,
     () => this.#model.rows,
     () => (this.#focusedId === null ? -1 : this.#model.indexOf(this.#focusedId)),
+    (index) => this.#rowElement(index),
   );
 
   /** Row that last had focus; it keeps the Tab stop (roving tabindex). @type {PropertyKey | null} */
@@ -138,8 +144,67 @@ export class TvxTreeView extends LitElement {
   /** @type {import("lit/directives/ref.js").Ref<HTMLElement>} */
   #liveRegion = createRef();
 
+  /** Fires `change` (`detail.namespace`) after an update that changed what `TreeViewController` reads. */
+  #changes = new EventTarget();
+  /** Last value per namespace that `#notifyChanges` compared. @type {Record<string, unknown>} */
+  #snapshots = {};
+  #internals = Object.freeze({
+    changes: this.#changes,
+    isAnyLoading: () => this.#model.loading.size > 0,
+  });
+
+  /** Built once; the namespace getters hand out these frozen objects. */
+  #api = freezeApi(
+    /** @type {import("../types/api.js").TvxTreeViewApi} */ ({
+      expansion: {
+        expand: (id) => this.#model.expand(id),
+        collapse: (id) => this.#model.collapse(id),
+        toggle: (id) => this.#model.toggle(id),
+        expandAll: () => this.#model.expandAll(),
+        collapseAll: () => this.#model.collapseAll(),
+        set: (ids) => this.#model.setExpandedItems(ids),
+        get: () => new Set(this.#model.expanded),
+        isExpanded: (id) => this.#model.isExpanded(id),
+      },
+      selection: {
+        select: (id) => this.#selection.setSelected(id, true),
+        deselect: (id) => this.#selection.setSelected(id, false),
+        set: (ids) => this.#selection.setSelectedItems(ids),
+        clear: () => this.#selection.clear(),
+        get: () => new Set(this.#selection.selected),
+        isSelected: (id) => this.#selection.stateOf(id).selected,
+        getState: (id) => this.#selection.stateOf(id),
+      },
+      nodes: {
+        getItem: (id) => this.#model.item(id) ?? null,
+        getParentId: (id) => this.#model.parentId(id),
+        getChildIds: (parentId = null) => this.#model.childIds(parentId),
+        getPosition: (id) => (this.#model.has(id) ? this.#model.position(id) : null),
+        move: (id, position) => this.#reorder.moveTo(id, position),
+      },
+      editing: {
+        start: (id) => this.#setEditedItem(id),
+        cancel: () => this.#setEditedItem(null),
+        getEdited: () => this.#editedId,
+        updateLabel: (id, label) => this.#updateLabel(id, label),
+        isEditable: (id) => this.#isEditable(id),
+      },
+      navigation: {
+        focusItem: (id) => this.#focusItem(id),
+        getFocused: () => this.#focusedId,
+        scrollToItem: (id, options) => this.#scrollToItem(id, options),
+        reveal: (id, options) => this.#reveal(id, options),
+      },
+      loading: {
+        reload: (id) => this.#dataSource.reload(id ?? null),
+        isLoading: (id) => this.#model.loading.has(id ?? null),
+      },
+    }),
+  );
+
   constructor() {
     super();
+    new ContextProvider(this, { context: treeViewContext, initialValue: this });
     /** Tree data — any shape, read through the `getItem*` accessors below. @type {TvxTreeItemData[] | undefined} */
     this.items = undefined;
     /** @type {(item: TvxTreeItemData) => PropertyKey} */
@@ -172,7 +237,7 @@ export class TvxTreeView extends LitElement {
     this.reordering = false;
     /** @type {((item: TvxTreeItemData) => boolean) | undefined} */
     this.isItemReorderable = undefined;
-    /** `true` or a per-item check: items `setEditedItem` may turn into a text field. @type {boolean | ((item: TvxTreeItemData) => boolean)} */
+    /** `true` or a per-item check: items `editing.start` may turn into a text field. @type {boolean | ((item: TvxTreeItemData) => boolean)} */
     this.isItemEditable = false;
     /** Dense rows: 28px instead of 36px, smaller icons, text and indent. @type {boolean} */
     this.compact = false;
@@ -217,6 +282,27 @@ export class TvxTreeView extends LitElement {
   updated(changed) {
     if (changed.has("dataSource")) this.#dataSource.reset();
     this.#virtualization.measure(this.renderRoot.querySelectorAll("[data-index]"));
+    this.#notifyChanges();
+  }
+
+  #notifyChanges() {
+    const next = {
+      selection: this.#selection.selected, // replaced, never mutated
+      expansion: this.#model.expanded, // a new Set after every change
+      navigation: this.#focusedId,
+      editing: this.#editedId,
+      loading: this.#model.loading.size > 0,
+    };
+    for (const [namespace, value] of Object.entries(next)) {
+      if (Object.is(this.#snapshots[namespace], value)) continue;
+      this.#snapshots[namespace] = value;
+      this.#changes.dispatchEvent(new CustomEvent("change", { detail: { namespace } }));
+    }
+  }
+
+  /** Internal: see `TreeViewController`. */
+  get [TREE_VIEW_INTERNALS]() {
+    return this.#internals;
   }
 
   #applyDefaultsOnce() {
@@ -227,6 +313,36 @@ export class TvxTreeView extends LitElement {
   }
 
   // ─── public API ───
+
+  /** Expand, collapse and read branches. */
+  get expansion() {
+    return this.#api.expansion;
+  }
+
+  /** Select, deselect and read the selection; no cascade. */
+  get selection() {
+    return this.#api.selection;
+  }
+
+  /** The tree's structure: items, parents, children, positions. */
+  get nodes() {
+    return this.#api.nodes;
+  }
+
+  /** Label editing: the text field and relabelling. */
+  get editing() {
+    return this.#api.editing;
+  }
+
+  /** Focus and scrolling. */
+  get navigation() {
+    return this.#api.navigation;
+  }
+
+  /** `dataSource` loading state. */
+  get loading() {
+    return this.#api.loading;
+  }
 
   /** Selected ids; assigning replaces the selection. @returns {Set<PropertyKey>} */
   get selectedItems() {
@@ -248,35 +364,16 @@ export class TvxTreeView extends LitElement {
     this.#model.setExpandedItems(ids);
   }
 
-  /** @param {PropertyKey} id
-   * @returns {TvxTreeItemData | null} */
-  getItem(id) {
-    return this.#model.item(id) ?? null;
-  }
-
-  /** @param {{ id: PropertyKey, expand: boolean }} options */
-  setItemExpansion({ id, expand }) {
-    if (expand) this.#model.expand(id);
-    else this.#model.collapse(id);
-  }
-
-  /** @param {PropertyKey} id */
-  isItemExpanded(id) {
-    return this.#model.isExpanded(id);
-  }
-
-  /** Selects or deselects one item (no cascade). @param {{ id: PropertyKey, selected: boolean }} options */
-  setItemSelection({ id, selected }) {
-    this.#selection.setSelected(id, selected);
-  }
+  // ─── editing ───
 
   /** Relabels an item until the next `.items`; fires cancelable `tvx-item-label-change` first.
-   * @param {{ id: PropertyKey, label: string }} options
+   * @param {PropertyKey} id
+   * @param {string} label
    * @returns {boolean} whether the label changed */
-  updateItemLabel({ id, label }) {
+  #updateLabel(id, label) {
     const oldLabel = this.#model.label(id);
     if (this.#model.item(id) === undefined || !label || label === oldLabel) return false;
-    const detail = { key: id, oldLabel, newLabel: label };
+    const detail = { id, oldLabel, newLabel: label };
     if (!emit(this, "tvx-item-label-change", detail, true)) return false;
     this.#model.setLabel(id, label);
     return true;
@@ -284,7 +381,7 @@ export class TvxTreeView extends LitElement {
 
   /** Swaps an editable item's label for a text field (or the `edit` slot); `null` leaves without saving.
    * @param {PropertyKey | null} id */
-  async setEditedItem(id) {
+  async #setEditedItem(id) {
     if (id !== null && !this.#isEditable(id)) return;
     const previous = this.#editedId;
     if (id === previous) return;
@@ -292,11 +389,11 @@ export class TvxTreeView extends LitElement {
     this.#editedId = id;
     if (id === null) {
       // the field is about to unmount — keep focus on its row
-      if (editorHadFocus && previous !== null) await this.focusItem(previous);
+      if (editorHadFocus && previous !== null) await this.#focusItem(previous);
       else this.requestUpdate();
       return;
     }
-    await this.focusItem(id); // renders the field and scrolls it into view
+    await this.#focusItem(id); // renders the field and scrolls it into view
     const editor = this.#editor();
     if (!editor) return;
     if ("value" in editor) /** @type {any} */ (editor).value = this.#model.label(id);
@@ -309,11 +406,6 @@ export class TvxTreeView extends LitElement {
       )?.focus();
     }
     deepActiveElement(this.ownerDocument)?.select?.();
-  }
-
-  /** Id of the item being edited, or `null`. @returns {PropertyKey | null} */
-  get editedItem() {
-    return this.#editedId;
   }
 
   /** The consumer's `slot="edit"` element, else the built-in input. */
@@ -345,41 +437,53 @@ export class TvxTreeView extends LitElement {
     return typeof editable === "function" ? !!editable(item) : !!editable;
   }
 
-  expandAll() {
-    this.#model.expandAll();
-  }
+  // ─── focus and scrolling ───
 
-  collapseAll() {
-    this.#model.collapseAll();
-  }
-
-  /** @returns {PropertyKey | null} */
-  get focusedKey() {
-    return this.#focusedId;
-  }
-
-  /** Gives `id` the Tab stop, focuses its row and scrolls it into view.
-   * @param {PropertyKey | null} id */
-  async focusItem(id) {
-    if (id === null) return;
+  /** Gives `id` the Tab stop, focuses its row and scrolls it into view; `false` when the item
+   * isn't visible (unknown, or under a collapsed parent).
+   * @param {PropertyKey | null} id
+   * @returns {Promise<boolean>} */
+  async #focusItem(id) {
+    if (id === null || this.#model.indexOf(id) === -1) return false;
     this.#focusedId = id;
     this.requestUpdate();
     await this.updateComplete; // the focused row is always rendered, even when off-screen
     const index = this.#model.indexOf(id);
-    if (index === -1) return;
-    this.rowElement(index)?.focus({ preventScroll: true });
+    if (index === -1) return false;
+    this.#rowElement(index)?.focus({ preventScroll: true });
     this.#virtualization.scrollToIndex(index);
+    return true;
+  }
+
+  /** Scrolls without moving focus; `false` when the item isn't visible.
+   * @param {PropertyKey} id
+   * @param {import("../types/api.js").TvxScrollToItemOptions} [options] */
+  async #scrollToItem(id, options) {
+    await this.updateComplete; // a row just made visible needs the virtualizer's new count
+    const index = this.#model.indexOf(id);
+    if (index === -1) return false;
+    this.#virtualization.scrollToIndex(index, options);
+    return true;
+  }
+
+  /** Expands the loaded ancestors, then scrolls; `false` when the id isn't loaded.
+   * @param {PropertyKey} id
+   * @param {import("../types/api.js").TvxScrollToItemOptions} [options] */
+  async #reveal(id, options) {
+    if (!this.#model.has(id)) return false;
+    this.#model.expandAncestors(id);
+    return this.#scrollToItem(id, options);
   }
 
   /** The rendered row at `index`, if it's in the DOM. @param {number} index
    * @returns {HTMLElement | null} */
-  rowElement(index) {
+  #rowElement(index) {
     return this.renderRoot.querySelector(`[data-index="${index}"]`);
   }
 
   /** Screen-reader announcement; cleared first so a repeated message is announced again.
    * @param {string} message */
-  announce(message) {
+  #announce(message) {
     const region = this.#liveRegion.value;
     if (!region) return;
     region.textContent = "";
@@ -429,7 +533,7 @@ export class TvxTreeView extends LitElement {
       this.#saveLabel(id, this.#editorValue(event), true);
     } else if (event.key === "Escape") {
       event.preventDefault();
-      this.setEditedItem(null);
+      this.#setEditedItem(null);
     }
   }
 
@@ -452,10 +556,9 @@ export class TvxTreeView extends LitElement {
     // a blur from the field unmounting after Enter/Escape, or editing moved to another item
     if (id !== this.#editedId) return;
     const label = value.trim();
-    const saved =
-      label === this.#model.label(id) || (!!label && this.updateItemLabel({ id, label }));
+    const saved = label === this.#model.label(id) || (!!label && this.#updateLabel(id, label));
     if (!saved && fromKeyboard) return;
-    if (fromKeyboard) this.setEditedItem(null);
+    if (fromKeyboard) this.#setEditedItem(null);
     else {
       this.#editedId = null;
       this.requestUpdate();

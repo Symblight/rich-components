@@ -1,5 +1,6 @@
 export { TvxTreeView } from "./base/tree-view.js";
 export { TvxTreeDirectoryIcon } from "./components/tree-directory-icon/tree-directory-icon.js";
+export { TreeViewController } from "./controllers/tree-view-controller.js";
 
 /** @typedef {import("./types/api.js").TvxTreeViewApi} TvxTreeViewApi */
 /** @typedef {import("./types/api.js").TvxTreeViewNamespace} TvxTreeViewNamespace */

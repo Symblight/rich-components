@@ -3,9 +3,18 @@ const TYPEAHEAD_RESET_MS = 500;
 /** Row height (px) used for PageUp/PageDown before a row has been measured. */
 const DEFAULT_ROW_HEIGHT = 38;
 
-/** The WAI-ARIA tree keyboard table, plus typeahead. Focus moves through `host.focusItem()`. */
+/**
+ * Host internals the controller reaches through, not the host's public API.
+ * @typedef {object} KeyboardNavSeams
+ * @property {(id: PropertyKey | null) => Promise<unknown>} focusItem
+ * @property {(index: number) => HTMLElement | null} rowElement
+ */
+
+/** The WAI-ARIA tree keyboard table, plus typeahead. Focus moves through the `focusItem` seam. */
 export class KeyboardNavController {
   #typed = "";
+  /** @type {KeyboardNavSeams} */
+  #seams;
   /** @type {ReturnType<typeof setTimeout> | undefined} */
   #typedTimer;
 
@@ -15,13 +24,15 @@ export class KeyboardNavController {
    * @param {import("./selection-controller.js").SelectionController} selection
    * @param {import("./reorder-controller.js").ReorderController} reorder
    * @param {import("./open-controller.js").OpenController} open
+   * @param {KeyboardNavSeams} seams
    */
-  constructor(host, model, selection, reorder, open) {
+  constructor(host, model, selection, reorder, open, seams) {
     this.host = host;
     this.model = model;
     this.selection = selection;
     this.reorder = reorder;
     this.open = open;
+    this.#seams = seams;
   }
 
   /** @param {KeyboardEvent} event
@@ -34,7 +45,7 @@ export class KeyboardNavController {
     /** @param {PropertyKey | null} target */
     const focus = (target) => {
       event.preventDefault();
-      host.focusItem(target);
+      this.#seams.focusItem(target);
     };
 
     switch (event.key) {
@@ -104,7 +115,7 @@ export class KeyboardNavController {
     for (let step = 1; step <= count; step++) {
       const id = this.model.idAt((index + step) % count);
       if (id !== null && this.model.label(id).toLowerCase().startsWith(this.#typed)) {
-        this.host.focusItem(id);
+        this.#seams.focusItem(id);
         return;
       }
     }
@@ -112,7 +123,7 @@ export class KeyboardNavController {
 
   /** How many rows fit in the visible part of the tree. @param {number} index */
   #pageSize(index) {
-    const rowHeight = this.host.rowElement(index)?.offsetHeight || DEFAULT_ROW_HEIGHT;
+    const rowHeight = this.#seams.rowElement(index)?.offsetHeight || DEFAULT_ROW_HEIGHT;
     const viewport = Math.min(this.host.clientHeight || Infinity, window.innerHeight);
     return Math.max(1, Math.floor(viewport / rowHeight));
   }

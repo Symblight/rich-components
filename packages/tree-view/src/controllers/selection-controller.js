@@ -50,7 +50,7 @@ export class SelectionController {
     this.#commit(new Set([id])); // plain click: only this item
   }
 
-  /** Selects or deselects one item, no cascade — backs `setItemSelection()`.
+  /** Selects or deselects one item, no cascade — backs `selection.select/deselect`.
    * In single-select, selecting replaces the current selection.
    * @param {PropertyKey} id
    * @param {boolean} selected */
@@ -82,6 +82,11 @@ export class SelectionController {
       else next.delete(p.key);
     }
     this.#commit(next);
+  }
+
+  /** Deselects everything; no event when nothing was selected. */
+  clear() {
+    if (this.selected.size > 0) this.setSelectedItems([]);
   }
 
   /** @param {Iterable<PropertyKey>} ids */

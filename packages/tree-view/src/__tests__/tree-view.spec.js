@@ -152,7 +152,7 @@ describe("tvx-tree-view — rendering", () => {
 
   it("renders a collapsed branch's children only once it's expanded", async () => {
     const el = await treeFixture(sampleItems());
-    el.setItemExpansion({ id: "src", expand: true });
+    el.expansion.expand("src");
     await settle(el);
     expect(labels(el)).to.deep.equal(["src/", "index.js", "README.md"]);
   });
@@ -192,7 +192,7 @@ describe("tvx-tree-view — rendering", () => {
     );
     expect(labels(el)).to.deep.equal(["Inbox", "Invoices"]);
     expect(row(el, "Inbox").getAttribute("aria-disabled")).to.equal("true");
-    expect(el.getItem("2")).to.deep.equal({ uuid: "2", name: "Invoices" });
+    expect(el.nodes.getItem("2")).to.deep.equal({ uuid: "2", name: "Invoices" });
   });
 
   it("passes the item and its state to renderItemLeading/Label/Trailing", async () => {
@@ -253,12 +253,12 @@ describe("tvx-tree-view — virtualization", () => {
     expect(el.hasAttribute("no-virtualization")).to.equal(true);
   });
 
-  it("focusItem() scrolls a far-away row into view and focuses it", async () => {
+  it("navigation.focusItem() scrolls a far-away row into view and focuses it", async () => {
     const el = await treeFixture(flatItems(1000));
-    await el.focusItem("i700");
+    await el.navigation.focusItem("i700");
     await settle(el);
     expect(focusedLabel(el)).to.equal("item-700");
-    expect(el.focusedKey).to.equal("i700");
+    expect(el.navigation.getFocused()).to.equal("i700");
     expect(el.scrollTop).to.be.greaterThan(0);
   });
 
@@ -281,9 +281,9 @@ describe("tvx-tree-view — expansion", () => {
     const one = onceEvent(el, "tvx-expand-change");
     const all = onceEvent(el, "tvx-expansion-change");
     await clickPart(el, "src/", ".tree-view__chevron");
-    expect(one).to.deep.equal([{ key: "src", expanded: true }]);
+    expect(one).to.deep.equal([{ id: "src", expanded: true }]);
     expect([...all[0].expandedItems]).to.deep.equal(["src"]);
-    expect(el.isItemExpanded("src")).to.equal(true);
+    expect(el.expansion.isExpanded("src")).to.equal(true);
   });
 
   it("clicking the chevron doesn't select the row", async () => {
@@ -294,23 +294,23 @@ describe("tvx-tree-view — expansion", () => {
 
   it("expandAll/collapseAll toggle every branch", async () => {
     const el = await treeFixture(twoParents());
-    el.expandAll();
+    el.expansion.expandAll();
     await settle(el);
     expect(labels(el)).to.deep.equal(["a/", "a1.js", "a2.js", "b/", "b1.js"]);
-    el.collapseAll();
+    el.expansion.collapseAll();
     await settle(el);
     expect(labels(el)).to.deep.equal(["a/", "b/"]);
   });
 
-  it("setItemExpansion expands and collapses; isItemExpanded is false for unknown ids and leaves", async () => {
+  it("expansion.expand/collapse; isExpanded is false for unknown ids and leaves", async () => {
     const el = await treeFixture(sampleItems());
-    el.setItemExpansion({ id: "src", expand: true });
-    expect(el.isItemExpanded("src")).to.equal(true);
-    el.setItemExpansion({ id: "src", expand: false });
-    expect(el.isItemExpanded("src")).to.equal(false);
-    expect(el.isItemExpanded("nope")).to.equal(false);
-    el.setItemExpansion({ id: "readme", expand: true });
-    expect(el.isItemExpanded("readme")).to.equal(false);
+    el.expansion.expand("src");
+    expect(el.expansion.isExpanded("src")).to.equal(true);
+    el.expansion.collapse("src");
+    expect(el.expansion.isExpanded("src")).to.equal(false);
+    expect(el.expansion.isExpanded("nope")).to.equal(false);
+    el.expansion.expand("readme");
+    expect(el.expansion.isExpanded("readme")).to.equal(false);
   });
 
   it("assigning expandedItems replaces the expansion", async () => {
@@ -330,7 +330,7 @@ describe("tvx-tree-view — defaultExpandedItems/defaultSelectedItems", () => {
       defaultExpandedItems: ["src"],
       defaultSelectedItems: ["readme"],
     });
-    expect(el.isItemExpanded("src")).to.equal(true);
+    expect(el.expansion.isExpanded("src")).to.equal(true);
     expect([...el.selectedItems]).to.deep.equal(["readme"]);
   });
 
@@ -338,7 +338,7 @@ describe("tvx-tree-view — defaultExpandedItems/defaultSelectedItems", () => {
     const el = await treeFixture([], { defaultExpandedItems: ["src"] });
     el.items = sampleItems();
     await settle(el);
-    expect(el.isItemExpanded("src")).to.equal(true);
+    expect(el.expansion.isExpanded("src")).to.equal(true);
   });
 
   it("only apply once — later writes have no effect", async () => {
@@ -346,7 +346,7 @@ describe("tvx-tree-view — defaultExpandedItems/defaultSelectedItems", () => {
     el.defaultExpandedItems = ["src"];
     el.items = sampleItems();
     await settle(el);
-    expect(el.isItemExpanded("src")).to.equal(false);
+    expect(el.expansion.isExpanded("src")).to.equal(false);
   });
 });
 
@@ -383,14 +383,14 @@ describe("tvx-tree-view — single selection (default)", () => {
     expect([...el.selectedItems]).to.deep.equal(["src"]);
   });
 
-  it("setItemSelection selects and deselects; deselecting an unselected id is a no-op", async () => {
+  it("selection.select/deselect; deselecting an unselected id is a no-op", async () => {
     const el = await treeFixture(sampleItems());
-    el.setItemSelection({ id: "readme", selected: true });
+    el.selection.select("readme");
     const events = onceEvent(el, "tvx-selection-change");
-    el.setItemSelection({ id: "src", selected: false });
+    el.selection.deselect("src");
     expect(events).to.have.length(0);
     expect([...el.selectedItems]).to.deep.equal(["readme"]);
-    el.setItemSelection({ id: "readme", selected: false });
+    el.selection.deselect("readme");
     expect(el.selectedItems.size).to.equal(0);
   });
 
@@ -398,7 +398,7 @@ describe("tvx-tree-view — single selection (default)", () => {
     const el = await treeFixture(sampleItems(), { disableSelection: true });
     const events = onceEvent(el, "tvx-selection-change");
     await click(el, "src/");
-    expect(el.isItemExpanded("src")).to.equal(true);
+    expect(el.expansion.isExpanded("src")).to.equal(true);
     expect(events).to.have.length(0);
   });
 });
@@ -462,7 +462,7 @@ describe("tvx-tree-view — multi-select", () => {
     await click(el, "Alpha");
     await click(el, "Echo", { shiftKey: true });
     expect([...el.selectedItems].sort()).to.deep.equal(["A", "B", "D", "E"]);
-    el.setItemSelection({ id: "C", selected: true });
+    el.selection.select("C");
     expect(el.selectedItems.has("C")).to.equal(false);
   });
 });
@@ -489,7 +489,7 @@ describe("tvx-tree-view — checkboxSelection", () => {
   it("a row click only toggles expansion — the checkbox does the selecting", async () => {
     const el = await treeFixture(sampleItems(), { checkboxSelection: true });
     await click(el, "src/");
-    expect(el.isItemExpanded("src")).to.equal(true);
+    expect(el.expansion.isExpanded("src")).to.equal(true);
     expect(el.selectedItems.size).to.equal(0);
     await clickPart(el, "README.md", ".tree-view__checkbox");
     expect([...el.selectedItems]).to.deep.equal(["readme"]);
@@ -526,7 +526,7 @@ describe("tvx-tree-view — checkboxSelection", () => {
     await focusRow(el, "b/");
     await press(el, " ");
     expect([...el.selectedItems].sort()).to.deep.equal(["b", "b1"]);
-    expect(el.isItemExpanded("b")).to.equal(false);
+    expect(el.expansion.isExpanded("b")).to.equal(false);
   });
 });
 
@@ -566,7 +566,7 @@ describe("tvx-tree-view — keyboard navigation", () => {
     const el = await treeFixture(sampleItems());
     await focusRow(el, "src/");
     await press(el, "ArrowRight");
-    expect(el.isItemExpanded("src")).to.equal(true);
+    expect(el.expansion.isExpanded("src")).to.equal(true);
     expect(focusedLabel(el)).to.equal("src/");
     await press(el, "ArrowRight");
     expect(focusedLabel(el)).to.equal("index.js");
@@ -578,7 +578,7 @@ describe("tvx-tree-view — keyboard navigation", () => {
     await press(el, "ArrowLeft");
     expect(focusedLabel(el)).to.equal("src/");
     await press(el, "ArrowLeft");
-    expect(el.isItemExpanded("src")).to.equal(false);
+    expect(el.expansion.isExpanded("src")).to.equal(false);
   });
 
   it("Backspace moves focus to the parent", async () => {
@@ -599,7 +599,7 @@ describe("tvx-tree-view — keyboard navigation", () => {
     const el = await treeFixture(sampleItems());
     await focusRow(el, "src/");
     await press(el, "Enter");
-    expect(el.isItemExpanded("src")).to.equal(true);
+    expect(el.expansion.isExpanded("src")).to.equal(true);
     expect(el.selectedItems.size).to.equal(0);
     await focusRow(el, "README.md");
     await press(el, "Enter");
@@ -611,7 +611,7 @@ describe("tvx-tree-view — keyboard navigation", () => {
     await focusRow(el, "src/");
     await press(el, " ");
     expect([...el.selectedItems]).to.deep.equal(["src"]);
-    expect(el.isItemExpanded("src")).to.equal(false);
+    expect(el.expansion.isExpanded("src")).to.equal(false);
   });
 
   it("Space does nothing with disableSelection", async () => {
@@ -625,12 +625,12 @@ describe("tvx-tree-view — keyboard navigation", () => {
     const items = sampleItems();
     items[0] = { ...items[0], disabled: true };
     const el = await treeFixture(items);
-    await el.focusItem("src");
+    await el.navigation.focusItem("src");
     await settle(el);
     await press(el, " ");
     await press(el, "Enter");
     expect(el.selectedItems.size).to.equal(0);
-    expect(el.isItemExpanded("src")).to.equal(false);
+    expect(el.expansion.isExpanded("src")).to.equal(false);
     await press(el, "ArrowDown");
     expect(focusedLabel(el)).to.equal("README.md");
   });
@@ -688,7 +688,7 @@ describe("tvx-tree-view — dataSource", () => {
     expect(labels(el)).to.deep.equal(["src/", "README.md"]);
     expect(row(el, "src/").getAttribute("aria-expanded")).to.equal("false");
     expect(row(el, "README.md").hasAttribute("aria-expanded")).to.equal(false);
-    expect(loaded[0]).to.include({ key: null, node: null });
+    expect(loaded[0]).to.include({ id: null, item: null });
   });
 
   it("treats pre-set .items as the root batch — no root fetch", async () => {
@@ -717,7 +717,7 @@ describe("tvx-tree-view — dataSource", () => {
       },
     });
     const loaded = onceEvent(el, "tvx-children-loaded");
-    el.setItemExpansion({ id: "src", expand: true });
+    el.expansion.expand("src");
     await settle(el);
     expect(el.shadowRoot?.querySelectorAll("md-skeleton").length).to.equal(8);
     await aTimeout(20);
@@ -730,7 +730,7 @@ describe("tvx-tree-view — dataSource", () => {
     await settle(el);
     expect(el.shadowRoot?.querySelector("md-skeleton")).to.equal(null);
     expect(labels(el)).to.deep.equal(["src/", "a.js"]);
-    expect(loaded[0].key).to.equal("src");
+    expect(loaded[0].id).to.equal("src");
     expect(loaded[0].items).to.deep.equal([{ id: "a", label: "a.js" }]);
   });
 
@@ -741,7 +741,7 @@ describe("tvx-tree-view — dataSource", () => {
         getChildrenCount: () => undefined,
       },
     });
-    el.setItemExpansion({ id: "src", expand: true });
+    el.expansion.expand("src");
     await settle(el);
     expect(el.shadowRoot?.querySelectorAll(".tree-view__placeholder").length).to.equal(1);
     expect(el.shadowRoot?.querySelector("md-progress-circular")).to.exist;
@@ -751,7 +751,7 @@ describe("tvx-tree-view — dataSource", () => {
     const el = await treeFixture([{ id: "empty", label: "empty/" }], {
       dataSource: { getTreeItems: async () => [], getChildrenCount: () => undefined },
     });
-    el.setItemExpansion({ id: "empty", expand: true });
+    el.expansion.expand("empty");
     await aTimeout(20);
     await settle(el);
     expect(row(el, "empty/").hasAttribute("aria-expanded")).to.equal(false);
@@ -772,7 +772,7 @@ describe("tvx-tree-view — dataSource", () => {
         getChildrenCount: () => 0,
       },
     });
-    el.setItemExpansion({ id: "leaf", expand: true });
+    el.expansion.expand("leaf");
     await aTimeout(20);
     expect(calls).to.equal(0);
   });
@@ -790,13 +790,13 @@ describe("tvx-tree-view — dataSource", () => {
       },
     });
     const errors = onceEvent(el, "tvx-load-error");
-    el.setItemExpansion({ id: "src", expand: true });
+    el.expansion.expand("src");
     await aTimeout(20);
-    expect(errors[0].key).to.equal("src");
+    expect(errors[0].id).to.equal("src");
     expect(errors[0].error.message).to.equal("offline");
 
-    el.setItemExpansion({ id: "src", expand: false });
-    el.setItemExpansion({ id: "src", expand: true });
+    el.expansion.collapse("src");
+    el.expansion.expand("src");
     await aTimeout(20);
     await settle(el);
     expect(calls).to.equal(2);
@@ -814,7 +814,7 @@ describe("tvx-tree-view — dataSource", () => {
         getChildrenCount: () => 1,
       },
     });
-    el.setItemExpansion({ id: "src", expand: true });
+    el.expansion.expand("src");
     await aTimeout(20);
     el.items = [{ id: "src", label: "src/" }];
     await aTimeout(20);
@@ -833,8 +833,8 @@ describe("tvx-tree-view — open in new tab", () => {
     await focusRow(el, "README.md");
     await press(el, "Enter", { ctrlKey: true });
     expect(opened).to.have.length(1);
-    expect(opened[0]).to.include({ key: "readme", newTab: true });
-    expect(opened[0].node).to.deep.equal({ id: "readme", label: "README.md" });
+    expect(opened[0]).to.include({ id: "readme", newTab: true });
+    expect(opened[0].item).to.deep.equal({ id: "readme", label: "README.md" });
   });
 
   it("opens getHref's URL directly, and never a javascript: URL", async () => {
@@ -853,7 +853,7 @@ describe("tvx-tree-view — open in new tab", () => {
       await focusRow(el, "src/");
       await press(el, "Enter", { ctrlKey: true });
       expect(urls).to.deep.equal(["https://example.com/readme"]);
-      expect(opened.map((d) => d.key)).to.deep.equal(["src"]);
+      expect(opened.map((d) => d.id)).to.deep.equal(["src"]);
     } finally {
       window.open = original;
     }
@@ -865,7 +865,7 @@ describe("tvx-tree-view — open in new tab", () => {
     row(el, "README.md").dispatchEvent(
       new MouseEvent("auxclick", { button: 1, bubbles: true, composed: true, cancelable: true }),
     );
-    expect(opened.map((d) => d.key)).to.deep.equal(["readme"]);
+    expect(opened.map((d) => d.id)).to.deep.equal(["readme"]);
   });
 });
 
@@ -891,7 +891,7 @@ describe("tvx-tree-view — reordering", () => {
     expect(labels(el)).to.deep.equal(["README.md", "src/"]);
     expect(focusedLabel(el)).to.equal("src/");
     expect(moves[0]).to.deep.equal({
-      key: "src",
+      id: "src",
       oldPosition: { parentId: null, index: 0 },
       newPosition: { parentId: null, index: 1 },
     });
@@ -930,7 +930,7 @@ describe("tvx-tree-view — reordering", () => {
     await press(el, "ArrowDown", { altKey: true });
     expect(labels(el)).to.deep.equal(["src/", "README.md", "locked"]);
 
-    await el.focusItem("locked");
+    await el.navigation.focusItem("locked");
     await settle(el);
     await press(el, "ArrowUp", { altKey: true });
     expect(labels(el)).to.deep.equal(["src/", "README.md", "locked"]);

@@ -13,7 +13,7 @@ const meta = {
           "label for a text field (`setEditedItem(null)` leaves without saving). In the field, " +
           "Enter saves, Escape cancels, blur saves a non-empty value. Saving goes through " +
           "`updateItemLabel({ id, label })`, which fires cancelable `tvx-item-label-change` " +
-          "(`{ key, oldLabel, newLabel }`) and then keeps the new label until the next `.items` — " +
+          "(`{ id, oldLabel, newLabel }`) and then keeps the new label until the next `.items` — " +
           "persist it yourself.",
       },
     },
@@ -33,9 +33,13 @@ export const RenameWithF2 = {
     });
     // the trigger is the consumer's: F2 and double-click here
     tree.addEventListener("keydown", (event) => {
-      if (event.key === "F2") tree.setEditedItem(tree.focusedKey);
+      const id = tree.navigation.getFocused();
+      if (event.key === "F2" && id !== null) tree.editing.start(id);
     });
-    tree.addEventListener("dblclick", () => tree.setEditedItem(tree.focusedKey));
+    tree.addEventListener("dblclick", () => {
+      const id = tree.navigation.getFocused();
+      if (id !== null) tree.editing.start(id);
+    });
     const log = logPanel();
     tree.addEventListener("tvx-item-label-change", (event) => {
       const { detail } = /** @type {CustomEvent} */ (event);
@@ -63,7 +67,7 @@ export const ProgrammaticRename = {
     const tree = createTree({ items: buildFileTree(), defaultExpandedItems: ["src"] });
     const button = document.createElement("button");
     button.textContent = 'Rename "index.js" → "main.js"';
-    button.addEventListener("click", () => tree.updateItemLabel({ id: "index", label: "main.js" }));
+    button.addEventListener("click", () => tree.editing.updateLabel("index", "main.js"));
     return stack(button, tree);
   },
 };
@@ -85,17 +89,18 @@ export const CustomEditor = {
     const save = document.createElement("button");
     save.textContent = "Save";
     save.addEventListener("click", () => {
-      const id = tree.editedItem;
+      const id = tree.editing.getEdited();
       if (id === null) return;
-      if (tree.updateItemLabel({ id, label: input.value })) tree.setEditedItem(null);
+      if (tree.editing.updateLabel(id, input.value)) tree.editing.cancel();
     });
     editor.append(input, save);
     tree.append(editor);
     // a wrapper has no `value`, so fill the input when editing starts
     tree.addEventListener("keydown", (event) => {
-      if (event.key !== "F2" || tree.focusedKey === null) return;
-      input.value = tree.getItem(tree.focusedKey)?.label ?? "";
-      tree.setEditedItem(tree.focusedKey);
+      const id = tree.navigation.getFocused();
+      if (event.key !== "F2" || id === null) return;
+      input.value = tree.nodes.getItem(id)?.label ?? "";
+      tree.editing.start(id);
     });
     return stack(hintText("Focus a row and press F2. The editor is a slotted div."), tree);
   },

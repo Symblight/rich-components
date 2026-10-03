@@ -30,14 +30,18 @@ export class ReorderController {
   #cleanup = null;
   /** Row currently showing a drop indicator. @type {HTMLElement | null} */
   #indicatorRow = null;
+  /** @type {(id: PropertyKey) => Promise<unknown>} */
+  #focusItem;
 
   /**
    * @param {import("../base/tree-view.js").TvxTreeView} host
    * @param {import("./tree-model-controller.js").TreeModelController} model
+   * @param {(id: PropertyKey) => Promise<unknown>} focusItem host seam: moves the Tab stop and focus
    */
-  constructor(host, model) {
+  constructor(host, model, focusItem) {
     this.host = host;
     this.model = model;
+    this.#focusItem = focusItem;
     host.addController(this);
   }
 
@@ -64,7 +68,7 @@ export class ReorderController {
     const { parentId, index } = this.model.position(id);
     const sibling = this.model.childIds(parentId)[index + step];
     if (sibling === undefined) return;
-    if (this.#move(id, sibling, step < 0 ? "before" : "after")) this.host.focusItem(id);
+    if (this.#move(id, sibling, step < 0 ? "before" : "after")) this.#focusItem(id);
   }
 
   #register() {
@@ -169,19 +173,41 @@ export class ReorderController {
    * @returns {boolean} whether the item moved (the event wasn't prevented)
    */
   #move(sourceId, targetId, zone) {
-    if (zone === "into" && !this.model.hasChildren(targetId)) return false;
-
+    if (zone === "into") return this.moveTo(sourceId, { parentId: targetId, index: 0 });
     // new index is counted among the siblings without the moved item itself
-    const parentId = zone === "into" ? targetId : this.model.parentId(targetId);
+    const parentId = this.model.parentId(targetId);
     const siblings = this.model.childIds(parentId).filter((id) => id !== sourceId);
-    const index = zone === "into" ? 0 : siblings.indexOf(targetId) + (zone === "after" ? 1 : 0);
+    const index = siblings.indexOf(targetId) + (zone === "after" ? 1 : 0);
+    return this.moveTo(sourceId, { parentId, index });
+  }
 
-    const oldPosition = this.model.position(sourceId);
-    const newPosition = { parentId, index };
-    const detail = { key: sourceId, oldPosition, newPosition };
+  /**
+   * Fires cancelable `tvx-item-position-change`, then moves. Not gated by `reordering` /
+   * `isItemReorderable` — those only gate gestures. Impossible or no-op moves return `false`
+   * without an event.
+   * @param {PropertyKey} id
+   * @param {import("../base/tree-view.js").TvxTreeItemPosition} newPosition `index` counted without `id`
+   * @returns {boolean} whether the item moved
+   */
+  moveTo(id, newPosition) {
+    const { model } = this;
+    const { parentId, index } = newPosition;
+    if (!model.has(id)) return false;
+    if (
+      parentId !== null &&
+      (parentId === id || !model.hasChildren(parentId) || model.isAncestor(id, parentId))
+    ) {
+      return false;
+    }
+    const siblings = model.childIds(parentId).filter((sibling) => sibling !== id);
+    if (!Number.isInteger(index) || index < 0 || index > siblings.length) return false;
+
+    const oldPosition = model.position(id);
+    if (oldPosition.parentId === parentId && oldPosition.index === index) return false;
+    const detail = { id, oldPosition, newPosition: { parentId, index } };
     if (!emit(this.host, "tvx-item-position-change", detail, true)) return false;
 
-    this.model.move(sourceId, parentId, index);
+    model.move(id, parentId, index);
     return true;
   }
 }

@@ -11,7 +11,7 @@ const meta = {
         component:
           "`reordering` enables drag-and-drop (`@atlaskit/pragmatic-drag-and-drop`) and `Alt+↑`/`Alt+↓`. " +
           "A drop lands before/after a target or into a branch. `isItemReorderable(item)` vetoes " +
-          "picking an item up. Cancelable `tvx-item-position-change` (`{ key, oldPosition, " +
+          "picking an item up. Cancelable `tvx-item-position-change` (`{ id, oldPosition, " +
           "newPosition }`) fires first; the tree then moves the item in its internal model — your " +
           "`.items` arrays are never mutated, so persist the move yourself if you need to.",
       },
@@ -55,7 +55,7 @@ export const VetoedMove = {
       const detail = /** @type {CustomEvent} */ (event).detail;
       if (detail.newPosition.parentId !== detail.oldPosition.parentId) {
         event.preventDefault();
-        log.textContent = `Blocked re-parent of "${detail.key}" — nothing moved.`;
+        log.textContent = `Blocked re-parent of "${detail.id}" — nothing moved.`;
         return;
       }
       log.textContent = `Allowed reorder: ${JSON.stringify(detail)}`;

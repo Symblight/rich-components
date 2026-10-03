@@ -62,11 +62,14 @@ export const LargeTree = {
           "the visible rows exist in the DOM.",
       ),
       controls(
-        button("Expand all", () => tree.expandAll()),
-        button("Collapse all", () => tree.collapseAll()),
+        button("Expand all", () => tree.expansion.expandAll()),
+        button("Collapse all", () => tree.expansion.collapseAll()),
+        button("Reveal file-500-50", () =>
+          tree.navigation.reveal("f500-50", { align: "center", behavior: "smooth" }),
+        ),
         button("Focus file-500-50", () => {
-          tree.expandedItems = new Set([...tree.expandedItems, "f500"]);
-          tree.focusItem("f500-50");
+          tree.expansion.expand("f500");
+          tree.navigation.focusItem("f500-50");
         }),
       ),
       tree,

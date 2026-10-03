@@ -36,8 +36,8 @@ export const GetHrefAndOpenEvent = {
 
     const log = logPanel();
     tree.addEventListener("tvx-open", (event) => {
-      const { key } = /** @type {CustomEvent} */ (event).detail;
-      log.textContent = `tvx-open: getHref returned nothing for "${key}" — app decides how to open it.`;
+      const { id } = /** @type {CustomEvent} */ (event).detail;
+      log.textContent = `tvx-open: getHref returned nothing for "${id}" — app decides how to open it.`;
     });
 
     return stack(

@@ -88,27 +88,26 @@ export const ProgrammaticControls = {
     const tree = createTree({ items: buildFileTree(), multiSelect: true });
     const status = logPanel();
     const renderStatus = () => {
-      status.textContent = `"src" expanded: ${tree.isItemExpanded("src")}`;
+      status.textContent = `"src" expanded: ${tree.expansion.isExpanded("src")}`;
     };
     tree.addEventListener("tvx-expansion-change", renderStatus);
     renderStatus();
 
     return stack(
       hintText(
-        "setItemExpansion()/setItemSelection() work for any id the tree knows — expanded or not; " +
-          "ids inside a lazy branch that hasn't loaded yet are ignored.",
+        "tree.expansion / tree.selection / tree.navigation work for any id the tree knows — " +
+          "expanded or not; ids inside a lazy branch that hasn't loaded yet are ignored.",
       ),
       controls(
-        button("setItemExpansion({id: 'src', expand: true})", () =>
-          tree.setItemExpansion({ id: "src", expand: true }),
-        ),
-        button("setItemExpansion({id: 'src', expand: false})", () =>
-          tree.setItemExpansion({ id: "src", expand: false }),
-        ),
-        button("expandAll()", () => tree.expandAll()),
-        button("collapseAll()", () => tree.collapseAll()),
-        button("setItemSelection({id: 'button', selected: true})", () =>
-          tree.setItemSelection({ id: "button", selected: true }),
+        button("expansion.expand('src')", () => tree.expansion.expand("src")),
+        button("expansion.collapse('src')", () => tree.expansion.collapse("src")),
+        button("expansion.expandAll()", () => tree.expansion.expandAll()),
+        button("expansion.collapseAll()", () => tree.expansion.collapseAll()),
+        button("selection.select('button')", () => tree.selection.select("button")),
+        button("selection.clear()", () => tree.selection.clear()),
+        button("navigation.reveal('button')", () => tree.navigation.reveal("button")),
+        button("nodes.move('readme', {parentId: 'src', index: 0})", () =>
+          tree.nodes.move("readme", { parentId: "src", index: 0 }),
         ),
       ),
       tree,

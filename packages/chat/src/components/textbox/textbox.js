@@ -22,7 +22,7 @@ import stop from "@material-design-icons/svg/outlined/stop.svg?raw";
  * @summary MD3 filled-field container that owns the ProseMirror `EditorView`
  * directly, configured via `placeholder`/`getTriggerFields` and reacting to
  * `chx-textbox-change`/`chx-command-selected`.
- * @fires chx-stop - fired by the action button while `loading`; chx-chat aborts the turn on it.
+ * @fires chx-stop - fired by the action button while `loading` with an empty draft; chx-chat aborts the turn on it.
  */
 @customElement("chx-textbox")
 export class ChxTextbox extends FormControlMixin(LitElement) {
@@ -331,12 +331,18 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
    * @param {MouseEvent} event
    */
   handleActionClick = (event) => {
-    if (!this.loading) return;
+    if (!this.#stopping) return;
     event.preventDefault();
     this.dispatchEvent(new CustomEvent("chx-stop", { bubbles: true, composed: true }));
   };
 
+  /** The action button stops the turn only while the draft is empty — typed text turns it back into send. */
+  get #stopping() {
+    return this.loading && !this.value.trim();
+  }
+
   render() {
+    const stopping = this.#stopping;
     return html`
             <div class=${classMap({ textbox: true, textbox_dragging: this.dragging })} part="box">
                 ${when(
@@ -370,14 +376,14 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
                                 <md-icon-button
                                   class="textbox__submit"
                                   part="action"
-                                  type=${this.loading ? "button" : "submit"}
+                                  type=${stopping ? "button" : "submit"}
                                   .form=${this.closest("form")}
-                                  variant=${this.loading ? "tonal" : "filled"}
-                                  ?selected=${!this.loading}
+                                  variant=${stopping ? "tonal" : "filled"}
+                                  ?selected=${!stopping}
                                   @click=${this.handleActionClick}
                                 >
                                   ${
-                                    this.loading
+                                    stopping
                                       ? html`<slot name="stop"
                                           ><md-icon>${unsafeSVG(stop)}</md-icon></slot
                                         >`
@@ -387,7 +393,7 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
                                        so this is the accessible name; an aria-label on the host
                                        would never reach it. -->
                                   <span class="visually-hidden"
-                                    >${this.loading ? this.stopLabel : this.sendLabel}</span
+                                    >${stopping ? this.stopLabel : this.sendLabel}</span
                                   >
                                 </md-icon-button>
                               `,

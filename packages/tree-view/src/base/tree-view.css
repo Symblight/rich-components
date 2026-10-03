@@ -8,7 +8,7 @@
   scrollbar-color: var(--_tvx-color-outline-variant) transparent;
 
   /* geometry — default density */
-  --tvx-tree-item-row-height: 2.25rem;
+  --tvx-tree-item-row-height: 2.15rem;
   /* gap between the row pill and the tree's edges */
   --tvx-tree-item-inset: 0.5rem;
   --tvx-tree-item-padding-start: 0.25rem;
@@ -132,9 +132,6 @@
     background-color: var(--tvx-tree-item-selected-background-color);
     color: var(--tvx-tree-item-selected-color);
 
-    & .tree-view__label {
-      font-weight: var(--_tvx-font-weight-medium);
-    }
   }
 
   /* drag state, set by ReorderController */

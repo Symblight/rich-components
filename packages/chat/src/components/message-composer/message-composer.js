@@ -51,7 +51,7 @@ export class ChxMessageComposer extends LitElement {
     this.dragging = false;
 
     /** @type {boolean} Pushed down by chx-chat — `loading || busy`, so it is raised by an in-flight
-     *  delivery on its own. Swaps chx-textbox's action button from send to stop. */
+     *  delivery on its own. Swaps chx-textbox's action button to stop while the draft is empty. */
     this.loading = false;
 
     /** @type {boolean} Pushed down by chx-chat — true in the empty state (no active conversation). Blocks send + editing. */
@@ -315,14 +315,13 @@ export class ChxMessageComposer extends LitElement {
   /**
    * `chx-send-message` is cancelable — a listener calling preventDefault()
    * vetoes the send and keeps the draft (editor content + attachments) intact.
-   * A submit can't mean "stop": while `loading` the action button is `type="button"` and dispatches
-   * `chx-stop` instead, so the two intents never share this path (they used to, and the stop click
-   * died silently on the empty-draft guard below).
+   * A submit can't mean "stop": while `loading` with an empty draft the action button is
+   * `type="button"` and dispatches `chx-stop` instead, so the two intents never share this path.
+   * A non-empty draft sends even mid-turn — chx-chat delivers it alongside the one in flight.
    * @param {SubmitEvent} event
    */
   #handleSend(event) {
     event.preventDefault();
-    if (this.loading) return;
     const textbox = this.#textbox;
     if (!textbox) return;
 

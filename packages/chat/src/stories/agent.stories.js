@@ -1,4 +1,5 @@
 import { html } from "lit";
+import { keyed } from "lit/directives/keyed.js";
 import { ref } from "lit/directives/ref.js";
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 
@@ -80,6 +81,13 @@ const meta = {
 export default meta;
 
 /** @typedef {import("@storybook/web-components").StoryObj} Story */
+
+// Only for stories that render a chx-chat. Toggling remounts it (keyed) — switching list strategies
+// on a live list isn't supported.
+const virtualizationControl = {
+  args: { virtualization: true },
+  argTypes: { virtualization: { name: "Virtualization", control: "boolean" } },
+};
 
 const REPLY_INTRO = "Sure — here's a small helper that reads the scroll/virtualizer state:";
 const REPLY_CODE = `function scrollSnapshot(scroller, virtualizer) {
@@ -166,21 +174,26 @@ function createStreamingCodeAgentAdapter() {
  */
 /** @type {Story} */
 export const StreamingCodeReply = {
+  ...virtualizationControl,
   render: (args) => html`
     ${messageStyleOverrides}
-    <chx-chat
-      .compact=${args.compact}
-      .userId=${"me"}
-      .partElements=${{ code: renderCodePart }}
-      .adapter=${createStreamingCodeAgentAdapter()}
-    >
-      <chx-message-list slot="message-list" scroll-behavior="smooth">
-        <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
-      </chx-message-list>
-      <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
-        <md-button slot="actions" variant="text">Send</md-button>
-      </chx-message-composer>
-    </chx-chat>
+    ${keyed(
+      args.virtualization,
+      html`<chx-chat
+        .compact=${args.compact}
+        .noVirtualization=${!args.virtualization}
+        .userId=${"me"}
+        .partElements=${{ code: renderCodePart }}
+        .adapter=${createStreamingCodeAgentAdapter()}
+      >
+        <chx-message-list slot="message-list" scroll-behavior="smooth">
+          <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
+        </chx-message-list>
+        <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
+          <md-button slot="actions" variant="text">Send</md-button>
+        </chx-message-composer>
+      </chx-chat>`,
+    )}
   `,
 };
 
@@ -811,6 +824,7 @@ const attachTriggerStyles = html`
  */
 /** @type {Story} */
 export const AgenticComposerKit = {
+  ...virtualizationControl,
   render: (args) => {
     /** @type {any} */
     let banner;
@@ -819,43 +833,52 @@ export const AgenticComposerKit = {
     });
     return html`
       ${attachTriggerStyles} ${messageStyleOverrides}
-      <chx-chat
-        .compact=${args.compact}
-        .userId=${"me"}
-        .partElements=${AGENT_PART_ELEMENTS}
-        .adapter=${adapter}
-        @chx-messages-change=${handleComposerKitMessagesChange}
-      >
-        <chx-message-list slot="message-list" scroll-behavior="smooth" content-align="start">
-          <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
-          <chx-scroll-to-bottom-affordance
-            slot="scroll-to-bottom"
-          ></chx-scroll-to-bottom-affordance>
-        </chx-message-list>
-        <chx-input-mode-banner
-          slot="input-banner"
-          hidden
-          ${ref((el) => (banner = el))}
-        ></chx-input-mode-banner>
-        <chx-message-composer
-          slot="message-composer"
-          placeholder="Type @ to mention a file, or paste a snippet..."
+      ${keyed(
+        args.virtualization,
+        html`<chx-chat
+          .compact=${args.compact}
+          .noVirtualization=${!args.virtualization}
+          .userId=${"me"}
+          .partElements=${AGENT_PART_ELEMENTS}
+          .adapter=${adapter}
+          @chx-messages-change=${handleComposerKitMessagesChange}
         >
-          <md-icon-button slot="leading" class="attach-trigger" @click=${openAttachmentPicker}>
-            <md-icon>${unsafeSVG(attachFileIcon)}</md-icon>
-          </md-icon-button>
-          <md-button slot="actions" variant="text">Opus 4.8</md-button>
-          <chx-attachments slot="attachments"></chx-attachments>
-          <chx-paste-long-text slot="paste-long-text" paste-threshold="200"></chx-paste-long-text>
-          <chx-command-picker
-            commandCharacter="@"
-            maxQuerySpaces="1"
-            id="agent-file-picker"
-            slot="command-field"
-            @chx-command-query=${handleAgentFileQuery}
-          ></chx-command-picker>
-        </chx-message-composer>
-      </chx-chat>
+          <chx-message-list
+            slot="message-list"
+            scroll-behavior="smooth"
+            content-align="start"
+            scroll-mode="pin-top"
+          >
+            <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
+            <chx-scroll-to-bottom-affordance
+              slot="scroll-to-bottom"
+            ></chx-scroll-to-bottom-affordance>
+          </chx-message-list>
+          <chx-input-mode-banner
+            slot="input-banner"
+            hidden
+            ${ref((el) => (banner = el))}
+          ></chx-input-mode-banner>
+          <chx-message-composer
+            slot="message-composer"
+            placeholder="Type @ to mention a file, or paste a snippet..."
+          >
+            <md-icon-button slot="leading" class="attach-trigger" @click=${openAttachmentPicker}>
+              <md-icon>${unsafeSVG(attachFileIcon)}</md-icon>
+            </md-icon-button>
+            <md-button slot="actions" variant="text">Opus 4.8</md-button>
+            <chx-attachments slot="attachments"></chx-attachments>
+            <chx-paste-long-text slot="paste-long-text" paste-threshold="200"></chx-paste-long-text>
+            <chx-command-picker
+              commandCharacter="@"
+              maxQuerySpaces="1"
+              id="agent-file-picker"
+              slot="command-field"
+              @chx-command-query=${handleAgentFileQuery}
+            ></chx-command-picker>
+          </chx-message-composer>
+        </chx-chat>`,
+      )}
     `;
   },
 };

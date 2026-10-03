@@ -4,6 +4,8 @@ import { StickToBottom } from "../../components/infinity-scroll/StickToBottom.js
 import { LoadMoreController } from "./LoadMoreController.js";
 import { VisibilityController } from "./VisibilityController.js";
 import { PlainListController } from "./PlainListController.js";
+import { PinController } from "./PinController.js";
+import { BottomSentinelController } from "./BottomSentinelController.js";
 
 /**
  * @typedef {import("lit").ReactiveController} ReactiveController
@@ -27,6 +29,8 @@ import { PlainListController } from "./PlainListController.js";
  * (see its own doc for what it would do otherwise).
  *  - {@link LoadMoreController}    asking the consumer for older items, owns `loading`
  *  - {@link VisibilityController}  reporting rows that scrolled into view, owns `onItemVisible`
+ *  - {@link BottomSentinelController} `onAwayFromBottomChange`, one IntersectionObserver for both modes
+ *  - {@link PinController}         `scroll-mode="pin-top"`: pin-on-send, reserved space, follow state
  *
  * The host supplies data/DOM getters and mirrors `loading` for rendering. No styling lives here.
  * @implements {ReactiveController}
@@ -39,10 +43,15 @@ export class InfinityScrollController {
   #loader;
   #visibility;
   #plainList;
+  #pin;
   /** @type {() => Element | undefined} */
   #getScrollElement;
   /** @type {() => boolean} */
   #getNoVirtualization;
+  /** @type {() => unknown[]} */
+  #getData;
+  /** @type {(item: unknown, index: number) => string | number} */
+  #getItemKey;
   /** @type {number | null} */
   #scrollFrame = null;
 
@@ -64,11 +73,7 @@ export class InfinityScrollController {
   /** @type {Element | null} */
   #gestureTarget = null;
 
-  /** @type {() => number} */
-  #getBuffer;
-  /** @type {(awayFromBottom: boolean) => void} */
-  #onAwayFromBottomChange;
-  #awayFromBottom = false;
+  #bottomSentinel;
 
   /**
    * @param {ReactiveControllerHost} host
@@ -93,15 +98,36 @@ export class InfinityScrollController {
    *   onItemVisible: (key: string) => void,
    *   emit: (type: string, detail?: unknown) => void,
    *   getNoVirtualization?: () => boolean,
+   *   getPinEnabled?: () => boolean,
+   *   getContentElement?: () => HTMLElement | undefined,
+   *   getEndElement?: () => Element | undefined,
+   *   getScrollBehavior?: () => "auto" | "smooth" | "instant",
    * }} config
    */
   constructor(host, config) {
     this.#host = host;
     this.#getScrollElement = config.getScrollElement;
-    this.#getBuffer = config.getBuffer;
-    this.#onAwayFromBottomChange = config.onAwayFromBottomChange;
+    this.#bottomSentinel = new BottomSentinelController({
+      getScrollElement: config.getScrollElement,
+      getSentinel: config.getEndElement ?? (() => undefined),
+      getBuffer: config.getBuffer,
+      onChange: config.onAwayFromBottomChange,
+    });
     this.#getNoVirtualization = config.getNoVirtualization ?? (() => false);
+    this.#getData = config.getData;
+    this.#getItemKey = config.getItemKey;
     const getCanvasElement = config.getCanvasElement ?? (() => undefined);
+
+    this.#pin = new PinController({
+      getScrollElement: () => /** @type {HTMLElement | undefined} */ (config.getScrollElement()),
+      getContentElement: config.getContentElement ?? (() => undefined),
+      getEnabled: config.getPinEnabled ?? (() => false),
+      indexOfKey: (key) => this.#indexOfKey(key),
+      getOffset: (index) => this.#pinOffset(index),
+      scrollTo: (offset, behavior) => this.#scrollToPin(offset, behavior),
+      getScrollBehavior: config.getScrollBehavior ?? (() => "auto"),
+      onFollowChange: (following) => this.#list.setFollowing(following),
+    });
 
     this.#list = new VirtualListController(host, {
       getScrollElement: config.getScrollElement,
@@ -119,6 +145,7 @@ export class InfinityScrollController {
     this.#stick = new StickToBottom({
       getVirtualizer: () => this.#list.virtualizer,
       getBuffer: config.getBuffer,
+      getFollowing: () => this.#pin.following,
     });
 
     this.#measurer = new RowMeasurer({
@@ -149,11 +176,13 @@ export class InfinityScrollController {
       getCanvasElement,
       rows: config.rows,
       getBuffer: config.getBuffer,
-      onAwayFromBottomChange: config.onAwayFromBottomChange,
       // hostUpdated() below deliberately does not call maybeLoad() itself in this mode — this is
       // the only place it gets checked, and only once scrollTop is genuinely post-correction. See
       // hostUpdated()'s own comment for why the direct call was the actual bug.
       onReconciled: () => this.#loader.maybeLoad(),
+      getFollowing: () => this.#pin.following,
+      getHold: () => this.#pin.pinning,
+      beforeReconcile: () => this.#pin.refresh(),
     });
 
     this.#loader = new LoadMoreController({
@@ -200,14 +229,21 @@ export class InfinityScrollController {
     // runs in both modes: under `noVirtualization` this is what puts virtual-core into `enabled:
     // false` before it can subscribe to the scroll element — see VirtualListController.sync()
     this.#list.sync();
+    // virtualized offsets are known before render, so a prepend's grown offset lands in the same
+    // layout as the rows, ahead of virtual-core's anchor scroll
+    if (!this.#getNoVirtualization()) this.#pin.refresh();
+    // onFollowChange misses a scroll-mode flip, so re-apply the effective state every pass
+    this.#list.setFollowing(this.#pin.following);
   }
 
   hostUpdated() {
     this.#visibility.schedule();
+    this.#bottomSentinel.sync();
     if (this.#getNoVirtualization()) {
       // idempotent — starts observing the first time the canvas exists, no-op afterwards; the
       // MutationObserver/ResizeObserver it installs handle every reconcile on their own from here.
       this.#plainList.observe();
+      this.#pin.update();
       return;
     }
     // Deliberately does NOT call maybeLoad() here — see RowMeasurer's own afterMeasure callback
@@ -218,8 +254,7 @@ export class InfinityScrollController {
     if (!this.#initialPinStarted && this.#list.virtualizer.options.count > 0)
       this.#startInitialPin();
     if (this.#initialPinStarted && !this.#initialPinDone) this.#pinCurrentFrame();
-    // data/size changes move the bottom distance without a `scroll` event; recompute after any pin
-    this.#updateAwayFromBottom();
+    this.#pin.update();
   }
 
   hostDisconnected() {
@@ -228,6 +263,8 @@ export class InfinityScrollController {
     this.#disposed = true;
     this.#loader.dispose();
     this.#visibility.dispose();
+    this.#bottomSentinel.dispose();
+    this.#pin.dispose();
     if (this.#getNoVirtualization()) {
       this.#plainList.dispose();
       return;
@@ -332,16 +369,56 @@ export class InfinityScrollController {
     return this.#loader.loading;
   }
 
+  /** Whether growth at the end is currently followed — always `true` outside `scroll-mode="pin-top"`. */
+  get following() {
+    return this.#pin.following;
+  }
+
+  // ------------------------------------------------------------ pin helpers
+
+  /** Searched from the tail — a pin is almost always the last item. @param {string | number} key */
+  #indexOfKey(key) {
+    const data = this.#getData();
+    for (let index = data.length - 1; index >= 0; index--) {
+      if (this.#getItemKey(data[index], index) === key) return index;
+    }
+    return -1;
+  }
+
+  /** The row's px offset from the content top — also the scrollTop that rests it at the top.
+   *  @param {number} index @returns {number | undefined} */
+  #pinOffset(index) {
+    if (!this.#getNoVirtualization()) return this.#list.virtualizer.getMeasurements()[index]?.start;
+
+    const el = this.#getScrollElement();
+    const rowTop = this.#plainList.getOffsetForIndex(index, "start");
+    if (!el || rowTop === undefined) return undefined;
+    const paddingTop = parseFloat(getComputedStyle(el).paddingBlockStart) || 0;
+    return Math.max(0, Math.round(rowTop - paddingTop));
+  }
+
+  /** @param {number} offset @param {"auto" | "smooth" | "instant"} behavior */
+  #scrollToPin(offset, behavior) {
+    if (!this.#getNoVirtualization()) {
+      // through virtual-core, so its own offset never lags the real scrollTop
+      this.#list.virtualizer.scrollToOffset(offset, { behavior });
+      return;
+    }
+    this.#plainList.scrollToOffset(offset, { behavior });
+    // a reconcile must restore onto the pin, not the pre-pin reading position
+    this.#plainList.captureAnchor();
+  }
+
   // -------------------------------------------------------------- commands
 
   handleScroll = () => {
+    this.#pin.handleScroll();
     // `atBottom` gates the follow, so it has to flip in the same task as the scroll event: deferring
     // it to a frame lets the next follow read a stale "true" and yank the user back down mid-scroll.
     if (this.#getNoVirtualization()) {
       this.#plainList.handleScroll();
     } else {
       this.#stick.refresh();
-      this.#updateAwayFromBottom();
     }
 
     // the load check only reads scrollTop and can wait for the frame
@@ -351,6 +428,22 @@ export class InfinityScrollController {
       this.#loader.maybeLoad();
     });
   };
+
+  /**
+   * Pins the item with `key` to the top of the viewport once it renders (`scroll-mode="pin-top"`
+   * only) — call before the data carrying it is set.
+   * @param {string | number} key
+   */
+  pinToStart(key) {
+    if (this.#initialPinStarted && !this.#initialPinDone) this.#endInitialPin();
+    this.#pin.pin(key);
+    this.#host.requestUpdate();
+  }
+
+  /** Re-engages following after an explicit jump to the bottom. */
+  noteScrollToBottom() {
+    this.#pin.noteScrollToBottom();
+  }
 
   /**
    * Scrolls the row at `index` into view — forwards to whichever strategy is active.
@@ -363,21 +456,6 @@ export class InfinityScrollController {
       return;
     }
     this.#list.virtualizer.scrollToIndex(index, options);
-  }
-
-  /**
-   * Recomputes whether the view is scrolled away from the bottom (past `buffer` px, read straight
-   * off the DOM — not the virtualizer's own end test, whose internal offset can lag the real
-   * scrollTop mid-measurement) and fires `onAwayFromBottomChange` only on an actual flip. Drives the
-   * consumer's scroll-to-bottom affordance.
-   */
-  #updateAwayFromBottom() {
-    const el = this.#getScrollElement();
-    // no scroll element yet counts as "at the bottom", so an initial load never flashes the affordance
-    const away = el ? el.scrollHeight - el.clientHeight - el.scrollTop > this.#getBuffer() : false;
-    if (away === this.#awayFromBottom) return;
-    this.#awayFromBottom = away;
-    this.#onAwayFromBottomChange(away);
   }
 
   /** release the ResizeObserver/IntersectionObserver registration of a row that left the DOM */

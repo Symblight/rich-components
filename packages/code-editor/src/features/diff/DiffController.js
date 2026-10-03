@@ -215,21 +215,36 @@ export class DiffController {
   get baselineStatus() {
     if (this.#host.baseline === null) return null;
     const { added, removed } = this.stats.baseline;
+    return { added, removed, pressed: this.expanded };
+  }
+
+  /** `baseline` or `reviewBase` is set. */
+  get enabled() {
+    return this.#host.baseline !== null || this.#host.reviewBase !== null;
+  }
+
+  get expanded() {
     const element = this.#elements.baseline;
-    return { added, removed, pressed: element ? element.expanded : this.#fallbackExpanded };
+    return element ? element.expanded : this.#fallbackExpanded;
   }
 
   /** "Diff vs HEAD": every baseline chunk inline, or back to marks. Goes through the consumer's
-   *  `<cdx-diff kind="baseline">` when there is one, so its `expanded` stays the truth. */
-  toggleBaselineExpanded() {
+   *  `<cdx-diff kind="baseline">` when there is one, so its `expanded` stays the truth.
+   * @param {boolean} expanded */
+  setExpanded(expanded) {
     const element = this.#elements.baseline;
     if (element) {
-      element.expanded = !element.expanded;
+      element.expanded = expanded;
       return;
     }
-    this.#fallbackExpanded = !this.#fallbackExpanded;
+    if (this.#fallbackExpanded === expanded) return;
+    this.#fallbackExpanded = expanded;
     this.#editor.dispatch({ effects: this.#baselineEffect(this.#host.baseline) });
     this.#host.requestUpdate();
+  }
+
+  toggleBaselineExpanded() {
+    this.setExpanded(!this.expanded);
   }
 
   /** What the host renders above the text; null hides the bar. @returns {ReviewBar | null} */

@@ -21,6 +21,17 @@ import { CdxCommentsNav } from "./components/comments-nav/comments-nav.js";
 import { CdxCommentField } from "./components/comment-field/comment-field.js";
 import { CdxCommentItem } from "./components/comment-item/comment-item.js";
 import { CdxCommentThread } from "./components/comment-thread/comment-thread.js";
+import {
+  CdxCommentOpenDetail,
+  CdxCommentDraftDetail,
+  CdxCommentSubmitDetail,
+  CdxCommentCancelDetail,
+  CdxCommentEditDetail,
+  CdxCommentDeleteDetail,
+  CdxCommentResolveDetail,
+  CdxCommentToggleDetail,
+  CdxCommentNavigateDetail,
+} from "./features/comments/shared.js";
 
 declare global {
   interface HTMLElementTagNameMap {
@@ -50,15 +61,15 @@ declare global {
     "cdx-symbols-change": CustomEvent<CdxSymbolsChangeDetail>;
     "cdx-before-change": CustomEvent<CdxBeforeChangeDetail>;
     "cdx-status-click": CustomEvent<{ item: string; index?: number }>;
-    "cdx-comment-open": CustomEvent<Record<string, unknown>>;
-    "cdx-comment-draft": CustomEvent<Record<string, unknown>>;
-    "cdx-comment-submit": CustomEvent<Record<string, unknown>>;
-    "cdx-comment-cancel": CustomEvent<Record<string, unknown>>;
-    "cdx-comment-edit": CustomEvent<Record<string, unknown>>;
-    "cdx-comment-delete": CustomEvent<Record<string, unknown>>;
-    "cdx-comment-resolve": CustomEvent<Record<string, unknown>>;
-    "cdx-comment-toggle": CustomEvent<Record<string, unknown>>;
-    "cdx-comment-navigate": CustomEvent<Record<string, unknown>>;
+    "cdx-comment-open": CustomEvent<CdxCommentOpenDetail>;
+    "cdx-comment-draft": CustomEvent<CdxCommentDraftDetail>;
+    "cdx-comment-submit": CustomEvent<CdxCommentSubmitDetail>;
+    "cdx-comment-cancel": CustomEvent<CdxCommentCancelDetail>;
+    "cdx-comment-edit": CustomEvent<CdxCommentEditDetail>;
+    "cdx-comment-delete": CustomEvent<CdxCommentDeleteDetail>;
+    "cdx-comment-resolve": CustomEvent<CdxCommentResolveDetail>;
+    "cdx-comment-toggle": CustomEvent<CdxCommentToggleDetail>;
+    "cdx-comment-navigate": CustomEvent<CdxCommentNavigateDetail>;
   }
 }
 

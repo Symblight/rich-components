@@ -72,11 +72,9 @@ optional `<cdx-diff>` per layer — without one, the data alone turns the layer 
     author="Agent"
     tone="tertiary"
     accept-label="Accept"
-    .getAuthor="${(chunk)"
-    =""
-  >
-    (chunk ? blame(chunk).name : "Agent")} .getAvatarUrl=${(chunk) => avatarUrl(chunk)} ></cdx-diff
-  >
+    .getAuthor=${(chunk) => (chunk ? blame(chunk).name : "Agent")}
+    .getAvatarUrl=${(chunk) => avatarUrl(chunk)}
+  ></cdx-diff>
 </cdx-code-editor>
 ```
 
@@ -84,13 +82,13 @@ optional `<cdx-diff>` per layer — without one, the data alone turns the layer 
   every chunk inline ("Diff vs HEAD"); Escape closes a peeked chunk.
 - `reviewBase` — the text before proposed edits. Accept folds a chunk into it
   (`cdx-review-base-change`), Reject reverts the text (`cdx-change`). `cdx-review-complete` fires
-  once nothing is pending; `acceptAllChanges()` / `rejectAllChanges()` do the bar's buttons.
+  once nothing is pending; `diff.acceptAll()` / `diff.rejectAll()` do the bar's buttons.
 - `<cdx-diff>`: `kind`, `author`, `tone` (`tertiary` | `neutral` | `primary` | `error`), `icon`,
   `accept-label`, `reject-label`, `revert-label`, `accept-all-label`, `reject-all-label`,
   `no-review-bar`, `expanded`, and `.getAuthor` / `.getAvatarUrl` — called per chunk, and with no
   argument for the review bar; a URL renders as `md-avatar`. Call `refresh()` when their data changes.
 - `diffStats` and `cdx-diff-change` carry the numbers for a status bar (`+4 −2 vs HEAD`).
-- Keys: F7 / Shift-F7 next/previous change, Mod-Alt-Enter / Mod-Alt-Backspace accept / reject the
+- Keys: F7 / Shift-F7 next/previous change (`diff.next()` / `diff.previous()`), Mod-Alt-Enter / Mod-Alt-Backspace accept / reject the
   chunk under the caret.
 - Theming: `--cdx-diff-tone-<tone>-{accent,on-accent,surface,container,on-container}`,
   `--cdx-diff-{added,removed}-background-color`, `--cdx-diff-{added,removed}-sign-color`,
@@ -209,6 +207,63 @@ editor.state = await editor.createState(text, {
 ```
 
 Requires the optional peer `@codemirror/lsp-client`.
+
+## Public API
+
+The imperative API is grouped into namespaces on the element. Each is a frozen object, built once —
+destructuring is safe. Reads are `get*` / `is*` / `can*`, actions are verbs; positions are offsets.
+
+```js
+const editor = document.querySelector("cdx-code-editor");
+
+editor.doc.replace(0, 0, "// generated\n"); // like a user edit: undoable, fires cdx-change
+editor.doc.undo();
+editor.selection.set(editor.doc.posAt(12, 5));
+editor.navigation.goToLine(42);
+editor.search.open({ search: "TODO" });
+editor.diff.acceptAll();
+editor.problems.next();
+editor.comments.confirmSubmit(threadId, { id: serverId });
+```
+
+| Namespace | Members |
+|---|---|
+| `doc` | `getText()`, `getLength()`, `getLineCount()`, `posAt(line, column?)`, `lineAt(pos)`, `replace(from, to, text)`, `undo()`, `redo()`, `canUndo()`, `canRedo()` |
+| `selection` | `set(anchor, head?)`, `get()` (`EditorSelection`), `getText()`, `getCursor()` |
+| `navigation` | `goToLine(line, column?)`, `openGoToLine()`, `closeGoToLine()`, `scrollToPosition(pos, { align })`, `revealSymbol(symbol)` |
+| `search` | `open(query?)`, `close()`, `isOpen()`, `setQuery(query)`, `getQuery()`, `findNext()`, `findPrevious()`, `replaceNext()`, `replaceAll()`, `isEnabled()` |
+| `diff` | `acceptAll()`, `rejectAll()`, `next()`, `previous()`, `dismissReview()`, `setExpanded(bool)`, `isExpanded()`, `isEnabled()` |
+| `problems` | `getCounts()`, `first()`, `next()`, `previous()`, `openQuickFix()` |
+| `comments` | `open(line, options?)`, `get()`, `add(thread)`, `setDraft(id, text)`, `resolve(id, resolved?)`, `remove(id, commentId)`, `fail(id, message)`, `confirmSubmit(id, comment?, options?)`, `failSubmit(id, message)`, `resolveAll(resolved?)`, `clear(id?)`, `reveal(id)`, `next()`, `previous()`, `isEnabled()` |
+
+Still on the element: `value`, `state` / `createState()`, `view` (the CodeMirror `EditorView`),
+`focus()`, and the read-only `activeLanguage`, `outline`, `symbolPath`, `diffStats`.
+
+- Before the first render reads return empty values and actions do nothing; with a feature off (no
+  `<cdx-comments>`, no `baseline`/`reviewBase`, `no-search`) its namespace is a silent no-op —
+  check `isEnabled()`.
+- Actions don't move focus, except the `open*` ones, whose UI takes it. Call `editor.focus()` after
+  `goToLine` when the user should keep typing.
+- `doc.replace` ignores `readOnly` but goes through `cdx-before-change` (`userEvent: "api"`;
+  prevented → `false`). `doc.undo`/`redo` and `search.replace*` are refused under `readOnly`, as
+  CodeMirror's own commands are.
+
+### Migration
+
+| Before | After |
+|---|---|
+| `acceptAllChanges()` / `rejectAllChanges()` | `diff.acceptAll()` / `diff.rejectAll()` |
+| `nextChange()` / `previousChange()` | `diff.next()` / `diff.previous()` |
+| `openComment(line, opts)` | `comments.open(line, opts)` |
+| `getComments()` / `addComment(t)` | `comments.get()` / `comments.add(t)` |
+| `resolveSubmit(id, c, opts)` / `rejectSubmit(id, msg)` | `comments.confirmSubmit(id, c, opts)` / `comments.failSubmit(id, msg)` |
+| `setDraft(id, text)` | `comments.setDraft(id, text)` |
+| `resolveComment(id, r)` / `deleteComment(id, cid)` / `rejectComment(id, msg)` | `comments.resolve(id, r)` / `comments.remove(id, cid)` / `comments.fail(id, msg)` |
+| `resolveAll(r)` / `clearComments(id)` | `comments.resolveAll(r)` / `comments.clear(id)` |
+| `openGoToLine()` | `navigation.openGoToLine()` |
+| `setSelection(anchor, head)` | `selection.set(anchor, head)` |
+
+Events are unchanged.
 
 ## Development
 

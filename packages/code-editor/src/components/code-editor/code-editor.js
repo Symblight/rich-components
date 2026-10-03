@@ -20,6 +20,7 @@ import { baseSetup } from "../../core/setup.js";
 import { ALL, ConfigController } from "../../controllers/ConfigController.js";
 import { ContextMenuController } from "../../controllers/ContextMenuController.js";
 import { DiagnosticsController } from "../../controllers/DiagnosticsController.js";
+import { DocController } from "../../controllers/DocController.js";
 import { FooterController } from "../../features/footer/FooterController.js";
 import { CommentsController } from "../../features/comments/CommentsController.js";
 import { DiffController } from "../../features/diff/DiffController.js";
@@ -27,6 +28,7 @@ import { EditorViewController } from "../../controllers/EditorViewController.js"
 import { GoToLineController } from "../../controllers/GoToLineController.js";
 import { LanguageController } from "../../controllers/LanguageController.js";
 import { QuickFixController } from "../../controllers/QuickFixController.js";
+import { SearchController } from "../../controllers/SearchController.js";
 import { SelectionController } from "../../controllers/SelectionController.js";
 import { SymbolsController } from "../../controllers/SymbolsController.js";
 import { ValueController } from "../../controllers/ValueController.js";
@@ -52,6 +54,17 @@ import styles from "./code-editor.css?inline";
  * Per-document settings for `createState` — the rest (features, plugins, readOnly…) is the
  * editor's and applies to every tab.
  */
+
+/**
+ * Freezes the top level and every namespace object.
+ * @template {Record<string, Record<string, (...args: any[]) => any>>} Api
+ * @param {Api} api
+ * @returns {Api}
+ */
+function freezeApi(api) {
+  for (const ns of Object.values(api)) Object.freeze(ns);
+  return Object.freeze(api);
+}
 
 /**
  * @tag cdx-code-editor
@@ -110,6 +123,10 @@ export class CdxCodeEditor extends LitElement {
   #comments = new CommentsController(this, this.#editor);
   /** @type {SymbolsController} */
   #symbols = new SymbolsController(this, this.#editor);
+  /** @type {DocController} */
+  #doc = new DocController(this.#editor);
+  /** @type {SearchController} */
+  #search = new SearchController(this.#editor, { enabled: () => !this.noSearch });
   /** @type {GoToLineController} */
   #goToLine = new GoToLineController(this, this.#editor, {
     focusCard: () =>
@@ -128,6 +145,87 @@ export class CdxCodeEditor extends LitElement {
     getContainer: () => this.renderRoot.querySelector(".code-editor__body"),
     open: () => this.#openQuickFix(),
   });
+
+  /** Built once; the namespace getters hand out these frozen objects. */
+  #api = freezeApi(
+    /** @type {import("../../types/api.js").CdxCodeEditorApi} */ ({
+      doc: {
+        getText: () => (this.#editor.state ? this.#value.value : ""),
+        getLength: () => this.#doc.length,
+        getLineCount: () => this.#doc.lineCount,
+        posAt: (line, column) => this.#doc.posAt(line, column),
+        lineAt: (pos) => this.#doc.lineAt(pos),
+        replace: (from, to, text) => this.#doc.replace(from, to, text),
+        undo: () => this.#doc.undo(),
+        redo: () => this.#doc.redo(),
+        canUndo: () => this.#doc.canUndo(),
+        canRedo: () => this.#doc.canRedo(),
+      },
+      selection: {
+        set: (anchor, head) => this.#selection.setSelection(anchor, head),
+        get: () => this.#selection.selection,
+        getText: () => this.#selection.text,
+        getCursor: () => this.#selection.cursor,
+      },
+      navigation: {
+        goToLine: (line, column) => this.#goToLine.goTo(line, column),
+        openGoToLine: () => this.#goToLine.show(),
+        // back to the text only when the card had focus
+        closeGoToLine: () => this.#goToLine.hide(this.matches(":focus-within")),
+        scrollToPosition: (pos, options) => this.#selection.scrollTo(pos, options),
+        revealSymbol: (symbol) => this.#selection.setSelection(symbol.from),
+      },
+      search: {
+        open: (query) => this.#search.open(query),
+        close: () => this.#search.close(),
+        isOpen: () => this.#search.isOpen,
+        setQuery: (query) => this.#search.setQuery(query),
+        getQuery: () => this.#search.query,
+        findNext: () => this.#search.findNext(),
+        findPrevious: () => this.#search.findPrevious(),
+        replaceNext: () => this.#search.replaceNext(),
+        replaceAll: () => this.#search.replaceAll(),
+        isEnabled: () => this.#search.enabled,
+      },
+      diff: {
+        acceptAll: () => this.#diff.acceptAll(),
+        rejectAll: () => this.#diff.rejectAll(),
+        next: () => this.#diff.navigate(1),
+        previous: () => this.#diff.navigate(-1),
+        dismissReview: () => this.#diff.dismissReview(),
+        setExpanded: (expanded) => this.#diff.setExpanded(expanded),
+        isExpanded: () => this.#diff.expanded,
+        isEnabled: () => this.#diff.enabled,
+      },
+      problems: {
+        getCounts: () => ({ ...this.#diagnostics.counts }),
+        first: () => this.#diagnostics.first(),
+        next: () => this.#diagnostics.next(),
+        previous: () => this.#diagnostics.previous(),
+        openQuickFix: () => {
+          if (this.#quickFix.bulb) this.#openQuickFix();
+        },
+      },
+      comments: {
+        open: (line, options) => this.#comments.openComment(line, options),
+        get: () => this.#comments.getComments(),
+        add: (thread) => this.#comments.addComment(thread),
+        setDraft: (threadId, text) => this.#comments.setDraft(threadId, text),
+        resolve: (threadId, resolved) => this.#comments.resolveComment(threadId, resolved),
+        remove: (threadId, commentId) => this.#comments.deleteComment(threadId, commentId),
+        fail: (threadId, message) => this.#comments.rejectComment(threadId, message),
+        confirmSubmit: (threadId, comment, options) =>
+          this.#comments.resolveSubmit(threadId, comment, options),
+        failSubmit: (threadId, message) => this.#comments.rejectSubmit(threadId, message),
+        resolveAll: (resolved) => this.#comments.resolveAll(resolved),
+        clear: (id) => this.#comments.clearComments(id),
+        reveal: (threadId) => this.#comments.reveal(threadId),
+        next: () => this.#comments.navigate(1),
+        previous: () => this.#comments.navigate(-1),
+        isEnabled: () => this.#comments.enabled,
+      },
+    }),
+  );
 
   constructor() {
     super();
@@ -282,109 +380,47 @@ export class CdxCodeEditor extends LitElement {
     return this.#diff.stats;
   }
 
-  /** Accepts every pending proposal into `reviewBase`. */
-  acceptAllChanges() {
-    return this.#diff.acceptAll();
+  // ─── public API ───
+
+  /** Text, edits and undo history. */
+  get doc() {
+    return this.#api.doc;
   }
 
-  /** Reverts every pending proposal. */
-  rejectAllChanges() {
-    return this.#diff.rejectAll();
+  /** The caret and selected ranges. */
+  get selection() {
+    return this.#api.selection;
   }
 
-  /** Next change (F7): pending proposals first, then baseline chunks. */
-  nextChange() {
-    return this.#diff.navigate(1);
+  /** Moving the caret and scrolling; the go-to-line card. */
+  get navigation() {
+    return this.#api.navigation;
   }
 
-  /** Previous change (Shift-F7). */
-  previousChange() {
-    return this.#diff.navigate(-1);
+  /** Find/replace and its panel. */
+  get search() {
+    return this.#api.search;
   }
 
-  /** Opens the comment field at a line — a new thread, or a reply when one lives there (with
-   *  `newThread`, another thread on that line, `thread` mode). Returns the thread id, or null when
-   *  `cdx-comment-open` was cancelled or comments are off.
-   * @param {number} line
-   * @param {{ range?: import("../../features/comments/shared.js").CdxCommentRange | null, newThread?: boolean }} [options] */
-  openComment(line, options) {
-    return this.#comments.openComment(line, options);
+  /** Baseline marks and proposed changes. */
+  get diff() {
+    return this.#api.diff;
   }
 
-  /** @returns {import("../../features/comments/shared.js").CdxThread[]} */
-  getComments() {
-    return this.#comments.getComments();
+  /** Diagnostics: counts, navigation, quick fixes. */
+  get problems() {
+    return this.#api.problems;
   }
 
-  /** Adds a comment thread, or replaces the one with its id (uncontrolled).
-   * @param {import("../../features/comments/shared.js").CdxThread} thread */
-  addComment(thread) {
-    this.#comments.addComment(thread);
-  }
-
-  /** The host saved a submitted comment; server `id`/`author`/`createdAt` may come along, and
-   *  `options.threadId` gives a new thread its server id (uncontrolled).
-   * @param {string} threadId @param {Partial<import("../../features/comments/shared.js").CdxComment>} [comment]
-   * @param {{ threadId?: string }} [options] */
-  resolveSubmit(threadId, comment, options) {
-    this.#comments.resolveSubmit(threadId, comment, options);
-  }
-
-  /** @param {string} threadId @param {string} message */
-  rejectSubmit(threadId, message) {
-    this.#comments.rejectSubmit(threadId, message);
-  }
-
-  /** @param {string} threadId @param {string} text */
-  setDraft(threadId, text) {
-    this.#comments.setDraft(threadId, text);
-  }
-
-  /** Answers a cancelled `cdx-comment-resolve` (or, uncontrolled, resolves directly).
-   * @param {string} threadId @param {boolean} [resolved] */
-  resolveComment(threadId, resolved) {
-    this.#comments.resolveComment(threadId, resolved);
-  }
-
-  /** Answers a cancelled `cdx-comment-delete` (or, uncontrolled, deletes directly).
-   * @param {string} threadId @param {string} commentId */
-  deleteComment(threadId, commentId) {
-    this.#comments.deleteComment(threadId, commentId);
-  }
-
-  /** A resolve or delete failed: the thread stops waiting and shows `message`.
-   * @param {string} threadId @param {string} message */
-  rejectComment(threadId, message) {
-    this.#comments.rejectComment(threadId, message);
-  }
-
-  /** Resolves (`false`: reopens) every thread — one `cdx-comment-resolve` each.
-   * @param {boolean} [resolved] */
-  resolveAll(resolved) {
-    this.#comments.resolveAll(resolved);
-  }
-
-  /** Removes every comment, or with `id` one comment (its thread goes with its last) — or the
-   *  thread with that id. No events, no permission hooks (uncontrolled).
-   * @param {string} [id] */
-  clearComments(id) {
-    this.#comments.clearComments(id);
-  }
-
-  /** Opens the "Go to line" card (also Ctrl-G). */
-  openGoToLine() {
-    this.#goToLine.show();
+  /** Line comment threads. */
+  get comments() {
+    return this.#api.comments;
   }
 
   /** @param {FocusOptions} [options] */
   focus(options) {
     if (this.#editor.view) this.#editor.focus();
     else super.focus(options);
-  }
-
-  /** @param {number} anchor @param {number} [head] */
-  setSelection(anchor, head) {
-    this.#selection.setSelection(anchor, head);
   }
 
   firstUpdated() {
@@ -418,12 +454,12 @@ export class CdxCodeEditor extends LitElement {
   }
 
   /** @param {Event} event */
-  handleDiffSlotchange = (event) => {
+  #handleDiffSlotchange = (event) => {
     this.#diff.handleSlotchange(/** @type {HTMLSlotElement} */ (event.target));
   };
 
   /** @param {CustomEvent<{ action: import("../review-bar/review-bar.js").CdxReviewBarAction }>} event */
-  handleReviewBarAction = (event) => {
+  #handleReviewBarAction = (event) => {
     const actions = {
       "accept-all": () => this.#diff.acceptAll(),
       "reject-all": () => this.#diff.rejectAll(),
@@ -435,34 +471,34 @@ export class CdxCodeEditor extends LitElement {
   };
 
   /** @param {Event} event */
-  handleCommentsSlotchange = (event) => {
+  #handleCommentsSlotchange = (event) => {
     this.#comments.handleSlotchange(/** @type {HTMLSlotElement} */ (event.target));
   };
 
   /** @param {Event} event */
-  handleCommentsBarSlotchange = (event) => {
+  #handleCommentsBarSlotchange = (event) => {
     this.#comments.handleBarSlotchange(/** @type {HTMLSlotElement} */ (event.target));
   };
 
   /** @param {CustomEvent<{ action: "previous" | "next" | "resolve-all" }>} event */
-  handleCommentsNavAction = (event) => {
+  #handleCommentsNavAction = (event) => {
     this.#comments.handleBarAction(event.detail);
   };
 
   /** @param {Event} event */
-  handleFooterSlotchange = (event) => {
+  #handleFooterSlotchange = (event) => {
     this.#footer.handleSlotchange(/** @type {HTMLSlotElement} */ (event.target));
   };
 
   /** Editor actions are handled here; file-level ones (path, language, encoding…) go to the
    *  consumer as `cdx-status-click`, since only it knows what they open.
    * @param {CustomEvent<import("../status-bar/status-bar.js").CdxStatusBarAction>} event */
-  handleStatusBarAction = (event) => {
+  #handleStatusBarAction = (event) => {
     const { action, index, symbol } = event.detail;
-    if (action === "go-to-line") this.openGoToLine();
+    if (action === "go-to-line") this.#goToLine.show();
     else if (action === "toggle-diff") this.#diff.toggleBaselineExpanded();
     else if (action === "symbol" && symbol) {
-      this.setSelection(symbol.from);
+      this.#selection.setSelection(symbol.from);
       this.focus();
     } else {
       this.dispatchEvent(
@@ -483,14 +519,14 @@ export class CdxCodeEditor extends LitElement {
         part="footer"
         exportparts="bar: status-bar, crumbs: status-crumbs, crumb: status-crumb, crumb-current: status-crumb-current, separator: status-separator, items: status-items, position: status-position, selection: status-selection, diff: status-diff, encoding: status-encoding, language: status-language, environment: status-environment"
         .model=${model}
-        @cdx-status-bar-action=${this.handleStatusBarAction}
+        @cdx-status-bar-action=${this.#handleStatusBarAction}
         ><slot name="status" slot="status"></slot
       ></cdx-status-bar>
     `;
   }
 
-  handleProblemsClick = () => {
-    this.#diagnostics.goToFirst();
+  #handleProblemsClick = () => {
+    if (this.#diagnostics.first()) this.#editor.focus();
   };
 
   async #openQuickFix() {
@@ -502,21 +538,21 @@ export class CdxCodeEditor extends LitElement {
   }
 
   /** @param {CustomEvent<import("../quick-fix/quick-fix.js").CdxQuickFixApplyDetail>} event */
-  handleQuickFixApply = (event) => {
+  #handleQuickFixApply = (event) => {
     this.#quickFix.apply(this.#editor.view, event.detail.problem, event.detail.index);
   };
 
-  handleQuickFixDismiss = () => {
+  #handleQuickFixDismiss = () => {
     this.focus();
   };
 
   /** @param {CustomEvent<import("../go-to-line/go-to-line.js").CdxGoToLineSubmitDetail>} event */
-  handleGoToSubmit = (event) => {
+  #handleGoToSubmit = (event) => {
     this.#goToLine.go(event.detail.value);
   };
 
   /** @param {CustomEvent<import("../go-to-line/go-to-line.js").CdxGoToLineCancelDetail>} event */
-  handleGoToCancel = (event) => {
+  #handleGoToCancel = (event) => {
     this.#goToLine.hide(event.detail.refocus);
   };
 
@@ -531,7 +567,7 @@ export class CdxCodeEditor extends LitElement {
         ?complete=${bar.complete}
         .config=${bar.config}
         .stats=${bar.stats}
-        @cdx-review-bar-action=${this.handleReviewBarAction}
+        @cdx-review-bar-action=${this.#handleReviewBarAction}
       ></cdx-review-bar>
     `;
   }
@@ -548,7 +584,7 @@ export class CdxCodeEditor extends LitElement {
         .errors=${errors}
         .warnings=${warnings}
         .others=${others}
-        @click=${this.handleProblemsClick}
+        @click=${this.#handleProblemsClick}
       ></cdx-problems-indicator>
     `;
   }
@@ -562,8 +598,8 @@ export class CdxCodeEditor extends LitElement {
         exportparts="bulb: quick-fix-bulb, menu: quick-fix-menu"
         style=${styleMap({ top: `${bulb.top}px`, left: `${bulb.left}px` })}
         .problems=${bulb.problems}
-        @cdx-quick-fix-apply=${this.handleQuickFixApply}
-        @cdx-quick-fix-dismiss=${this.handleQuickFixDismiss}
+        @cdx-quick-fix-apply=${this.#handleQuickFixApply}
+        @cdx-quick-fix-dismiss=${this.#handleQuickFixDismiss}
       ></cdx-quick-fix>
     `;
   }
@@ -577,7 +613,7 @@ export class CdxCodeEditor extends LitElement {
         exportparts="bar: comments-bar, nav: comments-bar-nav, count: comments-bar-count, action: comments-bar-action"
         .config=${bar.config}
         .model=${bar.model}
-        @cdx-comments-nav-action=${this.handleCommentsNavAction}
+        @cdx-comments-nav-action=${this.#handleCommentsNavAction}
       ></cdx-comments-nav>
     `;
   }
@@ -591,18 +627,18 @@ export class CdxCodeEditor extends LitElement {
         .lineCount=${this.#goToLine.lineCount}
         .position=${this.#goToLine.position}
         ?invalid=${this.#goToLine.invalid}
-        @cdx-go-to-line-submit=${this.handleGoToSubmit}
-        @cdx-go-to-line-cancel=${this.handleGoToCancel}
+        @cdx-go-to-line-submit=${this.#handleGoToSubmit}
+        @cdx-go-to-line-cancel=${this.#handleGoToCancel}
       ></cdx-go-to-line>
     `;
   }
 
   render() {
     return html`
-      <slot name="diff" hidden @slotchange=${this.handleDiffSlotchange}></slot>
-      <slot name="footer" hidden @slotchange=${this.handleFooterSlotchange}></slot>
-      <slot name="comments" hidden @slotchange=${this.handleCommentsSlotchange}></slot>
-      <slot name="comments-bar" hidden @slotchange=${this.handleCommentsBarSlotchange}></slot>
+      <slot name="diff" hidden @slotchange=${this.#handleDiffSlotchange}></slot>
+      <slot name="footer" hidden @slotchange=${this.#handleFooterSlotchange}></slot>
+      <slot name="comments" hidden @slotchange=${this.#handleCommentsSlotchange}></slot>
+      <slot name="comments-bar" hidden @slotchange=${this.#handleCommentsBarSlotchange}></slot>
       <div class="code-editor" part="container">
         ${this.#renderReviewBar()}
         <div class="code-editor__body">

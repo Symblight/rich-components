@@ -28,10 +28,10 @@ export class DataSourceController {
    * @param {PropertyKey} id */
   async loadChildren(id) {
     if (!this.host.dataSource || this.model.loading.has(id)) return;
-    if (this.model.nodes.get(id)?.childIds) return;
+    if (this.model.isLoaded(id)) return;
 
     const items = await this.#fetch(id);
-    if (!items || !this.model.nodes.has(id)) return;
+    if (!items || !this.model.has(id)) return;
     this.model.setChildren(id, items);
     if (items.length === 0) this.host.announce(`${this.model.label(id)} is empty.`);
     else emit(this.host, "tvx-children-loaded", { key: id, node: this.model.item(id), items });

@@ -220,7 +220,7 @@ export class TvxTreeView extends LitElement {
   }
 
   #applyDefaultsOnce() {
-    if (this.#defaultsApplied || this.#model.rootIds.length === 0) return;
+    if (this.#defaultsApplied || this.#model.empty) return;
     this.#defaultsApplied = true;
     if (this.defaultExpandedItems) this.#model.setExpandedItems(this.defaultExpandedItems);
     if (this.defaultSelectedItems) this.#selection.setSelectedItems(this.defaultSelectedItems);

@@ -1,4 +1,5 @@
 import { emit } from "../core/emit.js";
+import { walkIndexTree } from "../core/index-tree.js";
 
 /**
  * Selected ids. Single mode keeps one id. Multi mode is MUI-style (mirrors data-grid's
@@ -66,17 +67,19 @@ export class SelectionController {
   /** Checkbox click: toggles the whole subtree, then re-checks each ancestor (checked = all children checked).
    * @param {PropertyKey} id */
   toggleCascading(id) {
-    if (!this.#canSelect(id)) return;
-    const subtree = [...this.model.subtree(id)];
+    const node = this.model.node(id);
+    if (!node || !this.#canSelect(id)) return;
+    const subtree = [...walkIndexTree(node)].map((n) => /** @type {PropertyKey} */ (n.key));
     const select = !subtree.every((key) => this.selected.has(key));
     const next = new Set(this.selected);
     for (const key of subtree) {
       if (select) next.add(key);
       else next.delete(key);
     }
-    for (let p = this.model.parentId(id); p !== null; p = this.model.parentId(p)) {
-      if (this.model.childIds(p).every((key) => next.has(key))) next.add(p);
-      else next.delete(p);
+    // the root's key is null — stop below it
+    for (let p = node.parent; p && p.key !== null; p = p.parent) {
+      if (p.children?.every((n) => next.has(/** @type {PropertyKey} */ (n.key)))) next.add(p.key);
+      else next.delete(p.key);
     }
     this.#commit(next);
   }
@@ -133,13 +136,14 @@ export class SelectionController {
     this.#statesSelected = this.selected;
     this.#statesStructureVersion = this.model.structureVersion;
     const states = new Map();
-    /** @param {PropertyKey} id
+    /** @param {import("./tree-model-controller.js").TreeNode} node
      * @returns {[total: number, selected: number]} */
-    const count = (id) => {
+    const count = (node) => {
+      const id = /** @type {PropertyKey} */ (node.key);
       let total = 1;
       let selected = this.selected.has(id) ? 1 : 0;
-      for (const childId of this.model.childIds(id)) {
-        const [childTotal, childSelected] = count(childId);
+      for (const child of node.children ?? []) {
+        const [childTotal, childSelected] = count(child);
         total += childTotal;
         selected += childSelected;
       }
@@ -149,7 +153,7 @@ export class SelectionController {
       });
       return [total, selected];
     };
-    this.model.rootIds.forEach(count);
+    this.model.tree.children?.forEach(count);
     this.#checkboxStates = states;
     return states;
   }

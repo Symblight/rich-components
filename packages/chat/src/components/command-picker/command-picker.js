@@ -217,15 +217,15 @@ export class ChxCommandPicker extends LitElement {
       }),
     );
 
-    const composer =
-      /** @type {(HTMLElement & { insertAtRange: (target: string | null, node: Node) => void }) | null | undefined} */ (
-        /** @type {any} */ (this.closest("chx-chat"))?.messageComposerElement
-      );
-    if (!composer) return;
-
     const node = overrideNode ?? this.buildDefaultChip(optionElement, value);
     stampChipOwner(node, this.id);
-    composer.insertAtRange(this.#activeTarget, node);
+    // the slotting chx-message-composer listens for this and does the insertion
+    this.dispatchEvent(
+      new CustomEvent("chx-insert-chip", {
+        detail: { node, target: this.#activeTarget },
+        bubbles: true,
+      }),
+    );
   }
 
   /**

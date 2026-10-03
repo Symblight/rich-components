@@ -176,7 +176,7 @@ export const Typing = {
           if (!(/** @type {HTMLElement} */ (event.target).closest(".typing-story__toggle-typing")))
             return;
           if (!chatEl) return;
-          chatEl.setTyping(!chatEl.messageListElement?.typing);
+          chatEl.presence.setTyping(!chatEl.presence.isTyping());
         }}
       >
         <md-button
@@ -375,7 +375,8 @@ export const ScrollToBottomAffordance = {
             )
           )
             return;
-          chatEl?.messageListElement?.list?.scrollToIndex(0, { align: "start" });
+          const firstId = chatEl?.store.getMessages()[0]?.id;
+          if (firstId) chatEl?.viewport.toMessage(firstId, { align: "start" });
         }}
       >
         <md-button
@@ -528,7 +529,7 @@ function makeHistoryMessage(index, withAttachments = false) {
  * A fake `adapter.listMessages` backed by `PAGINATION_TOTAL_HISTORY` messages, paginated
  * `PAGINATION_PAGE_SIZE` at a time — `cursor` is just the (stringified) index to page backward
  * from. The first call (no cursor, made by chx-chat itself on connect) returns the newest page;
- * `loadMoreHistory()` (scroll to the top, or the composer's "Load older messages" button below)
+ * `store.loadMore()` (scroll to the top, or the composer's "Load older messages" button below)
  * walks backward one page at a time until `hasMore: false`. `delayMs` defaults to the same 600ms
  * `Pagination` story below uses — the initial-loading stories pass a longer one so the indicator
  * stays comfortably visible while looking at the story, not just for one paint.
@@ -546,7 +547,7 @@ function createHistoryAdapter(delayMs = 600, { withAttachments = false } = {}) {
 
 /**
  * Scroll `chx-message-list` to the top to load older history — a sentinel + IntersectionObserver
- * inside the list requests it automatically; the button below calls `chatEl.loadMoreHistory()`
+ * inside the list requests it automatically; the button below calls `chatEl.store.loadMore()`
  * directly, the same public method, for a way to
  * trigger it without scrolling. Scroll position is preserved across a load — the messages visible
  * before the load stay in place rather than jumping.
@@ -562,7 +563,7 @@ function createHistoryAdapter(delayMs = 600, { withAttachments = false } = {}) {
  * yet; this one fires every subsequent older-page fetch, with messages already visible). Unlike
  * `streaming`/`scroll-to-bottom` above, nothing is slotted here at all — the slot's own native
  * fallback is a plain `<chx-loading-history>`, so it shows up with zero story-level wiring the
- * instant a scroll-triggered (or button-triggered) `loadMoreHistory()` starts, and disappears the
+ * instant a scroll-triggered (or button-triggered) `store.loadMore()` starts, and disappears the
  * instant it settles. See `LoadingHistoryCustomDelay` below for overriding it explicitly.
  *
  * `<chx-divider slot="divider" sticky>` adds date dividers — the history steps back a day every 60
@@ -592,9 +593,7 @@ export const Pagination = {
           if (!(/** @type {HTMLElement} */ (event.target).closest(".pagination-story__load-more")))
             return;
           const container = /** @type {HTMLElement} */ (event.currentTarget);
-          /** @type {(HTMLElement & {loadMoreHistory: () => Promise<void>}) | null} */ (
-            container.querySelector("chx-chat")
-          )?.loadMoreHistory();
+          container.querySelector("chx-chat")?.store.loadMore();
         }}
       >
         <md-button
@@ -655,9 +654,7 @@ export const LoadingHistoryCustomDelay = {
         if (!(/** @type {HTMLElement} */ (event.target).closest(".pagination-story__load-more")))
           return;
         const container = /** @type {HTMLElement} */ (event.currentTarget);
-        /** @type {(HTMLElement & {loadMoreHistory: () => Promise<void>}) | null} */ (
-          container.querySelector("chx-chat")
-        )?.loadMoreHistory();
+        container.querySelector("chx-chat")?.store.loadMore();
       }}
     >
       <md-button

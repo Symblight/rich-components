@@ -34,6 +34,7 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     dropHint: { type: String, attribute: "drop-hint" },
     dragging: { type: Boolean, reflect: true, attribute: true },
     getTriggerFields: { attribute: false },
+    getPasteLongText: { attribute: false },
     loading: { type: Boolean, reflect: true, attribute: true },
     disabled: { type: Boolean, reflect: true, attribute: true },
     compact: { type: Boolean, reflect: true, attribute: true },
@@ -68,6 +69,8 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
 
     /** @type {() => Map<string, Element>} */
     this.getTriggerFields = () => new Map();
+    /** @type {() => import("../../editor/Editor.js").PasteLongTextConfig | undefined} */
+    this.getPasteLongText = () => undefined;
 
     /** @type {Editor | undefined} */
     this.editor = undefined;
@@ -142,6 +145,7 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
         this.closest("form")?.requestSubmit();
       },
       getCommandFields: () => this.getTriggerFields(),
+      getPasteLongText: () => this.getPasteLongText(),
       onCommandSelected: this.handleCommandSelected,
       placeholder: this.placeholder,
       attributes: {
@@ -220,9 +224,13 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     this.value = text;
   }
 
+  /** Inserts a chip at the caret — see Editor.insertChip. @param {Node} node */
+  insertChip(node) {
+    this.editor?.insertChip(node);
+  }
+
   /**
-   * Forwarded from chx-message-composer's own insertAtRange — see
-   * Editor.resolveCommand for the actual insertion logic.
+   * Replaces the tracked command range `target` with `node` — see Editor.resolveCommand.
    * @param {string | null} target
    * @param {Node} node
    */

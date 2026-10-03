@@ -70,12 +70,22 @@ export class PaginationController {
 
   /** Whether older history can still be loaded for the active conversation — pushed down to `chx-infinity-scroll`'s `hasMore`. */
   get hasMore() {
-    return this.#stateFor(this.#getConversationId()).hasMore;
+    return this.hasMoreFor(this.#getConversationId());
   }
 
   /** Whether a page fetch is in flight for the active conversation — pushed down to `chx-infinity-scroll`'s `loading`. */
   get loading() {
-    return this.#stateFor(this.#getConversationId()).loading;
+    return this.isLoadingFor(this.#getConversationId());
+  }
+
+  /** @param {string | undefined} conversationId */
+  hasMoreFor(conversationId) {
+    return this.#state.get(conversationId)?.hasMore ?? true;
+  }
+
+  /** @param {string | undefined} conversationId */
+  isLoadingFor(conversationId) {
+    return this.#state.get(conversationId)?.loading ?? false;
   }
 
   /**
@@ -211,7 +221,7 @@ export class PaginationController {
     this.#state.delete(conversationId);
   }
 
-  /** Drops cached pagination state for every conversation at once — the "clear everything" half of chx-chat's `cache.clear()`. */
+  /** Drops cached pagination state for every conversation at once — the "clear everything" half of chx-chat's `store.clear()`. */
   forgetAll() {
     this.#visited.clear();
     this.#state.clear();

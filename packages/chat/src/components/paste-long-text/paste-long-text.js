@@ -11,8 +11,8 @@ import styles from "./paste-long-text.css?inline";
  * @tag chx-paste-long-text
  * @summary Collapses a long paste in chx-message-composer into a chip — a plain "N lines" chip by
  * default, or a `chx-code-block` chip when the pasted text looks like code. Renders nothing itself;
- * reaches into its ancestor chx-message-composer's editor directly (see #registerWithEditor) so
- * chx-message-composer/chx-textbox carry no paste-specific properties at all.
+ * the composer tracks it through its `paste-long-text` slot and the editor reads `pasteThreshold`/
+ * `classify`/`buildElement` off it at paste time.
  */
 @customElement("chx-paste-long-text")
 export class ChxPasteLongText extends LitElement {
@@ -23,11 +23,6 @@ export class ChxPasteLongText extends LitElement {
     codeLanguages: { attribute: false },
     maxCodeErrorRatio: { type: Number, attribute: "max-code-error-ratio" },
   };
-
-  // real private fields must be declared here, in the class body — a bare `this.#foo = ...` inside
-  // the constructor alone isn't enough
-  /** @type {import("../message-composer/message-composer.js").ChxMessageComposer | undefined} */
-  #composer;
 
   constructor() {
     super();
@@ -48,42 +43,6 @@ export class ChxPasteLongText extends LitElement {
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
     return [styles];
-  }
-
-  connectedCallback() {
-    super.connectedCallback();
-    this.#registerWithEditor();
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-    this.#composer?.editor?.configurePasteLongText(null);
-    this.#composer = undefined;
-  }
-
-  /**
-   * The editor is constructed asynchronously (chx-textbox's own `firstUpdated()`, itself reached
-   * only after chx-message-composer's first render) — awaiting both `updateComplete`s in turn is
-   * the same ordering `handleSend`/`focus()` already rely on elsewhere, and is guaranteed to run
-   * after `firstUpdated()` since Lit resolves `updateComplete` only once that's already happened.
-   */
-  async #registerWithEditor() {
-    const composer =
-      /** @type {import("../message-composer/message-composer.js").ChxMessageComposer | null} */ (
-        this.closest("chx-message-composer")
-      );
-    if (!composer) return;
-    this.#composer = composer;
-
-    await composer.updateComplete;
-    await composer.textboxElement?.updateComplete;
-    if (this.#composer !== composer) return; // disconnected again while awaiting
-
-    composer.editor?.configurePasteLongText({
-      getPasteThreshold: () => this.pasteThreshold,
-      classify: (text, lines) => this.classify(text, lines),
-      buildElement: (attrs, source) => this.buildElement(attrs, source),
-    });
   }
 
   /**

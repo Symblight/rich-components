@@ -142,7 +142,7 @@ or default slot is overridden with real content, same as any Lit `<slot>` fallba
 
 - Click-to-expand or any other chip interaction beyond delete.
 - Re-evaluating chips already in the document after `chx-paste-long-text`'s properties change.
-- Surviving `chx-chat.setText()`/a composer disconnect-reconnect remount — both replace the document
+- Surviving `chx-chat.input.setText()`/a composer disconnect-reconnect remount — both replace the document
   with plain text, same pre-existing limitation as command chips.
 - Recognizing content other than code (e.g. URLs, JSON) — override `classify()`/`buildElement()`
   yourself in the meantime; there's no separate pluggable-handler registry anymore, one override

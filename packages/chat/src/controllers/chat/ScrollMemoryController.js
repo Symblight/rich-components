@@ -1,4 +1,4 @@
-/** @import { ChxMessageList } from "../../components/message-list/message-list.js" */
+/** @import { ChxViewportApi } from "../../types/api.js" */
 
 /**
  * Remembers where the reader was in each conversation, so switching away and back lands on the same
@@ -11,8 +11,8 @@
  * `ReadTrackingController.syncReadStates()` has in `chx-message-list`.
  */
 export class ScrollMemoryController {
-  /** @type {() => ChxMessageList | null | undefined} */
-  #getMessageListElement;
+  /** @type {() => ChxViewportApi} */
+  #getViewport;
   /** @type {() => boolean} */
   #getEnabled;
   /** conversationId -> chx-message-list scroll offset. @type {Map<string, number | undefined>} */
@@ -21,12 +21,12 @@ export class ScrollMemoryController {
 
   /**
    * @param {{
-   *   getMessageListElement: () => ChxMessageList | null | undefined,
+   *   getViewport: () => ChxViewportApi,
    *   getEnabled: () => boolean,
    * }} config
    */
   constructor(config) {
-    this.#getMessageListElement = config.getMessageListElement;
+    this.#getViewport = config.getViewport;
     this.#getEnabled = config.getEnabled;
   }
 
@@ -41,10 +41,7 @@ export class ScrollMemoryController {
       return;
     }
     if (previousConversationId !== undefined) {
-      this.#offsets.set(
-        previousConversationId,
-        this.#getMessageListElement()?.list?.getScrollOffset(),
-      );
+      this.#offsets.set(previousConversationId, this.#getViewport().getScrollOffset());
     }
     this.#pendingRestore = true;
   }
@@ -63,9 +60,7 @@ export class ScrollMemoryController {
     this.#pendingRestore = false;
     const offset = conversationId === undefined ? undefined : this.#offsets.get(conversationId);
     if (offset === undefined) return;
-    const list = this.#getMessageListElement();
-    await list?.updateComplete;
-    list?.list?.scrollToOffset(offset);
+    await this.#getViewport().scrollToOffset(offset); // awaits the list's own render first
   }
 
   /** Drops one conversation's remembered offset — its cache was cleared. @param {string} conversationId */

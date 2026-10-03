@@ -4,7 +4,7 @@ import "../components/paste-chip/paste-chip.js";
 
 /**
  * Last-resort default — only reached if a `paste` node exists (e.g. a restored draft, or undo)
- * without any chx-paste-long-text ever having registered via `Editor.js`'s `configurePasteLongText`.
+ * without a chx-paste-long-text slotted into the composer.
  * @param {{lines: number}} detail
  * @returns {HTMLElement}
  */
@@ -18,7 +18,7 @@ function defaultBuildElement({ lines }) {
 
 /**
  * Renders a collapsed `paste` node — chx-paste-long-text's own `buildElement()` once registered (see
- * Editor.js's `configurePasteLongText`), or `defaultBuildElement` above otherwise. Named generically,
+ * Editor.js's `getPasteLongText`), or `defaultBuildElement` above otherwise. Named generically,
  * not `buildChip`: the resolved element can be anything (e.g. `chx-code-block` for a detected code
  * paste), not just a chip. `source` is always `"composer"`: paste chips have no historical form,
  * they unfold to full text once sent. Syncs `chx-code-block-change`/`chx-code-block-lang-change`/

@@ -36,6 +36,15 @@ function fixMacDoubleSpacePeriod(tr, oldState, view) {
   return oldState.tr.insertText(inserted.replace(".", " "), step.from, step.to);
 }
 
+/**
+ * What `chx-paste-long-text` provides — read live at paste/render time, so a later change needs no remount.
+ * @typedef {{
+ *   pasteThreshold: number,
+ *   classify: (text: string, lines: number) => Record<string, unknown> | null,
+ *   buildElement: (attrs: {text: string, lines: number, data: Record<string, unknown>}, source: "composer") => HTMLElement,
+ * }} PasteLongTextConfig
+ */
+
 /** Facade over the composer's editing engine — constructed by chx-textbox (textbox.js) against its own mount div; chx-message-composer never touches ProseMirror directly. */
 export class Editor {
   // real private fields must be declared here, in the class body — a bare `this.#foo = ...`
@@ -45,34 +54,28 @@ export class Editor {
   /** @type {((detail: {target: string | null, id: string | undefined}) => void) | undefined} */
   #onCommandSelected;
   /**
-   * Live config the always-present paste plugin/node-view read from — starts fully inert (same
-   * "present but no-op until something registers" shape command-plugin.js's own
-   * `getCommandFields ?? (() => new Map())` already has). `chx-paste-long-text` mutates this
-   * directly via `configurePasteLongText`, no ProseMirror `reconfigure()` needed since the plugin's
-   * own getters are called live at paste time. `buildElement` is named generically, not `buildChip`
-   * — a collapsed paste can resolve to any element (e.g. `chx-code-block`), not just a chip.
-   * @type {{getPasteThreshold: () => number, classify: (text: string, lines: number) => Record<string, unknown> | null, buildElement: ((attrs: {text: string, lines: number, data: Record<string, unknown>}, source: "composer") => HTMLElement) | undefined}}
-   */
-  #pasteConfig = {
-    getPasteThreshold: () => 0,
-    classify: () => null,
-    buildElement: undefined,
-  };
-
-  /**
    * @param {HTMLElement} mount
    * @param {{
    *   onChange: (detail: {value: string, html: string}) => void,
    *   onSubmit: () => void,
    *   getCommandFields?: () => Map<string, Element>,
    *   onCommandSelected?: (detail: {target: string | null, id: string | undefined}) => void,
+   *   getPasteLongText?: () => PasteLongTextConfig | undefined,
    *   attributes?: Record<string, string>,
    *   placeholder?: string,
    * }} options
    */
   constructor(
     mount,
-    { onChange, onSubmit, getCommandFields, onCommandSelected, attributes, placeholder },
+    {
+      onChange,
+      onSubmit,
+      getCommandFields,
+      onCommandSelected,
+      getPasteLongText = () => undefined,
+      attributes,
+      placeholder,
+    },
   ) {
     this.#onChange = onChange;
     this.#onCommandSelected = onCommandSelected;
@@ -84,8 +87,11 @@ export class Editor {
         history(),
         createKeymap({ onSubmit }),
         createPastePlugin({
-          getPasteThreshold: () => this.#pasteConfig.getPasteThreshold(),
-          getClassify: () => this.#pasteConfig.classify,
+          getPasteThreshold: () => getPasteLongText()?.pasteThreshold ?? 0,
+          getClassify: () => {
+            const config = getPasteLongText();
+            return config && ((text, lines) => config.classify(text, lines));
+          },
         }),
         createPlaceholderPlugin(placeholder ?? ""),
       ],
@@ -98,7 +104,10 @@ export class Editor {
         chip: (node) => new ChipNodeView(node),
         paste: (node, view, getPos) =>
           new PasteNodeView(node, view, getPos, {
-            getBuildElement: () => this.#pasteConfig.buildElement,
+            getBuildElement: () => {
+              const config = getPasteLongText();
+              return config && ((attrs, source) => config.buildElement(attrs, source));
+            },
           }),
       },
       dispatchTransaction: (tr) => {
@@ -220,24 +229,5 @@ export class Editor {
     );
     this.view.dispatch(tr);
     this.view.focus();
-  }
-
-  /**
-   * Called by chx-paste-long-text on connect/disconnect (see its own #registerWithEditor) — the
-   * paste plugin/node-view are always present (see `#pasteConfig`'s own doc comment above), this
-   * just mutates the live config they already read from. `null` resets to fully disabled, same as
-   * before any chx-paste-long-text ever registered.
-   * @param {{
-   *   getPasteThreshold: () => number,
-   *   classify: (text: string, lines: number) => Record<string, unknown> | null,
-   *   buildElement: (attrs: {text: string, lines: number, data: Record<string, unknown>}, source: "composer") => HTMLElement,
-   * } | null} config
-   */
-  configurePasteLongText(config) {
-    this.#pasteConfig = {
-      getPasteThreshold: config?.getPasteThreshold ?? (() => 0),
-      classify: config?.classify ?? (() => null),
-      buildElement: config?.buildElement,
-    };
   }
 }

@@ -287,18 +287,23 @@ external (OS file) adapter.
 
 ## Attaching a file programmatically
 
-`chx-chat.attachFile(file)` attaches a `File` the same way picking or dropping one would — fires
-`chx-attach` with `source: "api"`, still preventable by a JS-driven listener. Useful for anything
-that gets you a `File` outside the picker/drop path (pasted from the clipboard, fetched from
-somewhere else, produced by your own UI):
+`chx-chat.attachments.add(files)` attaches one `File` or an array the same way picking or dropping
+would — fires `chx-attach` with `source: "api"`, still preventable by a JS-driven listener. Useful
+for anything that gets you a `File` outside the picker/drop path (fetched from somewhere else,
+produced by your own UI):
 
 ```js
-chatEl.attachFile(someFile);
+chatEl.attachments.add(someFile);
+chatEl.attachments.getFiles(); // File[] currently attached
+chatEl.attachments.clear();
 ```
 
-A no-op if no `<chx-attachments>` is connected. `chx-message-composer` exposes the same method,
-if you're working one level down. Same `mode`-based branching as any other attach path — in chip
-mode, `attachFile` inserts a chip at the current caret position instead of adding a card.
+A no-op (with a one-time console warning) if no `<chx-attachments>` is connected — check
+`ChatController.isAvailable("attachments")` to hide UI that depends on it. Same `mode`-based
+branching as any other attach path — in chip mode, `add` inserts a chip at the current caret
+position instead of adding a card. Used standalone, `<chx-attachments>` keeps its own methods
+(`addFiles(files, source)`, `clearAttachments()`, `getAttachments()`, `open()`). See
+[Public API](./public-api.md).
 
 ## Not yet supported
 

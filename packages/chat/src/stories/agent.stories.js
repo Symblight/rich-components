@@ -785,7 +785,7 @@ function handleComposerKitMessagesChange(event) {
 
   const parts = splitMessageParts(last.id, first.html, [chipPartRule, pasteCodePartRule]);
   if (!parts) return;
-  /** @type {any} */ (event.currentTarget).addMessage({ ...last, parts: [...parts, ...rest] });
+  /** @type {any} */ (event.currentTarget).store.add({ ...last, parts: [...parts, ...rest] });
 }
 
 /** @param {Event} event */

@@ -44,7 +44,7 @@ commands) is picked up by `chx-chat` automatically, appended to the internal sto
 no `chx-send-message` listener needed just to see your own message appear.
 
 `messages` is a **controlled override**, not the only way messages get in — a local send, a
-streamed reply, or an ingested `adapter.subscribe`/`addMessage` message all update the same
+streamed reply, or an ingested `adapter.subscribe`/`store.add` message all update the same
 internal store directly. Reassign `messages` only when you want to replace the whole array
 yourself (bulk load, external edit/delete) — always with a **new array reference**, so Lit's
 own dirty-check actually notices the change.
@@ -89,10 +89,10 @@ Chunks are batched (`chunkBatchIntervalMs`, default `16`) so a token-by-token st
 re-render on every single token.
 
 ```js
-chatEl.retry(messageId); // re-send a message currently status: "failed"
-chatEl.regenerate(replyIdOrItsAnchoringSendId); // redo an assistant reply (needs adapter.regenerate)
-chatEl.cancel(messageId); // abort one in-flight send/regenerate
-chatEl.stop(); // abort every delivery for the active conversation — what the composer's stop button does
+chatEl.delivery.retry(messageId); // re-send a message currently status: "failed"
+chatEl.delivery.regenerate(replyIdOrItsAnchoringSendId); // redo an assistant reply (needs adapter.regenerate)
+chatEl.delivery.cancel(messageId); // abort one in-flight send/regenerate
+chatEl.delivery.stop(); // abort every delivery for the active conversation — what the composer's stop button does
 ```
 
 **The `AbortSignal` is yours to honor.** Aborting only stops `chx-chat` reading the stream; nothing
@@ -224,7 +224,7 @@ chatEl.partElements = {
 
 There is no equivalent hook for the whole message: the `<chx-message>` wrapper is always the
 library's, so every row reliably carries its part names, roving-focus wiring and `aria-busy`.
-Change how it *looks* in CSS instead.
+Change how it _looks_ in CSS instead.
 
 ## Styling messages — `::part()` and `--chx-message-*`
 
@@ -233,18 +233,18 @@ Change how it *looks* in CSS instead.
 `exportparts` chain that carries the names out to the page. Each row gets a closed vocabulary,
 applied from its own state:
 
-| Part                  | On                                                    |
-| --------------------- | ------------------------------------------------------ |
-| `message`             | Every row (the `<chx-message>` host itself)            |
-| `message-own`         | `message.own`                                          |
-| `message-incoming`    | `!message.own` — own's complement, since part selectors can't be negated |
-| `message-unread`      | `readState === "unread"`                               |
-| `message-streaming`   | any part still `state: "streaming"`                    |
-| `message-system`      | `parts[0].type === "system"`                           |
-| `message-avatar` / `-body` / `-meta` / `-attachments` / `-content` / `-actions` / `-unread-marker` | chx-message's interior boxes |
+| Part                                                                                               | On                                                                       |
+| -------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `message`                                                                                          | Every row (the `<chx-message>` host itself)                              |
+| `message-own`                                                                                      | `message.own`                                                            |
+| `message-incoming`                                                                                 | `!message.own` — own's complement, since part selectors can't be negated |
+| `message-unread`                                                                                   | `readState === "unread"`                                                 |
+| `message-streaming`                                                                                | any part still `state: "streaming"`                                      |
+| `message-system`                                                                                   | `parts[0].type === "system"`                                             |
+| `message-avatar` / `-body` / `-meta` / `-attachments` / `-content` / `-actions` / `-unread-marker` | chx-message's interior boxes                                             |
 
 Part selectors **don't nest** — there's no `::part(message-own)::part(message-content)`. To reach a
-particular row's *interior*, set `--chx-message-*` in a rule matching the host part: custom
+particular row's _interior_, set `--chx-message-*` in a rule matching the host part: custom
 properties inherit into chx-message's shadow tree, where its own stylesheet consumes them. Inherited
 CSS properties (`color`, `font-size`, `text-align`) cross the same way.
 
@@ -294,7 +294,8 @@ one) auto-scrolls into view _only if you were already at the bottom_ — scroll 
 history and incoming messages won't yank you back down.
 
 ```js
-messageListEl.scrollToBottom(); // e.g. a "jump to latest" button after scrolling up
+chatEl.viewport.toBottom(); // e.g. a "jump to latest" button after scrolling up
+await chatEl.viewport.toMessage(messageId); // false when that message isn't loaded
 messageListEl.addEventListener("chx-scroll-to-bottom", () => hideJumpToLatestButton());
 ```
 
@@ -302,28 +303,30 @@ messageListEl.addEventListener("chx-scroll-to-bottom", () => hideJumpToLatestBut
 
 ### `chx-chat` — properties
 
-| Property               | Type                                                                   | Notes                                                                                                                                     |
-| ---------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
-| `userId`               | `string`                                                               | Identifies the local user — required for `own`/`adapter.subscribe`/`addMessage` to classify correctly.                                    |
-| `messages`             | `ChxMessage[]`                                                         | Optional controlled override — see Quick start. Default `[]`.                                                                             |
-| `partElements`         | `Record<string, (part, previousElement?) => HTMLElement> \| undefined` | Per-`part.type` render overrides — see Custom rendering.                                                                                  |
-| `adapter`              | `ChxChatAdapter \| undefined`                                          | `{ getMessages?, subscribe?, sendMessage?, regenerate? }` — see Streaming/Live updates.                                                   |
-| `connectionState`      | `"connecting" \| "connected" \| "error" \| undefined`                  | Reflected attribute `connection-state`. Read-only in practice.                                                                            |
-| `chunkBatchIntervalMs` | `number`                                                               | Default `16`. Read once at construction — set before first connecting the element.                                                        |
-| `loading`              | `boolean`                                                              | Reflected. An override, not a state — the composer is pushed `loading \|\| busy`, so an in-flight turn already shows its stop button.     |
-| `status`               | `"ready" \| "submitted" \| "streaming" \| "error"`                     | **Read-only**, derived from the active conversation's in-flight deliveries. `submitted` is the window between a send and its first chunk. |
-| `busy`                 | `boolean`                                                              | **Read-only** — `status` narrowed to `submitted \| streaming`.                                                                            |
+| Property               | Type                                                                   | Notes                                                                                                                                 |
+| ---------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `userId`               | `string`                                                               | Identifies the local user — required for `own`/`adapter.subscribe`/`store.add` to classify correctly.                                 |
+| `messages`             | `ChxMessage[]`                                                         | Optional controlled override — see Quick start. Default `[]`.                                                                         |
+| `partElements`         | `Record<string, (part, previousElement?) => HTMLElement> \| undefined` | Per-`part.type` render overrides — see Custom rendering.                                                                              |
+| `adapter`              | `ChxChatAdapter \| undefined`                                          | `{ getMessages?, subscribe?, sendMessage?, regenerate? }` — see Streaming/Live updates.                                               |
+| `connectionState`      | `"connecting" \| "connected" \| "error" \| undefined`                  | Reflected attribute `connection-state`. Read-only in practice.                                                                        |
+| `chunkBatchIntervalMs` | `number`                                                               | Default `16`. Read once at construction — set before first connecting the element.                                                    |
+| `loading`              | `boolean`                                                              | Reflected. An override, not a state — the composer is pushed `loading \|\| busy`, so an in-flight turn already shows its stop button. |
 
 ### `chx-chat` — methods
 
-| Method                             | Signature                                                                      | Notes                                                                                                                                        |
-| ---------------------------------- | ------------------------------------------------------------------------------ | -------------------------------------------------------------------------------------------------------------------------------------------- |
-| `addMessage`                       | `(message: Omit<ChxMessage, "own" \| "createdAt"> & {own?, createdAt?}): void` | Ingests one message into the store, matched by `id`.                                                                                         |
-| `retry`                            | `(messageId: string): void`                                                    | Re-sends a `status: "failed"` message. No-op otherwise.                                                                                      |
-| `regenerate`                       | `(messageId: string): void`                                                    | Redoes an assistant reply (needs `adapter.regenerate`). Accepts the reply's id or its anchoring send's id.                                   |
-| `cancel`                           | `(messageId: string): void`                                                    | Aborts one in-flight send/regenerate, backgrounded conversations included.                                                                   |
-| `stop`                             | `(): void`                                                                     | Aborts every in-flight delivery for the active conversation. Settles the turn state at once; ending the messages is still the adapter's job. |
-| `attachFile` / `setText` / `focus` | —                                                                              | Delegate to the composer — see the attachments docs.                                                                                         |
+Grouped into namespaces — see [Public API](./public-api.md) for every signature.
+
+| Method                      | Notes                                                                                                                                        |
+| --------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------- |
+| `store.add(message)`        | Ingests one message into the store, matched by `id`.                                                                                         |
+| `delivery.retry(id)`        | Re-sends a `status: "failed"` message. No-op otherwise.                                                                                      |
+| `delivery.regenerate(id)`   | Redoes an assistant reply (needs `adapter.regenerate`). Accepts the reply's id or its anchoring send's id.                                   |
+| `delivery.cancel(id)`       | Aborts one in-flight send/regenerate, backgrounded conversations included.                                                                   |
+| `delivery.stop()`           | Aborts every in-flight delivery for the active conversation. Settles the turn state at once; ending the messages is still the adapter's job. |
+| `delivery.getStatus()`      | `"ready" \| "submitted" \| "streaming" \| "error"`, derived from in-flight deliveries. `submitted` is the window before the first chunk.     |
+| `delivery.isBusy()`         | `getStatus()` narrowed to `submitted \| streaming`.                                                                                          |
+| `input.*` / `attachments.*` | The composer's text and files — see the attachments docs.                                                                                    |
 
 ### `chx-chat` — events
 
@@ -338,18 +341,19 @@ messageListEl.addEventListener("chx-scroll-to-bottom", () => hideJumpToLatestBut
 
 ### `chx-message-list` — properties
 
-| Property                                       | Type     | Notes                                                                                            |
-| ---------------------------------------------- | -------- | ------------------------------------------------------------------------------------------------ |
-| `messages` / `partElements`                    | —        | Normally pushed down from `chx-chat` — set directly only if using `chx-message-list` standalone. |
-| `messagesLabel`                                | `string` | `aria-label` for the `role="log"` region. Default `"Messages"`.                                  |
-| `dropHint`                                     | `string` | Attachment drag-over hint text. Default `"Release to attach"`.                                   |
+| Property                    | Type     | Notes                                                                                            |
+| --------------------------- | -------- | ------------------------------------------------------------------------------------------------ |
+| `messages` / `partElements` | —        | Normally pushed down from `chx-chat` — set directly only if using `chx-message-list` standalone. |
+| `messagesLabel`             | `string` | `aria-label` for the `role="log"` region. Default `"Messages"`.                                  |
+| `dropHint`                  | `string` | Attachment drag-over hint text. Default `"Release to attach"`.                                   |
 
-### `chx-message-list` — methods & events
+### `chx-message-list` — events
 
-| Member                 | Signature          | Notes                                                                                        |
-| ---------------------- | ------------------ | -------------------------------------------------------------------------------------------- |
-| `scrollToBottom`       | `(): void`         | Scrolls to the newest message. No-op on an empty list — see Scroll behavior above.           |
-| `chx-scroll-to-bottom` | event, no `detail` | Fired every time `scrollToBottom()` runs — explicit call or automatic stick-to-bottom alike. |
+Scrolling is driven through `chatEl.viewport` — see [Public API](./public-api.md).
+
+| Event                  | `detail` | Notes                                                                                              |
+| ---------------------- | -------- | -------------------------------------------------------------------------------------------------- |
+| `chx-scroll-to-bottom` | —        | Fired on every scroll to bottom — `chatEl.viewport.toBottom()` or automatic stick-to-bottom alike. |
 
 ### `ChxMessage` / `ChxMessagePart`
 

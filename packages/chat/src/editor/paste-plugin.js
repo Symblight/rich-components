@@ -37,7 +37,7 @@ function insertPasteChip(view, attrs) {
  * whatever text already surrounds the cursor instead of overwriting it.
  *
  * Precedence, driven entirely by chx-paste-long-text (see Editor.js's
- * `configurePasteLongText`) — this plugin itself has no opinion:
+ * `getPasteLongText`) — this plugin itself has no opinion:
  *  1. A paste of at least `getPasteThreshold()` lines always collapses to
  *     the plain "N lines" chip — `classify()` never runs in this branch,
  *     however it would have classified the content. `threshold <= 0`

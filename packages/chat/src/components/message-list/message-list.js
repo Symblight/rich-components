@@ -20,6 +20,7 @@ import { GroupController } from "../../controllers/message-list/GroupController.
 import { PartRenderer } from "./PartRenderer.js";
 import { StatusController } from "../../controllers/message-list/StatusController.js";
 import { StickyController } from "../../controllers/message-list/StickyController.js";
+import { CONNECT_REGISTRY } from "../../api/keys.js";
 import tokens from "../../styles/tokens.css?inline";
 import styles from "./message-list.css?inline";
 
@@ -225,6 +226,10 @@ export class ChxMessageList extends LitElement {
   };
   #itemKey = (/** @type {ChxMessage} */ message, /** @type {number} */ index) =>
     message?.id ?? index;
+  /** @type {import("../../context/chat-api-context.js").ChatApiRegistry | undefined} */
+  #registry; // pushed by chx-chat, see [CONNECT_REGISTRY]
+  /** @type {(() => void) | undefined} */
+  #unregisterViewport;
 
   constructor() {
     super();
@@ -373,11 +378,67 @@ export class ChxMessageList extends LitElement {
     this.#observePattern();
     // reconnect-must-reset, same posture VisibilityController/RowMeasurer already have
     this.#readTracking.reset();
+    this.#registerViewport();
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
     this.#patternObserver.disconnect();
+    this.#unregisterViewport?.();
+    this.#unregisterViewport = undefined;
+  }
+
+  /** Internal: chx-chat hands over its API registry. @param {import("../../context/chat-api-context.js").ChatApiRegistry} registry */
+  [CONNECT_REGISTRY](registry) {
+    if (registry === this.#registry) return;
+    this.#unregisterViewport?.();
+    this.#unregisterViewport = undefined;
+    this.#registry = registry;
+    this.#registerViewport();
+  }
+
+  #registerViewport() {
+    if (!this.#registry || this.#unregisterViewport || !this.isConnected) return;
+    this.#unregisterViewport = this.#registry.register(
+      "viewport",
+      this,
+      {
+        toBottom: (behavior) => this.#bottomAnchor.scrollToBottom(behavior),
+        toMessage: (messageId, options) => this.#scrollToMessage(messageId, options),
+        isAwayFromBottom: () => this.#bottomAnchor.awayFromBottom,
+        getScrollOffset: () => this.#infinityScrollElement?.getScrollOffset(),
+        scrollToOffset: async (offset) => {
+          await this.updateComplete;
+          this.#infinityScrollElement?.scrollToOffset(offset);
+        },
+      },
+      () => [this.#bottomAnchor.awayFromBottom],
+    );
+  }
+
+  /**
+   * Scrolls a loaded message into view; `false` when it isn't in `messages`. Resolves once the row
+   * has mounted and been re-aligned at its measured size (or after a capped number of frames).
+   * @param {string} messageId
+   * @param {{align?: "start" | "center" | "end", behavior?: ScrollBehavior}} [options]
+   * @returns {Promise<boolean>}
+   */
+  async #scrollToMessage(messageId, { align = "start", behavior } = {}) {
+    const index = this.messages.findIndex((message) => message.id === messageId);
+    if (index === -1) return false;
+    await this.updateComplete;
+    const list = this.#infinityScrollElement;
+    if (!list) return false;
+    list.scrollToIndex(index, { align, behavior });
+    const selector = `[data-message-id="${CSS.escape(messageId)}"]`;
+    for (let frame = 0; frame < 30; frame++) {
+      if (list.renderRoot.querySelector(selector)) {
+        list.scrollToIndex(index, { align, behavior }); // re-align at the measured size
+        return true;
+      }
+      await new Promise((resolve) => requestAnimationFrame(resolve));
+    }
+    return false;
   }
 
   /** Discovers the app's `<chx-message slot="message">` pattern; renders nothing itself.
@@ -558,16 +619,6 @@ export class ChxMessageList extends LitElement {
       >
     `;
     return this.#dividerController.wrap(rowTemplate, message, index);
-  }
-
-  /** The chx-infinity-scroll instance rendering this list. @returns {ChxInfinityScroll | undefined} */
-  get list() {
-    return this.#infinityScrollElement;
-  }
-
-  /** Forwards to chx-infinity-scroll.scrollToBottom. @param {"auto" | "smooth" | "instant"} [behavior] */
-  scrollToBottom(behavior) {
-    this.#bottomAnchor.scrollToBottom(behavior);
   }
 
   /** @param {import("lit").PropertyValues} changedProperties */

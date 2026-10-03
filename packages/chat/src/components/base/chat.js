@@ -15,8 +15,11 @@ import { PaginationController } from "../../controllers/chat/PaginationControlle
 import { ScrollMemoryController } from "../../controllers/chat/ScrollMemoryController.js";
 import { TypingController } from "../../controllers/chat/TypingController.js";
 import { RealtimeSyncController } from "../../controllers/chat/RealtimeSyncController.js";
-import { finalizeStreamingParts } from "../../stream/streamHelpers.js";
 import { DEFAULT_CONVERSATION_ID } from "../../constants.js";
+import { ApiRegistry } from "../../api/ApiRegistry.js";
+import { CHAT_API_DEFAULTS } from "../../api/chat-api-defaults.js";
+import { CONNECT_REGISTRY } from "../../api/keys.js";
+import { chatApiContext } from "../../context/chat-api-context.js";
 
 import tokens from "../../styles/tokens.css?inline";
 import styles from "./chat.css?inline";
@@ -76,10 +79,10 @@ export class ChxChat extends LitElement {
   #conversationMode; // single- vs multi-conversation latches + empty state — assigned in the constructor
   /** @type {{source: ChxMessage[], id: string | symbol | null, visible: ChxMessage[]} | undefined} */
   #visibleCache; // memo for #visibleMessages, invalidated by reference on every #internalMessages write
-  /** @type {string | undefined} */
-  #unkeyedTypingId; // conversation the last conversation-less setTyping/onTyping was attributed to
   /** @type {PaginationController} */
   #pagination; // assigned in the constructor
+  /** @type {string | undefined} */
+  #unkeyedTypingId; // conversation the last conversation-less #setTyping/onTyping was attributed to
   /** @type {TypingController} */
   #typing; // assigned in the constructor
   /** @type {RealtimeSyncController} */
@@ -88,6 +91,8 @@ export class ChxChat extends LitElement {
   #dropTarget;
   /** @type {ContextProvider<typeof attachmentsContext>} */
   #attachmentsProvider;
+  /** @type {import("../../context/chat-api-context.js").ChatApiRegistry} */
+  #api = new ApiRegistry(CHAT_API_DEFAULTS, { name: "chx-chat" });
 
   constructor() {
     super();
@@ -147,7 +152,7 @@ export class ChxChat extends LitElement {
 
     /**
      * Opt-in master switch for read tracking — `false` by default. Pushed straight through to
-     * `chx-message-list.readTracking` (see `pushMessageListProperties`); `chx-message-list` itself is
+     * `chx-message-list.readTracking` (see `#pushMessageListProperties`); `chx-message-list` itself is
      * what actually gates the `IntersectionObserver` observation and, through that, whether
      * `chx-message-read`/`adapter.markRead` ever fire.
      * @type {boolean}
@@ -157,7 +162,7 @@ export class ChxChat extends LitElement {
     /**
      * Opt-in real-DOM mode for `chx-message-list`'s `chx-infinity-scroll` — every message renders in
      * full, in normal document flow, no windowing/measurement. Pushed straight through to
-     * `chx-message-list.noVirtualization` (see `pushMessageListProperties`).
+     * `chx-message-list.noVirtualization` (see `#pushMessageListProperties`).
      * @type {boolean}
      */
     this.noVirtualization = false;
@@ -184,13 +189,17 @@ export class ChxChat extends LitElement {
     });
 
     this.#scrollMemory = new ScrollMemoryController({
-      getMessageListElement: () => this.messageListElement,
+      getViewport: () => this.#api.current("viewport"), // no warning when no list is slotted
       getEnabled: () => this.restoreScrollPosition,
     });
 
     this.#delivery = new DeliveryController(this, {
       getActiveConversationId: () => this.activeConversationId,
       getMessages: () => this.#internalMessages,
+      getAdapter: () => this.adapter,
+      getUserId: () => this.userId,
+      applyMessages: (messages, conversationId) => this.#applyMessages(messages, conversationId),
+      stream: this.#stream,
     });
 
     this.#pagination = new PaginationController(this, {
@@ -200,21 +209,11 @@ export class ChxChat extends LitElement {
       getConversationId: () => this.activeConversationId,
     });
 
-    /**
-     * Cache management surface — `clear(conversationId?)` drops cached messages and pagination
-     * state for one conversation, or (no argument) every cached conversation at once. A lower-level
-     * primitive than `refresh()`: it doesn't re-fetch afterwards. Future home for a pluggable
-     * `get`/`set` storage seam (persisting to localStorage/a server instead of the in-memory default)
-     * — not built yet, `clear()` is the only method today.
-     * @type {{clear: (conversationId?: string) => void}}
-     */
-    this.cache = { clear: (conversationId) => this.#clearCache(conversationId) };
-
     this.#typing = new TypingController(this);
 
     this.#realtimeSync = new RealtimeSyncController({
       getActiveConversationId: () => this.activeConversationId,
-      setTyping: (isTyping, conversationId) => this.setTyping(isTyping, conversationId),
+      setTyping: (isTyping, conversationId) => this.#setTyping(isTyping, conversationId),
       clearActiveConversation: () => {
         this.activeConversationId = undefined;
         this.dispatchEvent(
@@ -239,8 +238,8 @@ export class ChxChat extends LitElement {
      * put a dropped file, the rest of the chat isn't a dropzone either.
      */
     this.#dropTarget = new DropTargetController(this, {
-      canDrop: () => !!this.messageComposerElement?.attachmentsElement,
-      onDrop: (files) => this.messageComposerElement?.attachmentsElement?.addFiles(files, "drop"),
+      canDrop: () => !!this.#attachmentsElement,
+      onDrop: (files) => this.#attachmentsElement?.addFiles(files, "drop"),
     });
 
     /**
@@ -258,6 +257,91 @@ export class ChxChat extends LitElement {
       context: attachmentsContext,
       initialValue: [],
     });
+
+    new ContextProvider(this, { context: chatApiContext, initialValue: this.#api });
+    this.#registerOwnNamespaces();
+  }
+
+  #registerOwnNamespaces() {
+    const delivery = this.#delivery;
+    this.#api.register(
+      "delivery",
+      this,
+      {
+        retry: (messageId) => delivery.retry(messageId),
+        regenerate: (messageId) => delivery.regenerate(messageId),
+        stop: (conversationId) => delivery.stop(conversationId ?? this.activeConversationId),
+        cancel: (messageId) => delivery.cancel(messageId),
+        getStatus: (conversationId) =>
+          delivery.statusFor(conversationId ?? this.activeConversationId),
+        isBusy: (conversationId) => delivery.busyFor(conversationId ?? this.activeConversationId),
+      },
+      () => [delivery.status],
+    );
+
+    const pagination = this.#pagination;
+    this.#api.register(
+      "store",
+      this,
+      {
+        getMessages: (conversationId) =>
+          conversationId === undefined
+            ? this.#visibleMessages
+            : this.#internalMessages.filter(
+                (m) => (m.conversationId ?? DEFAULT_CONVERSATION_ID) === conversationId,
+              ),
+        add: (message) => this.#addMessage(message),
+        loadMore: () => this.#loadMore(),
+        refresh: (conversationId) => this.#refresh(conversationId ?? this.activeConversationId),
+        clear: (conversationId) => this.#clearCache(conversationId),
+        hasMore: (conversationId) =>
+          pagination.hasMoreFor(conversationId ?? this.activeConversationId),
+        isLoading: (conversationId) =>
+          pagination.isLoadingFor(conversationId ?? this.activeConversationId),
+      },
+      () => [this.#visibleMessages, pagination.hasMore, pagination.loading],
+    );
+
+    this.#api.register(
+      "presence",
+      this,
+      {
+        setTyping: (isTyping, conversationId) => this.#setTyping(isTyping, conversationId),
+        isTyping: (conversationId) =>
+          this.#typing.isTyping(conversationId ?? this.activeConversationId),
+      },
+      () => [this.#typing.isTyping(this.activeConversationId)],
+    );
+  }
+
+  /** Send, retry, regenerate, stop and cancel turns; read the turn status. */
+  get delivery() {
+    return this.#api.facades.delivery;
+  }
+
+  /** Read, add, page, refresh and clear cached messages. */
+  get store() {
+    return this.#api.facades.store;
+  }
+
+  /** The other side's typing state, per conversation. */
+  get presence() {
+    return this.#api.facades.presence;
+  }
+
+  /** Scrolling — needs a slotted `chx-message-list`. */
+  get viewport() {
+    return this.#api.facades.viewport;
+  }
+
+  /** The composer's text — needs a slotted `chx-message-composer`. */
+  get input() {
+    return this.#api.facades.input;
+  }
+
+  /** Attached files — needs a `chx-attachments` inside the composer. */
+  get attachments() {
+    return this.#api.facades.attachments;
   }
 
   /** @returns {import("lit").CSSResultGroup} */
@@ -267,14 +351,14 @@ export class ChxChat extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
-    this.addEventListener("chx-send-message", /** @type {EventListener} */ (this.handleSend));
+    this.addEventListener("chx-send-message", /** @type {EventListener} */ (this.#handleSend));
     this.addEventListener(
       "chx-attachments-change",
-      /** @type {EventListener} */ (this.handleAttachmentsChange),
+      /** @type {EventListener} */ (this.#handleAttachmentsChange),
     );
     this.addEventListener(
       "chx-active-conversation-change",
-      /** @type {EventListener} */ (this.handleActiveConversationChange),
+      /** @type {EventListener} */ (this.#handleActiveConversationChange),
     );
     this.addEventListener(
       "chx-message-read",
@@ -306,9 +390,9 @@ export class ChxChat extends LitElement {
    */
   #subscribeAdapter() {
     return this.adapter?.subscribe?.({
-      onMessage: (message) => this.addMessage(message),
+      onMessage: (message) => this.#addMessage(message),
       onChunk: (item) => this.#stream.applyChunk(item),
-      onTyping: (isTyping) => this.setTyping(isTyping), // unkeyed hook (no conversationId) → active conversation, see setTyping
+      onTyping: (isTyping) => this.#setTyping(isTyping), // unkeyed hook (no conversationId) → active conversation, see #setTyping
       onEvent: (event) => this.#realtimeSync.handleEvent(event),
       onConnectionChange: (state, error) => {
         this.connectionState = state;
@@ -332,16 +416,16 @@ export class ChxChat extends LitElement {
    * active conversation.
    * @param {CustomEvent<{conversationId: string | undefined}>} event
    */
-  handleActiveConversationChange(event) {
+  #handleActiveConversationChange(event) {
     this.activeConversationId = event.detail.conversationId;
   }
 
   disconnectedCallback() {
     super.disconnectedCallback();
-    this.removeEventListener("chx-send-message", /** @type {EventListener} */ (this.handleSend));
+    this.removeEventListener("chx-send-message", /** @type {EventListener} */ (this.#handleSend));
     this.removeEventListener(
       "chx-attachments-change",
-      /** @type {EventListener} */ (this.handleAttachmentsChange),
+      /** @type {EventListener} */ (this.#handleAttachmentsChange),
     );
     this.removeEventListener(
       "chx-message-read",
@@ -351,28 +435,13 @@ export class ChxChat extends LitElement {
     this.#unsubscribe?.();
   }
 
-  /**
-   * Loads one older page of history — see `PaginationController` for the cursor/hasMore/in-flight
-   * state and the actual prepend-merge logic, this just forwards to it. Normally reached when
-   * `chx-message-list`'s `onLoadMore` fires near the top (wired through `syncMessageList` below),
-   * callable directly too (e.g. a manual "load more" button). Re-entrancy is guarded by
-   * `PaginationController` itself (no-op while loading or exhausted); the list additionally gates on
-   * the `loading`/`hasMore` it's pushed, so no promise hand-back is needed.
-   */
-  loadMoreHistory() {
+  #loadMore() {
     if (this.#conversationMode.isEmptyState) return undefined;
     return this.#pagination.loadMore();
   }
 
-  /**
-   * Thin convenience — same as any other local action, applied to the internal store immediately
-   * and firing `chx-messages-change` as a side effect. Matches purely by `message.id`. Defaults
-   * `conversationId` to the active conversation, but a caller can target a different (e.g.
-   * currently-backgrounded) one explicitly — the same path `adapter.subscribe`'s `onMessage` itself
-   * goes through, since an incoming message can belong to any conversation, not just the visible one.
-   * @param {Omit<ChxMessage, "own" | "createdAt"> & {own?: boolean, createdAt?: number}} message
-   */
-  addMessage(message) {
+  /** @param {Omit<ChxMessage, "own" | "createdAt"> & {own?: boolean, createdAt?: number}} message */
+  #addMessage(message) {
     const resolved = /** @type {ChxMessage} */ ({
       createdAt: Date.now(),
       conversationId: this.activeConversationId,
@@ -384,22 +453,14 @@ export class ChxChat extends LitElement {
     );
   }
 
-  /**
-   * Re-fetches a conversation from scratch: clears its cache (see `cache.clear()`) and calls
-   * `loadInitial()` again, which re-invokes `adapter.listMessages()`. Defaults to the active
-   * conversation — this is also the general "reset chat state" primitive for a single-conversation
-   * `chx-chat` (`activeConversationId` never set): it clears every message and refetches the one
-   * implicit conversation from scratch. Useful as a manual refresh/pull-to-refresh action, or to
-   * recover from a failed initial load, which `loadInitial()` never silently retries on its own.
-   * @param {string} [conversationId]
-   */
-  refresh(conversationId = this.activeConversationId) {
-    this.cache.clear(conversationId);
+  /** @param {string | undefined} conversationId */
+  #refresh(conversationId) {
+    this.#clearCache(conversationId);
     this.#pagination.loadInitial(conversationId);
   }
 
   /**
-   * The mechanism behind the public `cache` object's `clear()` — see its own doc on `cache` above.
+   * `store.clear()` — drops cached messages, pagination state and scroll memory without refetching.
    * `conversationId === undefined` means "no argument was passed," never "a real conversation whose
    * id happens to be undefined" (ids are always non-empty strings), so it's an unambiguous "clear
    * everything" signal, not a collision with the single-conversation case.
@@ -420,18 +481,8 @@ export class ChxChat extends LitElement {
     );
   }
 
-  /**
-   * Sets whether the *other* side is currently typing/composing in `conversationId` (defaults to the
-   * active conversation). The active conversation's value is shown via whatever the app has slotted
-   * into `chx-message-list`'s `typing` slot; any conversation's value is announced via
-   * `chx-typing-change` (which `<chx-conversations>` uses to drive a per-row indicator). No-op if
-   * unchanged. Driven by calling this directly, by `adapter.subscribe`'s `onTyping` (active
-   * conversation only), or by an `onEvent` `typing` realtime event (any conversation) — all funnel
-   * into the same per-conversation `TypingController`.
-   * @param {boolean} isTyping
-   * @param {string} [conversationId]
-   */
-  setTyping(isTyping, conversationId) {
+  /** @param {boolean} isTyping @param {string} [conversationId] */
+  #setTyping(isTyping, conversationId) {
     if (conversationId !== undefined) {
       this.#typing.setTyping(conversationId, isTyping);
       return;
@@ -478,65 +529,34 @@ export class ChxChat extends LitElement {
   }
 
   /**
-   * chx-message-composer is consumer-authored light DOM, assigned to the
-   * `message-composer` slot (see handleMessageComposerSlotchange) rather
-   * than something chx-chat renders itself, so this is a light-DOM query,
-   * not a shadow-root one.
+   * Consumer-authored light DOM in the `message-composer` slot, so a light-DOM query.
    * @returns {import("../message-composer/message-composer.js").ChxMessageComposer}
    */
-  get messageComposerElement() {
+  get #composer() {
     return /** @type {import("../message-composer/message-composer.js").ChxMessageComposer} */ (
       this.querySelector("chx-message-composer")
     );
   }
 
+  /** The composer's `<chx-attachments>` — the drop target. */
+  get #attachmentsElement() {
+    return /** @type {import("../attachments/attachments.js").ChxAttachments | null} */ (
+      this.querySelector("chx-message-composer chx-attachments")
+    );
+  }
+
   /**
-   * Same status as messageComposerElement above — consumer-authored,
-   * optional light DOM, assigned to the `message-list` slot.
+   * Consumer-authored, optional light DOM in the `message-list` slot.
    * @returns {import("../message-list/message-list.js").ChxMessageList}
    */
-  get messageListElement() {
+  get #list() {
     return /** @type {import("../message-list/message-list.js").ChxMessageList} */ (
       this.querySelector("chx-message-list")
     );
   }
 
-  /**
-   * Programmatically attaches a file — same effect as picking or dropping
-   * one. A no-op if no <chx-attachments> is connected anywhere in the
-   * composer.
-   * @param {File} file
-   */
-  attachFile(file) {
-    this.messageComposerElement?.attachFile(file);
-  }
-
-  /**
-   * Replaces the composer's document with plain text — e.g. pre-filling a
-   * draft or a suggested reply.
-   * @param {string} text
-   */
-  setText(text) {
-    this.messageComposerElement?.setText(text);
-  }
-
-  /** Focuses the composer's textbox — see chx-message-composer.focus. */
-  focus() {
-    this.messageComposerElement?.focus();
-  }
-
-  /** The ProseMirror facade owned by chx-textbox — see chx-message-composer's `editor` getter. @returns {import("../../editor/Editor.js").Editor | undefined} */
-  get editor() {
-    return this.messageComposerElement?.editor;
-  }
-
-  /** True while an OS file drag carrying files is over the chat (message list included) — driven by `#dropTarget`, pushed down to the composer/textbox for the dashed-border/hint visual. @returns {boolean} */
-  get dragging() {
-    return this.#dropTarget.dragging;
-  }
-
   /** @param {CustomEvent<{value: string, html: string, attachments: File[]}>} event */
-  handleSend(event) {
+  #handleSend(event) {
     if (this.#conversationMode.isEmptyState) return; // nowhere to route a message when no conversation is active
     const { value, html, attachments = [] } = event.detail;
     const conversationId = this.activeConversationId;
@@ -563,7 +583,7 @@ export class ChxChat extends LitElement {
       reconcileMessages(this.#internalMessages, message, this.userId),
       conversationId,
     );
-    this.#deliver(message, conversationId); // not awaited — see #deliver's own doc for what this does
+    this.#delivery.deliver(message, conversationId); // not awaited — settles on its own
   }
 
   /**
@@ -571,7 +591,7 @@ export class ChxChat extends LitElement {
    * `conversationId` — this is what's actually rendered/announced: the active conversation's own
    * slice (or everything, when `activeConversationId` is never used — the single-conversation case).
    * Memoized on `(#internalMessages reference, effective id)` and identity-preserving when the whole
-   * store belongs to the active conversation, because `pushMessageListProperties` re-pushes this on
+   * store belongs to the active conversation, because `#pushMessageListProperties` re-pushes this on
    * *every* host update — a fresh array each time would re-render chx-message-list (and re-sync the
    * virtualizer underneath it) on unrelated changes like `loading` or `connectionState`.
    * @returns {ChxMessage[]}
@@ -594,7 +614,7 @@ export class ChxChat extends LitElement {
    * The one choke point every local mutation of the internal store goes through. `nextMessages` is
    * always the *full*, multi-conversation array — `conversationId` says which conversation this
    * particular write is *for* (a background delivery/pagination fetch can write here for a
-   * conversation that isn't currently active, see `#deliver`/`PaginationController`); only a write
+   * conversation that isn't currently active, see `DeliveryController.deliver`/`PaginationController`); only a write
    * matching the active conversation actually renders or fires `chx-messages-change`, so a
    * backgrounded conversation's cache stays silently up to date until the app switches to it.
    * @param {ChxMessage[]} nextMessages
@@ -632,220 +652,13 @@ export class ChxChat extends LitElement {
     this.conversations = nextConversations;
   }
 
-  /**
-   * AI-agent flavor's reply mechanism — a no-op if no `adapter.sendMessage` is set (a messenger
-   * flavor's local-echo-only `handleSend` is unaffected either way). `conversationId` is captured by
-   * the caller up front, not read from `this.activeConversationId` again in here — the app may have
-   * switched to a different conversation by the time this (unawaited) delivery settles, and every
-   * write below must still land on the conversation this send actually belongs to.
-   * @param {ChxMessage} message
-   * @param {string} [conversationId]
-   */
-  async #deliver(message, conversationId) {
-    if (!this.adapter?.sendMessage) {
-      this.#markSent(message.id, conversationId); // local echo only — nothing is in flight
-      return;
-    }
-    const controller = new AbortController();
-    let failed = false;
-    this.#delivery.track(message.id, controller, conversationId);
-    try {
-      const stream = await this.adapter.sendMessage(message, { signal: controller.signal });
-      // sendMessage resolving is the adapter accepting the message; the reply may still be streaming
-      this.#markSent(message.id, conversationId);
-      if (!stream) return;
-      await this.#stream.deliverStream(stream, { replyToId: message.id, conversationId });
-    } catch (error) {
-      // a cancellation surfaces either as an explicit {kind:"abort"} chunk (handled entirely
-      // inside deliverStream, never reaches this catch) or the adapter's own fetch/EventSource
-      // throwing once the signal fires — this branch only ever sees the second case
-      const cancelled = controller.signal.aborted;
-      failed = !cancelled;
-      const replyStatus = /** @type {"failed" | "cancelled"} */ (
-        cancelled ? "cancelled" : "failed"
-      );
-      const updated = {
-        ...message,
-        status: replyStatus,
-        ...(cancelled
-          ? {}
-          : { error: { message: String(/** @type {any} */ (error)?.message ?? error) } }),
-      };
-      const next = reconcileMessages(this.#internalMessages, updated, this.userId);
-      // a reply shell can already exist (some chunks arrived before the throw) — close it out too
-      const orphanedReply = next.find((m) => m.replyToId === message.id && m.status === "sending");
-      this.#applyMessages(
-        orphanedReply
-          ? next.map((m) =>
-              m.id === orphanedReply.id ? finalizeStreamingParts({ ...m, status: replyStatus }) : m,
-            )
-          : next,
-        conversationId,
-      );
-      if (!cancelled) {
-        this.dispatchEvent(
-          new CustomEvent("chx-send-error", {
-            detail: { messageId: message.id, error },
-            bubbles: true,
-            composed: true,
-          }),
-        );
-      }
-    } finally {
-      // an `{kind:"abort"}` chunk settles the stream cleanly, never throwing — so the outcome reads
-      // the signal here rather than trusting the catch to have run
-      this.#delivery.untrack(
-        message.id,
-        controller.signal.aborted ? "cancelled" : failed ? "failed" : "completed",
-        conversationId,
-      );
-    }
-  }
-
-  /** @param {string} messageId @param {string} [conversationId] */
-  #markSent(messageId, conversationId) {
-    const current = this.#internalMessages.find((m) => m.id === messageId);
-    if (current?.status !== "sending") return;
-    this.#applyMessages(
-      this.#internalMessages.map((m) => (m === current ? { ...m, status: "sent" } : m)),
-      conversationId,
-    );
-  }
-
-  /**
-   * Re-attempts delivery of a `status: "failed"` message. Also drops any reply already anchored to
-   * this send, so a successful retry doesn't leave two replies (mirrors `regenerate()` below).
-   * @param {string} messageId
-   */
-  retry(messageId) {
-    const message = this.#internalMessages.find((m) => m.id === messageId);
-    if (!message || message.status !== "failed") return;
-    const conversationId = message.conversationId;
-    const resetMessage = {
-      ...message,
-      status: /** @type {"sending"} */ ("sending"),
-      error: undefined,
-    };
-    const withoutStaleReply = this.#internalMessages.filter((m) => m.replyToId !== messageId);
-    this.#applyMessages(
-      reconcileMessages(withoutStaleReply, resetMessage, this.userId),
-      conversationId,
-    );
-    this.#deliver(resetMessage, conversationId);
-  }
-
-  /**
-   * The active conversation's turn state — `submitted` between a send and its first chunk,
-   * `streaming` while a reply shell fills in, `error` after a failed delivery until the next send.
-   * **Read-only**, derived by `DeliveryController`; nothing assigns it.
-   * @returns {import("../../types/adapter.js").ChxChatStatus}
-   */
-  get status() {
-    return this.#delivery.status;
-  }
-
-  /** True while the active conversation has a turn in flight — `status` narrowed to the one bit the composer needs. @returns {boolean} */
-  get busy() {
-    return this.#delivery.busy;
-  }
-
-  /** Aborts every in-flight delivery for the active conversation — what the composer's stop button
-   *  reaches through `chx-stop`. A backgrounded conversation's is left alone; use `cancel()`. */
-  stop() {
-    this.#delivery.stopActive();
-  }
-
-  /** Composer/textbox stop button — see `stop()`. Intercept by listening lower and calling `stopPropagation()`. */
+  /** Composer/textbox stop button → `delivery.stop()`. Intercept by listening lower and calling `stopPropagation()`. */
   #handleStop = () => {
-    this.stop();
+    this.#delivery.stop();
   };
 
-  /**
-   * Aborts an in-flight `sendMessage`/`regenerate` delivery — `messageId` is whichever id that
-   * delivery is tracked under (the send's own id, or a reply's id for a `regenerate` in flight).
-   * A no-op if nothing is currently in flight for that id.
-   * @param {string} messageId
-   */
-  cancel(messageId) {
-    this.#delivery.cancel(messageId);
-  }
-
-  /**
-   * Redoes a specific assistant reply — a different action from retry(): retry() re-sends a
-   * failed *user* message, this redoes an existing *assistant reply*, whether it succeeded,
-   * failed, or was left orphaned mid-stream. Removes the existing reply before requesting a fresh
-   * one. No-op if no matching reply is found or `adapter.regenerate` isn't set.
-   * @param {string} messageId — either the reply's own id, or its anchoring send's id
-   */
-  regenerate(messageId) {
-    const reply =
-      this.#internalMessages.find((m) => m.id === messageId && m.replyToId) ??
-      this.#internalMessages.find((m) => m.replyToId === messageId);
-    if (!reply || !this.adapter?.regenerate) return;
-
-    const conversationId = reply.conversationId;
-    this.#applyMessages(
-      this.#internalMessages.filter((m) => m.id !== reply.id),
-      conversationId,
-    );
-    this.#deliverRegenerate(reply.id, /** @type {string} */ (reply.replyToId), conversationId);
-  }
-
-  /**
-   * @param {string} replyId
-   * @param {string} replyToId
-   * @param {string} [conversationId] - see #deliver's own note on why this is captured up front
-   */
-  async #deliverRegenerate(replyId, replyToId, conversationId) {
-    const controller = new AbortController();
-    let failed = false;
-    this.#delivery.track(replyId, controller, conversationId);
-    try {
-      const stream = await this.adapter?.regenerate?.(replyId, {
-        signal: controller.signal,
-        conversationId,
-      });
-      if (!stream) return;
-      await this.#stream.deliverStream(stream, { replyToId, conversationId });
-    } catch (error) {
-      // regenerate() already removed the old reply — if a fresh one started streaming before the
-      // failure, close it out too; if nothing arrived yet, there's nothing to find or close
-      const cancelled = controller.signal.aborted;
-      failed = !cancelled;
-      const orphanedReply = this.#internalMessages.find(
-        (m) => m.replyToId === replyToId && m.status === "sending",
-      );
-      if (orphanedReply) {
-        const replyStatus = /** @type {"failed" | "cancelled"} */ (
-          cancelled ? "cancelled" : "failed"
-        );
-        this.#applyMessages(
-          this.#internalMessages.map((m) =>
-            m.id === orphanedReply.id ? finalizeStreamingParts({ ...m, status: replyStatus }) : m,
-          ),
-          conversationId,
-        );
-      }
-      if (!cancelled) {
-        this.dispatchEvent(
-          new CustomEvent("chx-send-error", {
-            detail: { messageId: replyId, error },
-            bubbles: true,
-            composed: true,
-          }),
-        );
-      }
-    } finally {
-      this.#delivery.untrack(
-        replyId,
-        controller.signal.aborted ? "cancelled" : failed ? "failed" : "completed",
-        conversationId,
-      );
-    }
-  }
-
   /** @param {CustomEvent<{attachments: File[]}>} event */
-  handleAttachmentsChange = (event) => {
+  #handleAttachmentsChange = (event) => {
     this.#attachmentsProvider.setValue(event.detail.attachments);
   };
 
@@ -869,22 +682,23 @@ export class ChxChat extends LitElement {
    * whatever composer/list shows up here, since it can no longer bind
    * properties onto them via its own template.
    */
-  handleMessageListSlotchange() {
-    this.pushMessageListProperties();
+  #handleMessageListSlotchange() {
+    this.#pushMessageListProperties();
   }
 
-  /** @see handleMessageListSlotchange */
-  handleMessageComposerSlotchange() {
-    this.pushComposerProperties();
+  /** Same as `#handleMessageListSlotchange`, for the composer slot. */
+  #handleMessageComposerSlotchange() {
+    this.#pushComposerProperties();
   }
 
-  pushComposerProperties() {
-    const composer = this.messageComposerElement;
+  #pushComposerProperties() {
+    const composer = this.#composer;
     if (!composer) return;
+    composer[CONNECT_REGISTRY](this.#api);
     // `loading` stays an app-settable override for a transport chx-chat doesn't drive (a messenger's
-    // local echo); a delivery in flight raises it on its own. See `status`.
-    composer.loading = this.loading || this.busy;
-    composer.dragging = this.dragging;
+    // local echo); a delivery in flight raises it on its own. See `delivery.getStatus()`.
+    composer.loading = this.loading || this.#delivery.busy;
+    composer.dragging = this.#dropTarget.dragging;
     composer.compact = this.compact;
     composer.messagesEmpty = this.#internalMessages.length === 0;
     composer.disabled = this.#conversationMode.isEmptyState; // no active conversation → can't compose/send
@@ -895,10 +709,11 @@ export class ChxChat extends LitElement {
    * message-list.js's own `dragging`/`dropHint`) — it has no
    * loading concept of its own.
    */
-  pushMessageListProperties() {
-    const list = this.messageListElement;
+  #pushMessageListProperties() {
+    const list = this.#list;
     if (!list) return;
-    list.dragging = this.dragging;
+    list[CONNECT_REGISTRY](this.#api);
+    list.dragging = this.#dropTarget.dragging;
     list.messages = this.#visibleMessages;
     list.partElements = this.partElements;
     list.typing = this.#typing.isTyping(this.activeConversationId);
@@ -937,7 +752,7 @@ export class ChxChat extends LitElement {
       // Keyed typing state survives a switch untouched (TypingController is per-conversation, so
       // switching just reads the now-active conversation's own value) — only an unkeyed signal's
       // attribution to the conversation being left is dropped, since it was never about that
-      // conversation in the first place. See setTyping.
+      // conversation in the first place. See #setTyping.
       this.#clearUnkeyedTyping();
       if (
         this.activeConversationId !== undefined &&
@@ -996,19 +811,19 @@ export class ChxChat extends LitElement {
         }),
       );
     }
-    this.pushComposerProperties();
-    this.pushMessageListProperties();
+    this.#pushComposerProperties();
+    this.#pushMessageListProperties();
     // not awaited — see restoreIfPending's own doc
     this.#scrollMemory.restoreIfPending(this.activeConversationId);
   }
 
   render() {
     return html`
-      <slot name="message-list" @slotchange=${this.handleMessageListSlotchange}></slot>
+      <slot name="message-list" @slotchange=${this.#handleMessageListSlotchange}></slot>
       <!-- purely a placement slot: chx-chat neither gates nor fills it, the app owns what's in it
            and when (see src/docs/agentic.md's permission flow) -->
       <slot name="input-banner"></slot>
-      <slot name="message-composer" @slotchange=${this.handleMessageComposerSlotchange}></slot>
+      <slot name="message-composer" @slotchange=${this.#handleMessageComposerSlotchange}></slot>
     `;
   }
 }

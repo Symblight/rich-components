@@ -162,9 +162,9 @@ const answerSubmitLate = (_root, editor) => {
     const { threadId } = /** @type {CustomEvent} */ (event).detail;
     event.preventDefault();
     setTimeout(() => {
-      if (fails()) editor.rejectSubmit(threadId, "Couldn’t save — try again.");
+      if (fails()) editor.comments.failSubmit(threadId, "Couldn’t save — try again.");
       else
-        editor.resolveSubmit(
+        editor.comments.confirmSubmit(
           threadId,
           { id: crypto.randomUUID() },
           { threadId: `server-${threadId}` },
@@ -175,16 +175,16 @@ const answerSubmitLate = (_root, editor) => {
     const { threadId, resolved } = /** @type {CustomEvent} */ (event).detail;
     event.preventDefault();
     setTimeout(() => {
-      if (fails()) editor.rejectComment(threadId, "Couldn’t update the thread.");
-      else editor.resolveComment(threadId, resolved);
+      if (fails()) editor.comments.fail(threadId, "Couldn’t update the thread.");
+      else editor.comments.resolve(threadId, resolved);
     }, 700);
   });
   editor.addEventListener("cdx-comment-delete", (event) => {
     const { threadId, commentId } = /** @type {CustomEvent} */ (event).detail;
     event.preventDefault();
     setTimeout(() => {
-      if (fails()) editor.rejectComment(threadId, "Couldn’t delete the comment.");
-      else editor.deleteComment(threadId, commentId);
+      if (fails()) editor.comments.fail(threadId, "Couldn’t delete the comment.");
+      else editor.comments.remove(threadId, commentId);
     }, 700);
   });
 };
@@ -195,8 +195,8 @@ const bulkButtons = (root, editor) => {
   for (const button of root.querySelectorAll("button[data-bulk]")) {
     button.addEventListener("click", () => {
       const action = /** @type {HTMLElement} */ (button).dataset.bulk;
-      if (action === "clear") editor.clearComments();
-      else editor.resolveAll(action === "resolve");
+      if (action === "clear") editor.comments.clear();
+      else editor.comments.resolveAll(action === "resolve");
     });
   }
 };

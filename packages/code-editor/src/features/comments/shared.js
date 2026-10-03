@@ -75,3 +75,16 @@ export const canEditComment = (config, comment, thread) =>
 /** @param {CdxCommentsConfig} config @param {CdxComment} comment @param {CdxThread} thread */
 export const canDeleteComment = (config, comment, thread) =>
   isOwn(comment.author, config.author) && (config.canDelete?.(comment, thread) ?? true);
+
+/**
+ * Event details. `file` is the editor's `filename`; `line` is 1-based.
+ * @typedef {{ line: number, file: string, threadId: string | null, source: "gutter" | "keyboard" | "api", range: CdxCommentRange | null }} CdxCommentOpenDetail
+ * @typedef {{ threadId: string, line: number, file: string, isReply: boolean, length: number }} CdxCommentDraftDetail
+ * @typedef {{ threadId: string, line: number, file: string, body: string, isReply: boolean, range: CdxCommentRange | null, lineText: string }} CdxCommentSubmitDetail
+ * @typedef {{ threadId: string, line: number, file: string, isReply: boolean, hadDraft: boolean, reason: "button" | "escape" | "replaced" | "removed", wasSending: boolean }} CdxCommentCancelDetail
+ * @typedef {{ threadId: string, line: number, file: string, commentId: string, body: string, previous: string }} CdxCommentEditDetail
+ * @typedef {{ threadId: string, line: number, file: string, commentId: string }} CdxCommentDeleteDetail
+ * @typedef {{ threadId: string, line: number, file: string, resolved: boolean }} CdxCommentResolveDetail
+ * @typedef {{ threadId: string, line: number, file: string, expanded: boolean }} CdxCommentToggleDetail
+ * @typedef {{ threadId: string, line: number, file: string, index: number, count: number }} CdxCommentNavigateDetail
+ */

@@ -23,3 +23,16 @@ export { symbolProvider, syntaxTreeSymbols } from "./core/symbols.js";
 /** @typedef {import("./features/comments/shared.js").CdxComment} CdxComment */
 /** @typedef {import("./features/comments/shared.js").CdxCommentAuthor} CdxCommentAuthor */
 /** @typedef {import("./features/comments/shared.js").CdxCommentDraft} CdxCommentDraft */
+/** @typedef {import("./types/api.js").CdxCodeEditorApi} CdxCodeEditorApi */
+/** @typedef {import("./types/api.js").CdxCodeEditorNamespace} CdxCodeEditorNamespace */
+/** @typedef {import("./types/api.js").CdxDocApi} CdxDocApi */
+/** @typedef {import("./types/api.js").CdxSelectionApi} CdxSelectionApi */
+/** @typedef {import("./types/api.js").CdxNavigationApi} CdxNavigationApi */
+/** @typedef {import("./types/api.js").CdxSearchApi} CdxSearchApi */
+/** @typedef {import("./types/api.js").CdxSearchQuery} CdxSearchQuery */
+/** @typedef {import("./types/api.js").CdxDiffApi} CdxDiffApi */
+/** @typedef {import("./types/api.js").CdxProblemsApi} CdxProblemsApi */
+/** @typedef {import("./types/api.js").CdxCommentsApi} CdxCommentsApi */
+/** @typedef {import("./types/api.js").CdxLineColumn} CdxLineColumn */
+/** @typedef {import("./types/api.js").CdxProblemCounts} CdxProblemCounts */
+/** @typedef {import("./types/api.js").CdxScrollOptions} CdxScrollOptions */

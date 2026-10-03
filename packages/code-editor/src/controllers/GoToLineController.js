@@ -83,15 +83,23 @@ export class GoToLineController {
       this.#host.requestUpdate();
       return false;
     }
-    const lineNumber = Math.min(Math.max(Number(match[1]), 1), state.doc.lines);
-    const line = state.doc.line(lineNumber);
-    const column = Math.min(Math.max(Number(match[2] ?? 1), 1), line.length + 1);
-    const pos = line.from + column - 1;
+    this.goTo(Number(match[1]), Number(match[2] ?? 1));
+    this.hide();
+    return true;
+  }
+
+  /** Caret to a 1-based line/column, clamped to the document, centered; focus stays put.
+   * @param {number} line @param {number} [column] */
+  goTo(line, column = 1) {
+    const state = this.#editor.state;
+    if (!state || !Number.isFinite(line)) return false;
+    const target = state.doc.line(Math.min(Math.max(Math.trunc(line), 1), state.doc.lines));
+    const col = Number.isFinite(column) ? Math.trunc(column) : 1;
+    const pos = target.from + Math.min(Math.max(col, 1), target.length + 1) - 1;
     this.#editor.dispatch({
       selection: { anchor: pos },
       effects: EditorView.scrollIntoView(pos, { y: "center" }),
     });
-    this.hide();
     return true;
   }
 }

@@ -190,7 +190,7 @@ export const ContextMenu = {
           true,
           () => {
             const { from, to } = editor.state.doc.line(line);
-            editor.setSelection(from, to);
+            editor.selection.set(from, to);
           },
         ],
         [`Region: ${region}, line ${line}`, false, () => {}],

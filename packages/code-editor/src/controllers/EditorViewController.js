@@ -1,3 +1,4 @@
+import { Transaction as StateTransaction } from "@codemirror/state";
 import { EditorView } from "@codemirror/view";
 
 /**
@@ -60,11 +61,15 @@ export class EditorViewController {
   }
 
   /** Applies to the live view, or to the kept state while disconnected — listeners only hear the
-   *  former, since nothing is on screen to react to otherwise.
-   * @param {import("@codemirror/state").TransactionSpec} spec */
+   *  former, since nothing is on screen to react to otherwise. A `Transaction` must come from the
+   *  current state.
+   * @param {import("@codemirror/state").TransactionSpec | Transaction} spec */
   dispatch(spec) {
     if (this.#view) this.#view.dispatch(spec);
-    else if (this.#detachedState) this.#detachedState = this.#detachedState.update(spec).state;
+    else if (this.#detachedState) {
+      this.#detachedState =
+        spec instanceof StateTransaction ? spec.state : this.#detachedState.update(spec).state;
+    }
   }
 
   /** @param {TransactionListener} listener */

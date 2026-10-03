@@ -237,6 +237,23 @@ export class CommentsController {
 
   // — public API, delegated from <cdx-code-editor> —
 
+  /** A `<cdx-comments>` is slotted. */
+  get enabled() {
+    return !!this.#config;
+  }
+
+  /** @param {string} threadId */
+  reveal(threadId) {
+    if (!this.#config) return;
+    this.#threads.setCollapsed(threadId, false);
+    this.#threads.reveal(threadId);
+  }
+
+  /** @param {1 | -1} direction */
+  navigate(direction) {
+    if (this.#config) this.#bar.navigate(direction);
+  }
+
   /** @param {number} line @param {{ range?: CdxCommentRange | null, newThread?: boolean }} [options] */
   openComment(line, options = {}) {
     if (!this.#config) return null;

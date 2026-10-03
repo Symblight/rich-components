@@ -1,4 +1,10 @@
-import { forEachDiagnostic, setDiagnostics, setDiagnosticsEffect } from "@codemirror/lint";
+import {
+  forEachDiagnostic,
+  nextDiagnostic,
+  previousDiagnostic,
+  setDiagnostics,
+  setDiagnosticsEffect,
+} from "@codemirror/lint";
 
 /** @typedef {import("../components/code-editor/code-editor.js").CdxCodeEditor} CdxCodeEditor */
 /** @typedef {{ errors: number, warnings: number, others: number }} ProblemCounts */
@@ -51,18 +57,29 @@ export class DiagnosticsController {
     if (!this.#editor.view && this.#editor.state) this.#recount(this.#editor.state);
   }
 
-  /** Moves the caret to the earliest diagnostic. */
-  goToFirst() {
+  /** Moves the caret to the earliest diagnostic; focus stays put. */
+  first() {
     const state = this.#editor.state;
-    if (!state) return;
+    if (!state) return false;
     /** @type {number | undefined} */
     let first;
     forEachDiagnostic(state, (_diagnostic, from) => {
       first ??= from;
     });
-    if (first === undefined) return;
+    if (first === undefined) return false;
     this.#editor.dispatch({ selection: { anchor: first }, scrollIntoView: true });
-    this.#editor.focus();
+    return true;
+  }
+
+  /** Selects the next diagnostic after the caret, wrapping (F8). */
+  next() {
+    const view = this.#editor.view;
+    return !!view && nextDiagnostic(view);
+  }
+
+  previous() {
+    const view = this.#editor.view;
+    return !!view && previousDiagnostic(view);
   }
 
   /** @param {import("@codemirror/state").EditorState} state */

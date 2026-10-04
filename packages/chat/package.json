@@ -28,6 +28,10 @@
       "import": "./dist/agent.js",
       "types": "./dist/agent.d.ts"
     },
+    "./composer": {
+      "import": "./dist/composer.js",
+      "types": "./dist/composer.d.ts"
+    },
     "./tokens.css": "./dist/tokens.css"
   },
   "files": [

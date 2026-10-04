@@ -17,8 +17,9 @@ export default defineConfig({
   build: {
     target: "esnext",
     rollupOptions: {
-      // separate entries: a messenger importing only "." never pulls the agentic components in
-      input: ["src/index.js", "src/agent.js"],
+      // separate entries: a messenger importing only "." never pulls the agentic components or
+      // the composer add-ons in
+      input: ["src/index.js", "src/agent.js", "src/composer.js"],
       // Vite's app build defaults this to false, which strips every entry's exports
       preserveEntrySignatures: "strict",
       external: [

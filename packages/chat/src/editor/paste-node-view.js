@@ -1,9 +1,10 @@
 import { Selection } from "prosemirror-state";
 
 import "../components/paste-chip/paste-chip.js";
+import { PASTE_BOUNDARY_EVENT, PASTE_CHANGE_EVENT } from "./extension.js";
 
 /**
- * Last-resort default — a `paste` node (a restored draft, undo) with no extension to render it.
+ * Last-resort default — a `paste` node (a restored draft, undo) no extension claims.
  * @param {{lines: number}} detail
  * @returns {HTMLElement}
  */
@@ -16,80 +17,88 @@ function defaultBuildElement({ lines }) {
 }
 
 /**
- * Renders a collapsed `paste` node — an editor extension's `buildPasteElement`, or
- * `defaultBuildElement` above otherwise. Named generically,
- * not `buildChip`: the resolved element can be anything (e.g. `chx-code-block` for a detected code
- * paste), not just a chip. `source` is always `"composer"`: paste chips have no historical form,
- * they unfold to full text once sent. Syncs `chx-code-block-change`/`chx-code-block-lang-change`/
- * `chx-code-block-boundary` (e.g. chx-code-block's `editable`/`langMenu`) back into the outer
- * editor, so an in-place edit survives into getValue()/getHTML() on send and arrowing out of the
- * block returns focus to the textbox.
+ * Renders a collapsed `paste` node — the first editor extension whose `buildPasteElement` claims
+ * it, or `defaultBuildElement` above. `source` is always `"composer"`: a collapsed paste unfolds
+ * to full text once sent. An editable element (e.g. chx-code-block via chx-code-block-paste) syncs
+ * back through `PASTE_CHANGE_EVENT`/`PASTE_BOUNDARY_EVENT`, so an in-place edit survives into
+ * getValue()/getHTML() and leaving the element returns focus to the textbox.
  */
 export class PasteNodeView {
+  /** @type {import("./extension.js").EditorExtension | undefined} */
+  #owner;
+
   /**
    * @param {import("prosemirror-model").Node} node
    * @param {import("prosemirror-view").EditorView} view
    * @param {() => number | undefined} getPos
-   * @param {{
-   *   getBuildElement: () => ((attrs: {text: string, lines: number, data: Record<string, unknown>}, source: "composer") => HTMLElement) | undefined,
-   * }} options
+   * @param {{getExtensions: () => import("./extension.js").EditorExtension[]}} options
    */
-  constructor(node, view, getPos, { getBuildElement }) {
+  constructor(node, view, getPos, { getExtensions }) {
     this.view = view;
     this.getPos = getPos;
 
     const { text, lines, data } = node.attrs;
-    const buildElement = getBuildElement() ?? defaultBuildElement;
-    this.dom = buildElement({ text, lines, data }, "composer");
+    /** @type {HTMLElement | null} */
+    let dom = null;
+    for (const extension of getExtensions()) {
+      dom = extension.buildPasteElement?.({ text, lines, data }, "composer") ?? null;
+      if (dom) {
+        this.#owner = extension;
+        break;
+      }
+    }
+    this.dom = dom ?? defaultBuildElement({ lines });
     this.dom.setAttribute("contenteditable", "false");
 
     this.dom.addEventListener(
-      "chx-code-block-change",
-      /** @type {EventListener} */ (this.#handleCodeChange),
+      PASTE_CHANGE_EVENT,
+      /** @type {EventListener} */ (this.#handleChange),
     );
     this.dom.addEventListener(
-      "chx-code-block-lang-change",
-      /** @type {EventListener} */ (this.#handleLangChange),
-    );
-    this.dom.addEventListener(
-      "chx-code-block-boundary",
+      PASTE_BOUNDARY_EVENT,
       /** @type {EventListener} */ (this.#handleBoundary),
     );
   }
 
-  /** Emptying the code entirely removes the node — an empty code block isn't a useful thing to send.
-   * @param {CustomEvent<{code: string}>} event */
-  #handleCodeChange = (event) => {
+  /** @returns {{pos: number, node: import("prosemirror-model").Node} | null} */
+  #current() {
     const pos = this.getPos();
-    if (pos === undefined) return;
+    if (pos === undefined) return null;
     const node = this.view.state.doc.nodeAt(pos);
-    if (!node) return;
+    return node ? { pos, node } : null;
+  }
 
-    if (event.detail.code === "") {
+  /** Emptying the text entirely removes the node — an empty paste isn't a useful thing to send.
+   * @param {CustomEvent<{text?: string, data?: Record<string, unknown>}>} event */
+  #handleChange = (event) => {
+    const current = this.#current();
+    if (!current) return;
+    const { pos, node } = current;
+    const { text, data } = event.detail;
+
+    if (text === "") {
       this.view.dispatch(this.view.state.tr.delete(pos, pos + node.nodeSize));
       this.view.focus();
       return;
     }
 
     const { tr } = this.view.state;
-    tr.setNodeAttribute(pos, "text", event.detail.code);
-    tr.setNodeAttribute(pos, "lines", event.detail.code.split("\n").length);
-    // The atom has no in-schema content, so there's no real position "inside" it to track
-    // character-for-character the way the ProseMirror CodeMirror example does — this just keeps
-    // the outer selection resting next to the node being edited instead of wherever it was stale
-    // from before the user clicked in.
-    tr.setSelection(Selection.near(tr.doc.resolve(pos + node.nodeSize), 1));
+    if (typeof text === "string") {
+      tr.setNodeAttribute(pos, "text", text);
+      tr.setNodeAttribute(pos, "lines", text.split("\n").length);
+      // An atom has no inner positions to track, so just keep the outer selection beside this node.
+      tr.setSelection(Selection.near(tr.doc.resolve(pos + node.nodeSize), 1));
+    }
+    if (data) tr.setNodeAttribute(pos, "data", { ...node.attrs.data, ...data });
     this.view.dispatch(tr);
   };
 
-  /** Moves the outer selection just before/after this node and refocuses the outer editor —
-   *  chx-code-block's own counterpart to arrowHandler() in keymap.js.
+  /** Counterpart to arrowHandler() in keymap.js — the element hands focus back at its edge.
    * @param {CustomEvent<{direction: "start" | "end"}>} event */
   #handleBoundary = (event) => {
-    const pos = this.getPos();
-    if (pos === undefined) return;
-    const node = this.view.state.doc.nodeAt(pos);
-    if (!node) return;
+    const current = this.#current();
+    if (!current) return;
+    const { pos, node } = current;
     const dir = event.detail.direction === "start" ? -1 : 1;
     const targetPos = dir < 0 ? pos : pos + node.nodeSize;
     const selection = Selection.near(this.view.state.doc.resolve(targetPos), dir);
@@ -97,34 +106,14 @@ export class PasteNodeView {
     this.view.focus();
   };
 
-  /** Mirrors a language change from chx-code-block's own picker into this node's `data.lang`.
-   *  @param {CustomEvent<{lang: string}>} event */
-  #handleLangChange = (event) => {
-    const pos = this.getPos();
-    if (pos === undefined) return;
-    const node = this.view.state.doc.nodeAt(pos);
-    if (!node) return;
-    this.view.dispatch(
-      this.view.state.tr.setNodeAttribute(pos, "data", {
-        ...node.attrs.data,
-        lang: event.detail.lang,
-      }),
-    );
-  };
-
-  /** Without this, ProseMirror rebuilds `this.dom` from scratch on every attrs change — including
-   *  the one #handleCodeChange itself just dispatched — destroying focus/cursor after one keystroke.
-   *  Only pushes into chx-code-block's own `code`/`lang` when they actually differ (undo/redo,
-   *  programmatic doc changes), so echoing our own edit back is a no-op.
+  /** Without this, ProseMirror rebuilds `this.dom` on every attrs change — including the one
+   *  #handleChange just dispatched — destroying focus/cursor after one keystroke.
    * @param {import("prosemirror-model").Node} node
    * @returns {boolean} */
   update(node) {
     if (node.type.name !== "paste") return false;
-    const dom = /** @type {HTMLElement & {code?: string, lang?: string}} */ (this.dom);
-    if (typeof dom.code === "string" && node.attrs.text !== dom.code) dom.code = node.attrs.text;
-    const lang = node.attrs.data?.lang;
-    if (typeof dom.lang === "string" && typeof lang === "string" && lang !== dom.lang)
-      dom.lang = lang;
+    const { text, lines, data } = node.attrs;
+    this.#owner?.updatePasteElement?.(this.dom, { text, lines, data });
     return true;
   }
 
@@ -143,18 +132,13 @@ export class PasteNodeView {
     return inside;
   }
 
-  /** Reverses the constructor's event wiring. */
   destroy() {
     this.dom.removeEventListener(
-      "chx-code-block-change",
-      /** @type {EventListener} */ (this.#handleCodeChange),
+      PASTE_CHANGE_EVENT,
+      /** @type {EventListener} */ (this.#handleChange),
     );
     this.dom.removeEventListener(
-      "chx-code-block-lang-change",
-      /** @type {EventListener} */ (this.#handleLangChange),
-    );
-    this.dom.removeEventListener(
-      "chx-code-block-boundary",
+      PASTE_BOUNDARY_EVENT,
       /** @type {EventListener} */ (this.#handleBoundary),
     );
   }

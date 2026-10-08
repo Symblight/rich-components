@@ -2,7 +2,6 @@ export { CdxCodeEditor } from "./components/code-editor/code-editor.js";
 export { CdxDiff } from "./features/diff/diff.js";
 export { CdxFooter } from "./features/footer/footer.js";
 export { CdxComments } from "./features/comments/comments.js";
-export { CdxCommentsBar } from "./features/comments/comments-bar.js";
 export { defineCdxPlugin } from "./core/plugin.js";
 export { symbolProvider, syntaxTreeSymbols } from "./core/symbols.js";
 
@@ -14,6 +13,7 @@ export { symbolProvider, syntaxTreeSymbols } from "./core/symbols.js";
 /** @typedef {import("./components/code-editor/code-editor.js").CdxReviewBaseChangeDetail} CdxReviewBaseChangeDetail */
 /** @typedef {import("./components/code-editor/code-editor.js").CdxDiffStats} CdxDiffStats */
 /** @typedef {import("./components/code-editor/code-editor.js").CdxChunkModel} CdxChunkModel */
+/** @typedef {import("./features/diff/shared.js").CdxCollapseUnchanged} CdxCollapseUnchanged */
 /** @typedef {import("./components/code-editor/code-editor.js").CdxSymbolsChangeDetail} CdxSymbolsChangeDetail */
 /** @typedef {import("./components/code-editor/code-editor.js").CdxBeforeChangeDetail} CdxBeforeChangeDetail */
 /** @typedef {import("./components/code-editor/code-editor.js").CdxStateOptions} CdxStateOptions */

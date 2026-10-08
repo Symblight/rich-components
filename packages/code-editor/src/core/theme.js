@@ -2,6 +2,10 @@ import { syntaxHighlighting } from "@codemirror/language";
 import { EditorView } from "@codemirror/view";
 import { classHighlighter, tagHighlighter, tags } from "@lezer/highlight";
 
+/** Material Symbols `unfold_more`, drawn as a mask so it takes the bar's text color. */
+const UNFOLD_MORE_SVG =
+  '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24"><path d="M12 5.83 15.17 9l1.41-1.41L12 3 7.41 7.59 8.83 9 12 5.83zm0 12.34L8.83 15l-1.41 1.41L12 21l4.59-4.59L15.17 15 12 18.17z"/></svg>';
+
 /** @param {string} color */
 const wavy = (color) => ({
   backgroundImage: "none",
@@ -210,8 +214,11 @@ export const cdxTheme = EditorView.theme({
     insetBlock: "0",
     insetInlineStart: "3px",
     inlineSize: "3px",
-    borderRadius: "0 2px 2px 0",
   },
+  // adjacent lines read as one bar: only a run's ends are rounded
+  ".cdx-vcs-marker_single::after": { borderRadius: "0 2px 2px 0" },
+  ".cdx-vcs-marker_first::after": { borderRadius: "0 2px 0 0" },
+  ".cdx-vcs-marker_last::after": { borderRadius: "0 0 2px 0" },
   ".cdx-vcs-marker_added::after": { backgroundColor: "var(--cdx-vcs-added-color)" },
   ".cdx-vcs-marker_modified::after": { backgroundColor: "var(--cdx-vcs-modified-color)" },
   ".cdx-vcs-marker_deleted::after, .cdx-vcs-marker_deleted-end::after": {
@@ -226,9 +233,9 @@ export const cdxTheme = EditorView.theme({
   ".cdx-vcs-marker_deleted::after": { top: "-4px" },
   ".cdx-vcs-marker_deleted-end::after": { bottom: "-4px" },
   ".cdx-vcs-marker_deleted-row::after": { backgroundColor: "var(--cdx-vcs-deleted-color)" },
-  // a HEAD mark opens its chunk; hovering widens the bar to say so
+  // a HEAD mark opens its chunk; hovering any of its lines widens the chunk's whole bar
   ".cdx-vcs-marker_peekable": { cursor: "pointer" },
-  ".cdx-vcs-marker_peekable:hover::after": { inlineSize: "5px" },
+  ".cdx-vcs-marker_peekable.cdx-vcs-marker_hovered::after": { inlineSize: "5px" },
 
   // Diff rows, both layers: added lines are real text on a green wash; removed lines are a block
   // of "ghost" rows (not part of the file — no caret, no selection), muted to 80%.
@@ -261,6 +268,46 @@ export const cdxTheme = EditorView.theme({
     content: '"−"',
     insetInlineStart: "calc(2px - var(--cdx-line-padding-inline))",
     color: "var(--cdx-diff-removed-sign-color)",
+  },
+  // merge's collapseUnchanged bar: unfold_more icon, "N unchanged lines", "Expand" at the end.
+  // The whole strip expands on click — merge's widget has no per-20-lines arrows.
+  ".cm-collapsedLines": {
+    display: "flex",
+    alignItems: "center",
+    gap: "0.5rem",
+    boxSizing: "border-box",
+    blockSize: "var(--cdx-diff-collapsed-height)",
+    padding: "0 0.5rem 0 var(--cdx-line-padding-inline)",
+    borderBlock: "1px solid var(--cdx-diff-collapsed-border-color)",
+    font: "500 0.75rem/1rem var(--_cdx-font-family)",
+    letterSpacing: "0.3px",
+    fontVariantNumeric: "tabular-nums",
+    whiteSpace: "nowrap",
+    color: "var(--cdx-diff-collapsed-color)",
+    background: "var(--cdx-diff-collapsed-background-color)",
+    userSelect: "none",
+    "&:hover": {
+      backgroundImage:
+        "linear-gradient(var(--cdx-diff-collapsed-hover-color), var(--cdx-diff-collapsed-hover-color))",
+    },
+    "&::before": {
+      content: '""',
+      flex: "none",
+      inlineSize: "1.125rem",
+      blockSize: "1.125rem",
+      margin: "0",
+      background: "currentColor",
+      mask: `url("data:image/svg+xml,${encodeURIComponent(UNFOLD_MORE_SVG)}") center / contain no-repeat`,
+    },
+    "&::after": {
+      content: "var(--cdx-diff-collapsed-action-label)",
+      flex: "none",
+      marginInlineStart: "auto",
+      padding: "0 0.625rem",
+      lineHeight: "1.5rem",
+      borderRadius: "9999px",
+      color: "var(--cdx-diff-collapsed-action-color)",
+    },
   },
   ".cm-insertedLine, .cm-deletedLine, .cm-deletedLine del": {
     textDecoration: "none",

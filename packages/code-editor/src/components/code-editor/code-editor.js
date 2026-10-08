@@ -9,10 +9,8 @@ import "../quick-fix/quick-fix.js";
 import "../../features/diff/diff.js";
 import "../review-bar/review-bar.js";
 import "../status-bar/status-bar.js";
-import "../comments-nav/comments-nav.js";
 import "../../features/footer/footer.js";
 import "../../features/comments/comments.js";
-import "../../features/comments/comments-bar.js";
 import commentsStyles from "../../features/comments/comments.css?inline";
 import footerStyles from "../../features/footer/footer.css?inline";
 import diffStyles from "../../features/diff/diff.css?inline";
@@ -476,16 +474,6 @@ export class CdxCodeEditor extends LitElement {
   };
 
   /** @param {Event} event */
-  #handleCommentsBarSlotchange = (event) => {
-    this.#comments.handleBarSlotchange(/** @type {HTMLSlotElement} */ (event.target));
-  };
-
-  /** @param {CustomEvent<{ action: "previous" | "next" | "resolve-all" }>} event */
-  #handleCommentsNavAction = (event) => {
-    this.#comments.handleBarAction(event.detail);
-  };
-
-  /** @param {Event} event */
   #handleFooterSlotchange = (event) => {
     this.#footer.handleSlotchange(/** @type {HTMLSlotElement} */ (event.target));
   };
@@ -604,20 +592,6 @@ export class CdxCodeEditor extends LitElement {
     `;
   }
 
-  #renderCommentsBar() {
-    const bar = this.#comments.bar;
-    if (!bar) return nothing;
-    return html`
-      <cdx-comments-nav
-        part="comments-bar-host"
-        exportparts="bar: comments-bar, nav: comments-bar-nav, count: comments-bar-count, action: comments-bar-action"
-        .config=${bar.config}
-        .model=${bar.model}
-        @cdx-comments-nav-action=${this.#handleCommentsNavAction}
-      ></cdx-comments-nav>
-    `;
-  }
-
   #renderGoToLine() {
     if (!this.#goToLine.open) return nothing;
     return html`
@@ -638,13 +612,11 @@ export class CdxCodeEditor extends LitElement {
       <slot name="diff" hidden @slotchange=${this.#handleDiffSlotchange}></slot>
       <slot name="footer" hidden @slotchange=${this.#handleFooterSlotchange}></slot>
       <slot name="comments" hidden @slotchange=${this.#handleCommentsSlotchange}></slot>
-      <slot name="comments-bar" hidden @slotchange=${this.#handleCommentsBarSlotchange}></slot>
       <div class="code-editor" part="container">
         ${this.#renderReviewBar()}
         <div class="code-editor__body">
           <div class="code-editor__view"></div>
           ${this.#renderProblems()} ${this.#renderQuickFix()} ${this.#renderGoToLine()}
-          ${this.#renderCommentsBar()}
         </div>
         ${this.#renderStatusBar()}
       </div>

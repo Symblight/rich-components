@@ -94,6 +94,7 @@ export default meta;
 /** Review: an agent's three proposals inline, each with its header, the review bar above. Accept
  *  folds a chunk into `reviewBase` (`cdx-review-base-change`), Reject reverts it (`cdx-change`).
  *  F7 / Shift-F7 walk the chunks, Mod-Alt-Enter / Mod-Alt-Backspace decide the one under the caret.
+ *  `collapse-unchanged` folds untouched stretches into a bar; click it to expand.
  *  @type {Story} */
 export const Review = {
   render: () => html`
@@ -108,7 +109,7 @@ export const Review = {
         /** @type {CdxCodeEditor} */ (event.currentTarget).reviewBase = event.detail.reviewBase;
       }}
     >
-      <cdx-diff slot="diff" kind="review" author="Agent"></cdx-diff>
+      <cdx-diff slot="diff" kind="review" author="Agent" collapse-unchanged></cdx-diff>
       <cdx-footer slot="footer" encoding="UTF-8"></cdx-footer>
     </cdx-code-editor>
   `,
@@ -222,6 +223,33 @@ export const CustomAuthor = {
           AUTHORS[(chunk?.index ?? 0) % 2].avatar}
       ></cdx-diff>
       <cdx-footer slot="footer" encoding="UTF-8"></cdx-footer>
+    </cdx-code-editor>
+  `,
+};
+
+/** Collapse unchanged: stretches of at least `minSize` untouched lines fold into an "N unchanged
+ *  lines" bar, `margin` lines of context kept around each change; click the bar to expand it.
+ *  The bare `collapse-unchanged` attribute takes merge's defaults (margin 3, minSize 4).
+ *  @type {Story} */
+export const CollapseUnchanged = {
+  args: { margin: 2, minSize: 4 },
+  argTypes: {
+    margin: { control: { type: "number", min: 0 } },
+    minSize: { control: { type: "number", min: 1 } },
+  },
+  render: ({ margin, minSize }) => html`
+    <cdx-code-editor
+      style="block-size: 34rem"
+      label="eslint.config.js"
+      .plugins=${webPreset}
+      filename="eslint.config.js"
+      .defaultValue=${PROPOSED}
+      .reviewBase=${WORKING}
+      @cdx-review-base-change=${(/** @type {CustomEvent} */ event) => {
+        /** @type {CdxCodeEditor} */ (event.currentTarget).reviewBase = event.detail.reviewBase;
+      }}
+    >
+      <cdx-diff slot="diff" kind="review" .collapseUnchanged=${{ margin, minSize }}></cdx-diff>
     </cdx-code-editor>
   `,
 };

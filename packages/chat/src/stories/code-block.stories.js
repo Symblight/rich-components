@@ -12,7 +12,7 @@ import { marked } from "marked";
 
 import "../index.js";
 import "../components/code-block/code-block.js";
-import "../components/paste-long-text/paste-long-text.js";
+import { codeBlockPastePartRule } from "../components/code-block-paste/code-block-paste.js";
 import { createSplitOnSendHandler } from "../utils/split-message-parts.js";
 import { sleep } from "./shared/adapters.js";
 import { makeMessage, textPart } from "./shared/fixtures.js";
@@ -331,24 +331,12 @@ function renderCodePart(part, previous) {
   return block;
 }
 
-/**
- * Rule for `paste` nodes (`schema.js`) — matches the `<span data-paste-lines>` chip
- * `paste-plugin.js` serializes into `getHTML()`, feeding `splitMessageParts` (see
- * `createSplitOnSendHandler` below) the same way `chipPartRule` does for command-picker chips.
- * @type {import("../types/inline-part-rule.js").InlinePartRule}
- */
-const codePartRule = {
-  type: "code",
-  selector: "span[data-paste-lines]",
-  toPart: (element) => ({ text: element.textContent ?? "", lang: element.dataset.lang ?? "" }),
-};
-
-const handleMessagesChange = createSplitOnSendHandler([codePartRule]);
+const handleMessagesChange = createSplitOnSendHandler([codeBlockPastePartRule]);
 
 /**
  * A mocked historical conversation with code-block parts mixed into ordinary text parts, wired up
  * entirely through `partElements` — no new chat/composer API involved. Also slots in
- * `<chx-paste-long-text>` + `handleMessagesChange` so pasting/sending a new code snippet through the
+ * `<chx-code-block-paste>` + `handleMessagesChange` so pasting/sending a new code snippet through the
  * composer below stays a `<chx-code-block>` after send too, not just in the pre-authored history
  * above.
  */
@@ -390,7 +378,7 @@ export const MockedMessages = {
     >
       <chx-message-list slot="message-list"></chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
-        <chx-paste-long-text></chx-paste-long-text>
+        <chx-code-block-paste></chx-code-block-paste>
       </chx-message-composer>
     </chx-chat>
   `,
@@ -413,11 +401,10 @@ function renderMarkdownText(part) {
 }
 
 /**
- * `<chx-paste-long-text>` slotted into `chx-message-composer` — code detection is built in, no
+ * `<chx-code-block-paste>` inside `chx-message-composer` — code detection is built in, no
  * consumer wiring needed. Paste a multi-line snippet (JS, TS, JSON, Python, or CSS — see
  * detect-language.js's default candidates) into the field below and it collapses to a
- * `<chx-code-block>` chip automatically; paste plain prose and it stays plain text (or, at 205+
- * lines, the generic "N lines" chip — same threshold precedence either way). Also wires
+ * `<chx-code-block>` chip automatically; paste plain prose and it stays plain text. Also wires
  * `partElements` for both `code` (survives send, via `handleMessagesChange` above) and `text`
  * (rendered as markdown via `renderMarkdownText`) — try typing "**bold**, _italic_, or a
  * [link](https://example.com)" alongside a pasted snippet in the same message.
@@ -436,7 +423,7 @@ export const PasteRecognizesCode = {
     >
       <chx-message-list slot="message-list"></chx-message-list>
       <chx-message-composer slot="message-composer" placeholder="Paste some code...">
-        <chx-paste-long-text></chx-paste-long-text>
+        <chx-code-block-paste></chx-code-block-paste>
       </chx-message-composer>
     </chx-chat>
   `,

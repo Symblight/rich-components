@@ -10,7 +10,7 @@
  * @property {string} [label] - `type: "chip"`, and `type: "tool_call"` (ACP's `title` — `label`
  *   there too, so it doesn't collide with the native `title` attribute on chx-tool-call)
  * @property {string | null} [icon] - `type: "chip"`
- * @property {string} [lang] - `type: "code"` (app-defined, e.g. `chx-code-block`'s paste handler)
+ * @property {string} [lang] - `type: "code"` (app-defined, e.g. `codeBlockPastePartRule`)
  * @property {"pending" | "in_progress" | "completed" | "failed" | "awaiting-permission" | "rejected" | "cancelled"} [status] -
  *   `type: "tool_call"` — the tool call's own lifecycle, independent of `state` below (which only
  *   tracks whether this package is still receiving stream deltas for the part, not what the tool

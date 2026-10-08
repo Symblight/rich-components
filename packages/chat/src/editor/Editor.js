@@ -87,11 +87,7 @@ export class Editor {
       attributes,
       nodeViews: {
         chip: (node) => new ChipNodeView(node),
-        paste: (node, view, getPos) =>
-          new PasteNodeView(node, view, getPos, {
-            getBuildElement: () =>
-              getExtensions().find((extension) => extension.buildPasteElement)?.buildPasteElement,
-          }),
+        paste: (node, view, getPos) => new PasteNodeView(node, view, getPos, { getExtensions }),
       },
       dispatchTransaction: (tr) => {
         const oldState = this.view.state;

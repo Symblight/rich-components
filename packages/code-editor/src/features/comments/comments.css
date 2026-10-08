@@ -1,6 +1,6 @@
 /* The comments feature's styles, adopted by cdx-code-editor: the gutter column and the thread rows
    are CodeMirror DOM inside the editor's shadow root. Tokens are declared here, on the editor host,
-   so they're overridable on cdx-code-editor and reach cdx-comment-thread / cdx-comments-nav by inheritance. */
+   so they're overridable on cdx-code-editor and reach cdx-comment-thread by inheritance. */
 :host {
   --cdx-comment-background-color: var(--_cdx-color-surface-container-low);
   --cdx-comment-accent-width: 3px;
@@ -23,8 +23,6 @@
 
   --cdx-comment-add-background-color: var(--_cdx-color-primary);
   --cdx-comment-add-color: var(--_cdx-color-on-primary);
-  --cdx-comments-bar-background-color: var(--_cdx-color-surface-container-high);
-  --cdx-comments-bar-shadow: var(--cdx-tooltip-shadow);
 }
 
 /* The 24dp column left of the change marks. */
@@ -60,7 +58,7 @@
   transition: opacity 0.12s;
 }
 
-.cdx-comments-gutter .cm-gutterElement:hover .cdx-comment-add,
+.cdx-comments-gutter-hovered .cdx-comment-add,
 .cm-focused .cdx-comments-gutter .cm-activeLineGutter .cdx-comment-add {
   opacity: 1;
 }
@@ -96,12 +94,4 @@
     box-sizing: border-box;
     inline-size: var(--cdx-text-width, 100%);
   }
-}
-
-/* The optional open-threads bar floats over the text, above the footer. */
-cdx-comments-nav {
-  position: absolute;
-  inset-block-end: 0.75rem;
-  inset-inline-end: 1rem;
-  z-index: 7;
 }

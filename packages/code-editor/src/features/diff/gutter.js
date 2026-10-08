@@ -3,16 +3,23 @@ import { gutter, GutterMarker, gutterLineClass } from "@codemirror/view";
 
 import { baselineChunkAt, baselineField, expandedBaselineChunks, togglePeek } from "./baseline.js";
 import { reviewChunks } from "./review.js";
+import { gutterHover } from "../../core/gutter-hover.js";
 import { addedGutterClass, isDeletedBlock } from "./shared.js";
 
 /** @typedef {"added" | "modified" | "deleted" | "deleted-end" | "deleted-row"} MarkKind */
 
+/** Where a line sits in a run of same-kind bars: only the run's ends are rounded. */
+/** @typedef {"single" | "first" | "middle" | "last"} RunEdge */
+
 class ChangeMarker extends GutterMarker {
-  /** @param {MarkKind} kind @param {boolean} peekable */
-  constructor(kind, peekable) {
+  /** @param {MarkKind} kind @param {boolean} peekable @param {RunEdge} edge */
+  constructor(kind, peekable, edge) {
     super();
     this.kind = kind;
-    this.elementClass = `cdx-vcs-marker cdx-vcs-marker_${kind}${peekable ? " cdx-vcs-marker_peekable" : ""}`;
+    this.peekable = peekable;
+    this.elementClass =
+      `cdx-vcs-marker cdx-vcs-marker_${kind} cdx-vcs-marker_${edge}` +
+      (peekable ? " cdx-vcs-marker_peekable" : "");
   }
 
   /** @param {GutterMarker} other */
@@ -22,9 +29,17 @@ class ChangeMarker extends GutterMarker {
 }
 
 const marker = /** @type {Record<string, ChangeMarker>} */ ({});
-/** @param {MarkKind} kind @param {boolean} [peekable] */
-const markerOf = (kind, peekable = false) =>
-  (marker[`${kind}:${peekable}`] ??= new ChangeMarker(kind, peekable));
+/** @param {MarkKind} kind @param {boolean} [peekable] @param {RunEdge} [edge] */
+const markerOf = (kind, peekable = false, edge = "single") =>
+  (marker[`${kind}:${peekable}:${edge}`] ??= new ChangeMarker(kind, peekable, edge));
+
+/** @param {ChangeMarker | undefined} a @param {ChangeMarker | undefined} b */
+const joins = (a, b) =>
+  !!a &&
+  !!b &&
+  a.kind === b.kind &&
+  a.peekable === b.peekable &&
+  (a.kind === "added" || a.kind === "modified");
 
 /**
  * @typedef {{
@@ -80,7 +95,13 @@ function build(state) {
   /** @type {RangeSetBuilder<GutterMarker>} */
   const markBuilder = new RangeSetBuilder();
   for (const from of [...marks.keys()].sort((a, b) => a - b)) {
-    markBuilder.add(from, from, /** @type {ChangeMarker} */ (marks.get(from)));
+    const mark = /** @type {ChangeMarker} */ (marks.get(from));
+    const line = doc.lineAt(from);
+    const up = line.number > 1 && joins(mark, marks.get(doc.line(line.number - 1).from));
+    const down = line.number < doc.lines && joins(mark, marks.get(doc.line(line.number + 1).from));
+    /** @type {RunEdge} */
+    const edge = up ? (down ? "middle" : "last") : down ? "first" : "single";
+    markBuilder.add(from, from, markerOf(mark.kind, mark.peekable, edge));
   }
   /** @type {RangeSetBuilder<GutterMarker>} */
   const classBuilder = new RangeSetBuilder();
@@ -103,6 +124,20 @@ const gutterField = StateField.define({
 
 const deletedRow = markerOf("deleted-row");
 
+/** Hovering any line of a HEAD chunk's mark widens the whole chunk's bar — one marker, not N. */
+const chunkHover = gutterHover({
+  gutter: "cdx-vcs-gutter",
+  className: "cdx-vcs-marker_hovered",
+  onlyOverGutter: true,
+  rangeAt(view, block) {
+    const baseline = view.state.field(baselineField, false);
+    const chunk = baseline && baselineChunkAt(baseline.chunks, block.from);
+    // an expanded chunk is shown inline and has no peek to open
+    if (!chunk || expandedBaselineChunks(view.state).includes(chunk)) return null;
+    return [chunk.fromB, Math.max(chunk.fromB, chunk.endB)];
+  },
+});
+
 /**
  * The 10dp change column left of the line numbers, shared by both layers: baseline marks
  * (clickable, open a peek), review/expanded added lines, and a bar beside removed-line blocks.
@@ -110,6 +145,7 @@ const deletedRow = markerOf("deleted-row");
  */
 export const changesGutter = [
   gutterField,
+  chunkHover,
   gutter({
     class: "cdx-vcs-gutter",
     markers: (view) => view.state.field(gutterField).marks,

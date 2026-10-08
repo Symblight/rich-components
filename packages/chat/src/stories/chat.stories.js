@@ -19,7 +19,7 @@ import "../components/loading-history/loading-history.js";
 import "../components/unread-marker/unread-marker.js";
 import "../components/divider/divider.js";
 import "../components/chip/chip.js";
-import "../components/paste-long-text/paste-long-text.js";
+import { longTextPastePartRule } from "../components/paste-long-text/paste-long-text.js";
 import "../components/attachments/attachments.js";
 import "../components/attachment/attachment.js";
 import { createSplitOnSendHandler } from "../utils/split-message-parts.js";
@@ -788,22 +788,7 @@ export const ComposerOnly = {
   `,
 };
 
-/**
- * Rule for `paste` nodes (`schema.js`) — matches the `<span data-paste-lines>` chip
- * `paste-plugin.js` serializes into `getHTML()`, feeding `splitMessageParts` (see
- * `handlePasteChipMessagesChange` below) the same way `chipPartRule` does for command-picker chips.
- * @type {import("../types/inline-part-rule.js").InlinePartRule}
- */
-const longTextPartRule = {
-  type: "longText",
-  selector: "span[data-paste-lines]",
-  toPart: (element) => ({
-    text: element.textContent ?? "",
-    lines: Number(element.dataset.pasteLines) || 0,
-  }),
-};
-
-const handlePasteChipMessagesChange = createSplitOnSendHandler([longTextPartRule]);
+const handlePasteChipMessagesChange = createSplitOnSendHandler([longTextPastePartRule]);
 
 /**
  * Renders a `type: "longText"` message part as a native `<details>` disclosure — collapsed by

@@ -182,10 +182,6 @@
   background-color: var(--cdx-content-background-color);
   border: 1px solid var(--cdx-content-border-color);
   border-radius: var(--cdx-content-border-radius);
-
-  &:focus-within {
-    border-color: var(--cdx-content-focus-border-color);
-  }
 }
 
 /* Everything under the review bar: the view plus the overlays positioned over it. */

@@ -11,6 +11,7 @@ A Material Design 3 chat web component built with [Lit](https://lit.dev). Framew
 - **Commands** — an opt-in `@`/`/`-style trigger-a-menu-get-a-chip feature for the composer. See [Commands API](./src/docs/commands.md).
 - **Attachments** — an opt-in file-attachment row above the composer, with a file picker button, OS drag-and-drop, and a default card per file. See [Attachments API](./src/docs/attachments.md).
 - **Paste chip** — pasting `paste-threshold`+ lines into the composer collapses the paste into a single "N lines" chip instead of flooding the field; expands back to the full text on send. See [Paste chip API](./src/docs/paste-chip.md).
+- **Code block paste** — pasting code into the composer collapses it into an editable, syntax-highlighted `chx-code-block`. See [Code block paste API](./src/docs/code-block-paste.md).
 - **Conversations** — optional: hold more than one conversation's worth of messages at once, each cached independently (messages, pagination, scroll position), and switch which one is on screen by reassigning `activeConversationId`. No built-in picker component — bring your own. See [Conversations API](./src/docs/conversations.md).
 - **Agentic parts** — opt-in elements for an AI agent's structured output: tool-call cards, reasoning disclosures, plan checklists, diffs, and a permission banner docked above the composer. The package ships the elements; the renderers that turn message parts into them are yours. See [Agentic parts API](./src/docs/agentic.md).
 
@@ -66,10 +67,12 @@ behavior — is in [Messages API](./src/docs/messages.md).
 
 Commands (`chx-command-query`/`chx-command-confirm`/`chx-command-navigate`/`chx-command-selected`)
 and attachments (`chx-attach`/`chx-attachment-remove`) each have their own event contract, covered
-in their respective docs linked above rather than duplicated here. The paste chip feature has no
-events of its own — it's opt-in via `<chx-paste-long-text>` slotted into `<chx-message-composer>`
-(see [Paste chip API](./src/docs/paste-chip.md)); `chx-send-message`/`chx-change`'s `value`/`html`
-already contain the full pasted text regardless of whether a chip is currently shown.
+in their respective docs linked above rather than duplicated here. The paste chip and code block
+paste features have no events of their own — they're opt-in via `<chx-paste-long-text>`/
+`<chx-code-block-paste>` placed inside `<chx-message-composer>` (see
+[Paste chip API](./src/docs/paste-chip.md), [Code block paste API](./src/docs/code-block-paste.md));
+`chx-send-message`/`chx-change`'s `value`/`html` already contain the full pasted text regardless of
+whether a chip is currently shown.
 
 ## Install
 

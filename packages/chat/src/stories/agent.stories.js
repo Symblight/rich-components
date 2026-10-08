@@ -19,6 +19,7 @@ import "../components/command-picker/command-picker.js";
 import "../components/attachments/attachments.js";
 import "../components/attachment/attachment.js";
 import "../components/paste-long-text/paste-long-text.js";
+import { codeBlockPastePartRule } from "../components/code-block-paste/code-block-paste.js";
 
 import { buildChipElement, chipPartRule, splitMessageParts } from "../index.js";
 import { createBannerPermissionPrompt } from "../agent.js";
@@ -765,15 +766,6 @@ function handleAgentFileQuery(event) {
   );
 }
 
-/** Rule for the `paste` node chx-paste-long-text collapses a detected code paste into, so it stays
- *  a `type: "code"` part after send instead of flattening back to text.
- *  @type {import("../types/inline-part-rule.js").InlinePartRule} */
-const pasteCodePartRule = {
-  type: "code",
-  selector: "span[data-paste-lines]",
-  toPart: (element) => ({ text: element.textContent ?? "", lang: element.dataset.lang ?? "" }),
-};
-
 /** Re-splits a sent message's leading text part into real `chip`/`code` parts, keeping any
  *  attachment parts after it — `createSplitOnSendHandler` bails on anything but a lone text part,
  *  so a send with an attachment would leave the chip and paste as flat text.
@@ -783,7 +775,7 @@ function handleComposerKitMessagesChange(event) {
   const [first, ...rest] = last?.parts ?? [];
   if (!last?.own || first?.type !== "text" || typeof first.html !== "string") return;
 
-  const parts = splitMessageParts(last.id, first.html, [chipPartRule, pasteCodePartRule]);
+  const parts = splitMessageParts(last.id, first.html, [chipPartRule, codeBlockPastePartRule]);
   if (!parts) return;
   /** @type {any} */ (event.currentTarget).store.add({ ...last, parts: [...parts, ...rest] });
 }
@@ -817,9 +809,10 @@ const attachTriggerStyles = html`
  *   real chip in the sent message rather than plain text.
  * - **Attachments** — the `+` button opens the picker, OS drag-and-drop over the whole chat works
  *   too, and a sent file renders through `renderAttachmentPart`.
- * - **Long paste** — `paste-threshold="200"` (the attribute's real name), so a paste of 200+ lines
- *   collapses to a "N lines" chip. Under that, chx-paste-long-text's built-in code detection still
- *   runs, so pasting a snippet collapses into a `<chx-code-block>` instead.
+ * - **Long paste** — `<chx-paste-long-text paste-threshold="200">`, so a paste of 200+ lines
+ *   collapses to a "N lines" chip.
+ * - **Code paste** — `<chx-code-block-paste>` runs first, so a snippet of up to 2000 lines collapses into
+ *   a `<chx-code-block>` instead.
  * - **Code blocks** — both from that paste path and from the agent's own streamed `code` parts.
  */
 /** @type {Story} */
@@ -869,6 +862,7 @@ export const AgenticComposerKit = {
             <md-button slot="actions" variant="text">Opus 4.8</md-button>
             <chx-attachments slot="attachments"></chx-attachments>
             <chx-paste-long-text paste-threshold="200"></chx-paste-long-text>
+            <chx-code-block-paste></chx-code-block-paste>
             <chx-command-picker
               commandCharacter="@"
               maxQuerySpaces="1"

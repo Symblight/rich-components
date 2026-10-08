@@ -72,12 +72,11 @@ export const schema = new Schema({
     /**
      * A collapsed long paste — the full text lives in `attrs.text`, only a
      * chip renders (see paste-plugin.js / paste-node-view.js, both driven by
-     * chx-paste-long-text). `data` is `{}` for the plain "N lines" chip
-     * (threshold hit, or chx-paste-long-text.classify() didn't match);
-     * otherwise it carries whatever `classify()` returned (e.g. `{lang}` for
-     * a detected code paste), round-tripped the same way `command`'s `data`
-     * bag is — opaque to the schema, only meaningful to
-     * chx-paste-long-text's own `buildElement()`.
+     * editor extensions). `data` is whatever the extension's `handlePaste`
+     * returned — `data.kind` names the owner (`"long-text"` from
+     * chx-paste-long-text, `"code"` + `lang` from chx-code-block-paste) —
+     * round-tripped the same way `command`'s `data` bag is, opaque to the
+     * schema.
      *
      * `leafText` feeds ProseMirror's own clipboard text/plain serialization,
      * so copying a selection containing a chip yields the full text;

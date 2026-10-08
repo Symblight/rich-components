@@ -1,6 +1,7 @@
 import { Plugin } from "prosemirror-state";
 
 import { landCaretAfterNode } from "./land-caret.js";
+import { byPastePriority } from "./extension.js";
 
 /**
  * A trailing "\n" is a line terminator, not an extra line — "a\nb\n" is 2
@@ -30,8 +31,8 @@ function insertPasteChip(view, attrs) {
 
 /**
  * Forces plain-text paste: lines are inserted one by one, splitting the current `line` block, so a
- * paste merges with the surrounding text. The first editor extension whose `handlePaste` returns
- * data collapses the paste into a `paste` node instead; with none, it's always inline.
+ * paste merges with the surrounding text. The first editor extension (by `priority`) whose
+ * `handlePaste` returns data collapses the paste into a `paste` node instead; with none, it's inline.
  * @param {{getExtensions?: () => import("./extension.js").EditorExtension[]}} [options]
  * @returns {import("prosemirror-state").Plugin}
  */
@@ -47,7 +48,7 @@ export function createPastePlugin({ getExtensions = () => [] } = {}) {
         if (!text) return false;
 
         const lineCount = countLines(text);
-        for (const extension of getExtensions()) {
+        for (const extension of byPastePriority(getExtensions)) {
           const data = extension.handlePaste?.(text, lineCount);
           if (data != null) return insertPasteChip(view, { text, lines: lineCount, data });
         }

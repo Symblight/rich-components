@@ -199,6 +199,7 @@ export function reviewFeature(reviewBase, config, hooks) {
       highlightChanges: false,
       syntaxHighlightDeletions: true,
       mergeControls: false,
+      collapseUnchanged: config.collapseUnchanged,
       diffConfig: DIFF_CONFIG,
     }),
     headersField,

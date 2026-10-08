@@ -116,7 +116,7 @@ export class CdxComments extends ReactiveElement {
     /** @type {((thread: CdxThread) => boolean) | undefined} */
     this.canResolve = undefined;
 
-    /** @type {boolean} No Resolve / Reopen, in either mode (and no Resolve all in the bar). */
+    /** @type {boolean} No Resolve / Reopen, in either mode. */
     this.noResolve = false;
 
     /** @type {boolean} Resolved threads start expanded instead of as a one-line row. */

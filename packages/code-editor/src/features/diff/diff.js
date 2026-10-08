@@ -6,6 +6,7 @@ import { customElement } from "lit/decorators.js";
  * @typedef {import("./shared.js").CdxDiffTone} CdxDiffTone
  * @typedef {import("./shared.js").CdxChunkModel} CdxChunkModel
  * @typedef {import("./shared.js").CdxDiffConfig} CdxDiffConfig
+ * @typedef {import("./shared.js").CdxCollapseUnchanged} CdxCollapseUnchanged
  */
 
 /** Defaults per layer: a review is loud (tertiary, the agent's), a baseline quiet (neutral, HEAD). */
@@ -33,6 +34,11 @@ export class CdxDiff extends ReactiveElement {
     rejectAllLabel: { type: String, attribute: "reject-all-label" },
     expanded: { type: Boolean, reflect: true },
     noReviewBar: { type: Boolean, attribute: "no-review-bar" },
+    collapseUnchanged: {
+      attribute: "collapse-unchanged",
+      // the bare attribute takes merge's defaults; margin/minSize go through the property
+      converter: { fromAttribute: (value) => (value === null ? undefined : {}) },
+    },
     getAuthor: { attribute: false },
     getAvatarUrl: { attribute: false },
   };
@@ -74,6 +80,10 @@ export class CdxDiff extends ReactiveElement {
     /** @type {boolean} Review only: hides the bar above the text. */
     this.noReviewBar = false;
 
+    /** @type {CdxCollapseUnchanged | undefined} Review only: folds unchanged stretches into a
+     *  "N unchanged lines" bar that expands on click. */
+    this.collapseUnchanged = undefined;
+
     /** @type {((chunk?: CdxChunkModel) => string | null | undefined) | undefined} Per chunk;
      *  no argument for the review bar. Falls back to `author`. */
     this.getAuthor = undefined;
@@ -110,6 +120,7 @@ export class CdxDiff extends ReactiveElement {
       rejectAllLabel: this.rejectAllLabel,
       getAuthor: this.getAuthor,
       getAvatarUrl: this.getAvatarUrl,
+      collapseUnchanged: this.collapseUnchanged,
     };
   }
 

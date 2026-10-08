@@ -1,5 +1,4 @@
 import { emit, emitCancelable } from "../../core/emit.js";
-import { CommentsBarController } from "./CommentsBarController.js";
 import { DraftController } from "./DraftController.js";
 import { canResolveThread } from "./shared.js";
 import { ThreadsController } from "./ThreadsController.js";
@@ -7,7 +6,6 @@ import { ThreadsController } from "./ThreadsController.js";
 /**
  * @typedef {import("./comments.js").CdxComments} CdxComments
  * @typedef {import("./comments.js").CdxCommentsConfig} CdxCommentsConfig
- * @typedef {import("./comments-bar.js").CdxCommentsBar} CdxCommentsBar
  * @typedef {import("./shared.js").CdxThread} CdxThread
  * @typedef {import("./shared.js").CdxComment} CdxComment
  * @typedef {import("./shared.js").CdxCommentRange} CdxCommentRange
@@ -15,8 +13,8 @@ import { ThreadsController } from "./ThreadsController.js";
  */
 
 /**
- * Line comments: reads the slotted `<cdx-comments>` / `<cdx-comments-bar>`, routes what the widgets
- * report to the threads, the open field and the bar, and is the public API's single door.
+ * Line comments: reads the slotted `<cdx-comments>`, routes what the widgets report to the threads
+ * and the open field, and is the public API's single door.
  */
 export class CommentsController {
   /** @type {import("lit").ReactiveControllerHost & HTMLElement & { filename: string }} */
@@ -29,10 +27,8 @@ export class CommentsController {
   #threads;
   /** @type {DraftController} */
   #drafts;
-  /** @type {CommentsBarController} */
-  #bar;
-  /** @type {CdxCommentsBar | null} */
-  #barElement = null;
+  /** @type {import("../../controllers/EditorViewController.js").EditorViewController} */
+  #editor;
 
   /**
    * @param {import("lit").ReactiveControllerHost & HTMLElement & { filename: string }} host
@@ -40,6 +36,7 @@ export class CommentsController {
    */
   constructor(host, editor) {
     this.#host = host;
+    this.#editor = editor;
     this.#threads = new ThreadsController(editor, {
       onUi: (_view, id, detail) => this.#handleUi(id, detail),
       onOpen: (_view, line, source) => this.#drafts.openAt(line, { source }),
@@ -51,15 +48,8 @@ export class CommentsController {
       threads: this.#threads,
       config: () => /** @type {CdxCommentsConfig} */ (this.#config),
     });
-    this.#bar = new CommentsBarController(host, editor, {
-      threads: this.#threads,
-      config: () => this.#config,
-    });
     host.addEventListener("cdx-comments-config", (event) => {
       if (event.target !== host) this.#reconfigure();
-    });
-    host.addEventListener("cdx-comments-bar-config", (event) => {
-      if (event.target !== host) this.#bar.setBar(this.#barElement?.config ?? null);
     });
   }
 
@@ -84,35 +74,12 @@ export class CommentsController {
     this.#reconfigure();
   }
 
-  /** @param {HTMLSlotElement} slot */
-  handleBarSlotchange(slot) {
-    const elements = slot.assignedElements();
-    const found = elements.find((element) => element.localName === "cdx-comments-bar");
-    if (elements.length > 1 || (elements.length && !found)) {
-      console.error('cdx-code-editor: slot="comments-bar" takes one <cdx-comments-bar>');
-    }
-    this.#barElement = /** @type {CdxCommentsBar | null} */ (found ?? null);
-    this.#bar.setBar(this.#barElement?.config ?? null);
-  }
-
-  /** What the host renders as the floating bar. */
-  get bar() {
-    return this.#bar.bar;
-  }
-
-  /** @param {{ action: "previous" | "next" | "resolve-all" }} detail */
-  handleBarAction(detail) {
-    if (detail.action === "resolve-all") this.resolveAll(true);
-    else this.#bar.navigate(detail.action === "next" ? 1 : -1);
-  }
-
   #reconfigure() {
     const previous = this.#config?.threads;
     this.#config = this.#element?.config ?? null;
     this.#threads.setConfig(this.#config);
     const next = this.#config?.threads;
     if (next !== undefined && next !== previous) this.#drafts.acknowledge(previous ?? [], next);
-    this.#bar.changed();
   }
 
   /** Routes a widget's `cdx-comment-ui` message.
@@ -249,9 +216,40 @@ export class CommentsController {
     this.#threads.reveal(threadId);
   }
 
-  /** @param {1 | -1} direction */
+  /** Unresolved, current threads by line. @returns {CdxThread[]} */
+  #open() {
+    return this.#threads.threads
+      .filter((thread) => !thread.resolved && !thread.outdated && thread.comments.length)
+      .sort((a, b) => a.line - b.line);
+  }
+
+  /** Steps the caret to the previous/next open thread, wrapping, and expands it.
+   * @param {1 | -1} direction */
   navigate(direction) {
-    if (this.#config) this.#bar.navigate(direction);
+    if (!this.#config) return;
+    const open = this.#open();
+    if (!open.length) return;
+    const state = this.#editor.state;
+    const line = state ? state.doc.lineAt(state.selection.main.head).number : -1;
+    const current = open.findIndex((thread) => thread.line === line);
+    let index = (current + direction + open.length) % open.length;
+    if (current < 0) {
+      index =
+        direction > 0
+          ? open.findIndex((thread) => thread.line > line)
+          : open.map((thread) => thread.line < line).lastIndexOf(true);
+      if (index < 0) index = direction > 0 ? 0 : open.length - 1;
+    }
+    const thread = open[index];
+    this.#threads.setCollapsed(thread.id, false);
+    this.#threads.reveal(thread.id);
+    emit(this.#host, "cdx-comment-navigate", {
+      threadId: thread.id,
+      line: thread.line,
+      file: this.#host.filename,
+      index,
+      count: open.length,
+    });
   }
 
   /** @param {number} line @param {{ range?: CdxCommentRange | null, newThread?: boolean }} [options] */

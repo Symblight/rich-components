@@ -2,6 +2,7 @@ import { StateEffect, StateField } from "@codemirror/state";
 import { Decoration, EditorView, gutter, GutterMarker, WidgetType } from "@codemirror/view";
 
 import "../../components/comment-thread/comment-thread.js";
+import { gutterHover } from "../../core/gutter-hover.js";
 import { iconElement } from "../../core/icons.js";
 import { stickyGeometry } from "../diff/shared.js";
 import { canDeleteComment, canEditComment, canResolveThread, toneOf } from "./shared.js";
@@ -369,6 +370,13 @@ export function createCommentsField(api) {
 
 /** @typedef {ReturnType<typeof createCommentsField>} CommentsField */
 
+/** "+" shows on the hovered line, wherever the pointer is on it. */
+const addHover = gutterHover({
+  gutter: "cdx-comments-gutter",
+  className: "cdx-comments-gutter-hovered",
+  rangeAt: (_view, block) => [block.from, block.from],
+});
+
 class AddMarker extends GutterMarker {
   toDOM() {
     const add = document.createElement("span");
@@ -414,7 +422,8 @@ class ThreadMarker extends GutterMarker {
 
 const addMarker = new AddMarker();
 
-/** The 24dp column left of the change marks: "+" on hover, a marker where a thread lives.
+/** The 24dp column left of the change marks: "+" while its line is hovered, a marker where a
+ *  thread lives.
  * @param {CommentsField} field @param {CommentsApi} api */
 function commentsGutter(field, api) {
   /** @type {Map<string, ThreadMarker>} */
@@ -466,5 +475,5 @@ function commentsGutter(field, api) {
 
 /** @param {CommentsField} field @param {CommentsApi} api */
 export function commentsExtension(field, api) {
-  return [field, stickyGeometry, commentsGutter(field, api)];
+  return [field, addHover, stickyGeometry, commentsGutter(field, api)];
 }

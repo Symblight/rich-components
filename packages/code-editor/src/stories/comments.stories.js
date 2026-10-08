@@ -93,10 +93,9 @@ const meta = {
   component: "cdx-code-editor",
   argTypes: {
     mode: { control: "inline-radio", options: ["thread", "single"] },
-    visibility: { control: "inline-radio", options: ["auto", "always", "never"] },
     maxLength: { control: "number" },
   },
-  args: { mode: "thread", visibility: "auto", maxLength: 2000 },
+  args: { mode: "thread", maxLength: 2000 },
 };
 export default meta;
 
@@ -249,8 +248,7 @@ const ownThreads = (root, editor) => {
 /** GitHub / GitLab style: replies, Resolve / Reopen, a resolved thread collapsed to one row.
  *  "+" in the gutter (or Ctrl/⌘ Alt M) opens the field; the second thread is resolved. The buttons
  *  call `resolveAll()` / `resolveAll(false)` — one event per thread, only where the user may — and
- *  `clearComments()`, a silent wipe (no events, no permission hooks). The floating bar (`<cdx-comments-bar>`)
- *  steps through open comments with ‹ › and has its own Resolve all; `visibility` in the controls.
+ *  `clearComments()`, a silent wipe (no events, no permission hooks).
  *  @type {Story} */
 export const Thread = {
   render: (args) => html`
@@ -270,7 +268,6 @@ export const Thread = {
           .author=${me}
           .defaultComments=${THREADS}
         ></cdx-comments>
-        <cdx-comments-bar slot="comments-bar" visibility=${args.visibility}></cdx-comments-bar>
       </cdx-code-editor>
       <div class="log" style=${LOG_STYLE}></div>
     </div>
@@ -299,7 +296,6 @@ export const Single = {
           .author=${me}
           .defaultComments=${[{ ...THREADS[0], comments: [THREADS[0].comments[1]] }]}
         ></cdx-comments>
-        <cdx-comments-bar slot="comments-bar" visibility=${args.visibility}></cdx-comments-bar>
       </cdx-code-editor>
       <div class="log" style=${LOG_STYLE}></div>
     </div>
@@ -341,7 +337,6 @@ export const WithDiff = {
             },
           ]}
         ></cdx-comments>
-        <cdx-comments-bar slot="comments-bar" visibility=${args.visibility}></cdx-comments-bar>
       </cdx-code-editor>
       <div class="log" style=${LOG_STYLE}></div>
     </div>
@@ -384,7 +379,6 @@ export const ValidationAndPermissions = {
             comment.author.id === "me"}
           .canComment=${(/** @type {{ line: number }} */ { line }) => line !== 1}
         ></cdx-comments>
-        <cdx-comments-bar slot="comments-bar" visibility=${args.visibility}></cdx-comments-bar>
       </cdx-code-editor>
       <div class="log" style=${LOG_STYLE}></div>
     </div>
@@ -412,7 +406,6 @@ export const ControlledThreads = {
           .author=${me}
           .comments=${[]}
         ></cdx-comments>
-        <cdx-comments-bar slot="comments-bar" visibility=${args.visibility}></cdx-comments-bar>
       </cdx-code-editor>
       <div class="log" style=${LOG_STYLE}></div>
     </div>

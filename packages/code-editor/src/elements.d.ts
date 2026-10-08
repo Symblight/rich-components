@@ -16,8 +16,6 @@ import { CdxReviewBar } from "./components/review-bar/review-bar.js";
 import { CdxStatusBar } from "./components/status-bar/status-bar.js";
 import { CdxFooter } from "./features/footer/footer.js";
 import { CdxComments } from "./features/comments/comments.js";
-import { CdxCommentsBar } from "./features/comments/comments-bar.js";
-import { CdxCommentsNav } from "./components/comments-nav/comments-nav.js";
 import { CdxCommentField } from "./components/comment-field/comment-field.js";
 import { CdxCommentItem } from "./components/comment-item/comment-item.js";
 import { CdxCommentThread } from "./components/comment-thread/comment-thread.js";
@@ -44,8 +42,6 @@ declare global {
     "cdx-quick-fix": CdxQuickFix;
     "cdx-go-to-line": CdxGoToLine;
     "cdx-comments": CdxComments;
-    "cdx-comments-bar": CdxCommentsBar;
-    "cdx-comments-nav": CdxCommentsNav;
     "cdx-comment-field": CdxCommentField;
     "cdx-comment-item": CdxCommentItem;
     "cdx-comment-thread": CdxCommentThread;

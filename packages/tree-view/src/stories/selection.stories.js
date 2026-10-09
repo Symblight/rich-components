@@ -116,6 +116,14 @@ export const CheckboxSelection = {
   render: () => {
     /** @type {LogRef} */
     const log = createRef();
+    /** @type {import("lit/directives/ref.js").Ref<import("../base/tree-view.js").TvxTreeView>} */
+    const tree = createRef();
+    const items = buildFileTree();
+    /** Leaf ids only — folders derive their checked state from their children.
+     * @param {import("./shared.js").TreeNodeData[]} nodes
+     * @returns {string[]} */
+    const leafIds = (nodes) =>
+      nodes.flatMap((n) => (n.children?.length ? leafIds(n.children) : [n.id]));
     return html`
       ${storyStyles}
       <div class="story">
@@ -123,10 +131,15 @@ export const CheckboxSelection = {
           Checking a folder checks its whole subtree; checking every child checks the folder. A row
           click only toggles expansion — selection is the checkbox's job.
         </p>
+        <div class="story__controls">
+          <button @click=${() => tree.value?.selection.set(leafIds(items))}>Select all</button>
+          <button @click=${() => tree.value?.selection.clear()}>Clear</button>
+        </div>
         <tvx-tree-view
+          ${ref(tree)}
           multi-select
           checkbox-selection
-          .items=${buildFileTree()}
+          .items=${items}
           .renderItemLeading=${renderFileIcon}
           .renderItemTrailing=${renderTrailingIcon}
           @tvx-selection-change=${logSelection(log)}

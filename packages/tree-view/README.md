@@ -70,6 +70,7 @@ tree.addEventListener("tvx-selection-change", (event) => {
 | `noVirtualization`                                             | `no-virtualization`  | `false`                     | Render every row instead of only the visible ones.                                                                                                                                                               |
 | `multiSelect`                                                  | `multi-select`       | `false`                     | Ctrl/Cmd+click and Shift+click/Shift+↑/↓ selection.                                                                                                                                                              |
 | `checkboxSelection`                                            | `checkbox-selection` | `false`                     | A checkbox per row; checking a branch checks its subtree. Row clicks then only toggle expansion.                                                                                                                 |
+| `expansionTrigger`                                             | `expansion-trigger`  | `"content"`                 | `"content"`: clicking anywhere on a row toggles a branch. `"icon"`: only the chevron does; keyboard is unchanged.                                                                                                |
 | `disableSelection`                                             | `disable-selection`  | `false`                     | No selection at all; rows still focus and branches still toggle.                                                                                                                                                 |
 | `dataSource`                                                   | —                    | `undefined`                 | Lazy loader, see [Async loading](#async-loading).                                                                                                                                                                |
 | `reordering`                                                   | `reordering`         | `false`                     | Drag-and-drop and `Alt+↑`/`Alt+↓` reordering.                                                                                                                                                                    |
@@ -308,8 +309,11 @@ npx md-colors --sourceColor="#6750A4" --scheme=light --output=./theme.css
   them on the `tvx-tree-view` element itself.
 - To recolor the `md-*` controls inside the tree as well (checkbox, spinner, skeleton), set
   `--md-sys-color-*` on `tvx-tree-view` instead of `--tvx-tree-view-color-*`.
-- Rows expose parts for anything else: `::part(row | chevron | checkbox | leading | label |
-label-input | trailing | placeholder)`.
+- Rows expose parts for anything else: `::part(row | chevron | checkbox | checkbox-control |
+checkbox-box | leading | label | label-input | trailing | placeholder)`.
+- The checkbox's own `--md-checkbox-*` tokens are declared on `md-checkbox` itself, so setting them
+  on `tvx-tree-view` has no effect — set them on `::part(checkbox-control)`. Shape and border go on
+  `::part(checkbox-box)`.
 
 ```css
 tvx-tree-view {
@@ -321,6 +325,14 @@ tvx-tree-view {
 
 tvx-tree-view::part(label) {
   letter-spacing: 0.01em;
+}
+
+tvx-tree-view::part(checkbox-control) {
+  --md-checkbox-border-color: #79747e;
+}
+
+tvx-tree-view::part(checkbox-box) {
+  border-radius: 0.25rem;
 }
 ```
 

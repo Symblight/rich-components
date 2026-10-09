@@ -52,6 +52,25 @@ export const UncontrolledDefaults = {
 };
 
 /** @type {Story} */
+export const ExpansionTrigger = {
+  render: () => html`
+    ${storyStyles}
+    <div class="story">
+      <p class="story__hint">
+        expansion-trigger="icon": only the chevron toggles a branch — clicking the rest of the row
+        just selects it.
+      </p>
+      <tvx-tree-view
+        expansion-trigger="icon"
+        .items=${buildFileTree()}
+        .renderItemLeading=${renderFileIcon}
+        .renderItemTrailing=${renderTrailingIcon}
+      ></tvx-tree-view>
+    </div>
+  `,
+};
+
+/** @type {Story} */
 export const ControlledState = {
   render: () => {
     /** @type {import("lit/directives/ref.js").Ref<TvxTreeView>} */

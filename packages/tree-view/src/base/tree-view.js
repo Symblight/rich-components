@@ -67,6 +67,8 @@ const SKELETON_WIDTHS = ["60%", "45%", "72%"];
  * @csspart row - A row's visible line.
  * @csspart chevron - Expand/collapse chevron.
  * @csspart checkbox - Checkbox wrapper (under `checkboxSelection`).
+ * @csspart checkbox-control - The `md-checkbox` itself; set `--md-checkbox-*` tokens here.
+ * @csspart checkbox-box - The checkbox's square box (`md-checkbox`'s `box` part).
  * @csspart leading - `renderItemLeading` output.
  * @csspart label - Label (or `renderItemLabel` output).
  * @csspart label-input - The built-in text input shown by `editing.start`.
@@ -100,6 +102,7 @@ export class TvxTreeView extends LitElement {
     multiSelect: { type: Boolean, reflect: true, attribute: "multi-select" },
     disableSelection: { type: Boolean, reflect: true, attribute: "disable-selection" },
     checkboxSelection: { type: Boolean, reflect: true, attribute: "checkbox-selection" },
+    expansionTrigger: { reflect: true, attribute: "expansion-trigger" },
     getHref: { attribute: false },
     dataSource: { attribute: false },
     reordering: { type: Boolean, reflect: true },
@@ -229,6 +232,8 @@ export class TvxTreeView extends LitElement {
     this.disableSelection = false;
     /** A checkbox per row; checking a branch checks its whole subtree. @type {boolean} */
     this.checkboxSelection = false;
+    /** What a click must hit to toggle a branch: the whole row, or only the chevron. @type {"content" | "icon"} */
+    this.expansionTrigger = "content";
     /** @type {((item: TvxTreeItemData) => string | undefined) | undefined} */
     this.getHref = undefined;
     /** @type {TvxTreeDataSource | undefined} */
@@ -565,11 +570,12 @@ export class TvxTreeView extends LitElement {
     }
   }
 
-  /** Clicking a row toggles a branch and — unless checkboxes do the selecting — selects it.
+  /** Clicking a row toggles a branch (unless only the chevron does) and — unless checkboxes do
+   * the selecting — selects it.
    * @param {MouseEvent} event
    * @param {PropertyKey} id */
   #onRowClick(event, id) {
-    if (this.#model.hasChildren(id)) this.#model.toggle(id);
+    if (this.expansionTrigger !== "icon" && this.#model.hasChildren(id)) this.#model.toggle(id);
     if (!this.checkboxSelection) this.#selection.activate(id, event);
   }
 
@@ -726,6 +732,8 @@ export class TvxTreeView extends LitElement {
                   >
                     <md-checkbox
                       class="tree-view__checkbox-control"
+                      part="checkbox-control"
+                      exportparts="box: checkbox-box"
                       .checked=${selected}
                       .indeterminate=${indeterminate}
                       ?disabled=${disabled}

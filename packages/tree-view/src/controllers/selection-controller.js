@@ -70,7 +70,7 @@ export class SelectionController {
     const node = this.model.node(id);
     if (!node || !this.#canSelect(id)) return;
     const subtree = [...walkIndexTree(node)].map((n) => /** @type {PropertyKey} */ (n.key));
-    const select = !subtree.every((key) => this.selected.has(key));
+    const select = !this.stateOf(id).selected; // what the checkbox shows, not raw membership
     const next = new Set(this.selected);
     for (const key of subtree) {
       if (select) next.add(key);
@@ -131,7 +131,8 @@ export class SelectionController {
     emit(this.host, "tvx-selection-change", { selectedItems: new Set(next) });
   }
 
-  /** Branch checked = its whole subtree is selected; indeterminate = only part of it. */
+  /** Branch checked = all children checked; indeterminate = only some. The branch's own id is
+   * ignored, so leaf-only selections (e.g. `defaultSelectedItems`) render the same as clicks. */
   #getCheckboxStates() {
     const upToDate =
       this.#statesSelected === this.selected &&
@@ -142,21 +143,27 @@ export class SelectionController {
     this.#statesStructureVersion = this.model.structureVersion;
     const states = new Map();
     /** @param {import("./tree-model-controller.js").TreeNode} node
-     * @returns {[total: number, selected: number]} */
+     * @returns {{ checked: boolean, indeterminate: boolean }} */
     const count = (node) => {
       const id = /** @type {PropertyKey} */ (node.key);
-      let total = 1;
-      let selected = this.selected.has(id) ? 1 : 0;
-      for (const child of node.children ?? []) {
-        const [childTotal, childSelected] = count(child);
-        total += childTotal;
-        selected += childSelected;
+      const children = node.children ?? [];
+      // no loaded children (leaf or unloaded async branch): its own id decides
+      let state = { checked: this.selected.has(id), indeterminate: false };
+      if (children.length > 0) {
+        let checked = 0;
+        let partial = false;
+        for (const child of children) {
+          const childState = count(child);
+          if (childState.checked) checked++;
+          else if (childState.indeterminate) partial = true;
+        }
+        state = {
+          checked: checked === children.length,
+          indeterminate: partial || (checked > 0 && checked < children.length),
+        };
       }
-      states.set(id, {
-        checked: selected === total,
-        indeterminate: selected > 0 && selected < total,
-      });
-      return [total, selected];
+      states.set(id, state);
+      return state;
     };
     this.model.tree.children?.forEach(count);
     this.#checkboxStates = states;

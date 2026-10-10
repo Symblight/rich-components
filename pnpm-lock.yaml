@@ -10,9 +10,6 @@ importers:
 
   packages/chat:
     dependencies:
-      '@atlaskit/pragmatic-drag-and-drop':
-        specifier: ^3.0.0
-        version: 3.1.0
       '@codemirror/lang-css':
         specifier: ^6.3.1
         version: 6.3.1

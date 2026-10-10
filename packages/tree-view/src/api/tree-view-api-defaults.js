@@ -43,6 +43,7 @@ export const TREE_VIEW_API_DEFAULTS = freezeApi(
       getChildIds: () => [],
       getPosition: () => null,
       move: () => false,
+      getIdFromEvent: () => null,
     },
     editing: {
       start: resolved,

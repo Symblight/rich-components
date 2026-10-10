@@ -36,6 +36,7 @@
  * @property {(parentId?: PropertyKey | null) => PropertyKey[]} getChildIds - the root without an argument; `[]` for a leaf or an unloaded branch
  * @property {(id: PropertyKey) => TvxTreeItemPosition | null} getPosition
  * @property {(id: PropertyKey, position: TvxTreeItemPosition) => boolean} move - fires cancelable `tvx-item-position-change`; whether it moved
+ * @property {(event: Event) => PropertyKey | null} getIdFromEvent - the item row an event came from; `null` outside item rows
  */
 
 /**

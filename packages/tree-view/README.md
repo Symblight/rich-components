@@ -132,6 +132,7 @@ await tree.loading.reload(folderId);
 | `getChildIds(parentId?)` | The root without an argument; `[]` for a leaf or an unloaded branch.                                                                                                                        |
 | `getPosition(id)`        | `{ parentId, index }`, or `null`.                                                                                                                                                           |
 | `move(id, position)`     | Fires cancelable `tvx-item-position-change`, then moves; returns whether it moved. Not gated by `reordering` / `isItemReorderable`. `false` without an event for impossible or no-op moves. |
+| `getIdFromEvent(event)`  | Id of the item row an event came from; `null` outside item rows. For context menus.                                                                                                         |
 
 #### `editing`
 
@@ -250,6 +251,57 @@ save button) doesn't end editing; such a button can save with
   <md-text-field slot="edit" variant="filled"></md-text-field>
 </tvx-tree-view>
 ```
+
+## Context menus
+
+One shared menu, opened from a `contextmenu` listener. `tree.nodes.getIdFromEvent(event)` says
+which item was hit (`null` on empty space). Shift+F10 and the ContextMenu key
+fire `contextmenu` on the focused row, and touch long-press fires it too.
+
+```html
+<tvx-tree-view id="tree"></tvx-tree-view>
+<md-menu id="itemMenu">
+  <!-- no for, no trigger -->
+  <md-menu-item value="rename">Rename</md-menu-item>
+  <md-menu-item value="delete">Delete</md-menu-item>
+</md-menu>
+```
+
+```js
+let menuItemId = null;
+
+tree.addEventListener("contextmenu", async (e) => {
+  const id = tree.nodes.getIdFromEvent(e);
+  if (id === null) return; // empty area → the browser's own menu
+  e.preventDefault();
+  const row = e.composedPath()[0]; // empty after the first await
+  await itemMenu.close({ returnFocus: false }); // already open for another row
+  menuItemId = id;
+  itemMenu.setAttribute("aria-label", `${tree.nodes.getItem(id).label} actions`);
+  if (e.button === 2) {
+    itemMenu.anchorElement = undefined;
+    itemMenu.openAtPoint(e.clientX, e.clientY);
+    await itemMenu.updateComplete;
+  } else {
+    // keyboard: coordinates vary by browser, anchor to the focused row (writes no ARIA)
+    itemMenu.anchorElement = row;
+    await itemMenu.show();
+  }
+  itemMenu.focusFirstItem(); // openAtPoint()/show() don't move focus in
+});
+
+itemMenu.addEventListener("select", (e) => runAction(e.detail.value, menuItemId));
+itemMenu.addEventListener("closed", () => {
+  // without `for`, close() has nowhere to return focus
+  if (!itemMenu.open && document.activeElement === document.body) {
+    tree.navigation.focusItem(menuItemId);
+  }
+});
+```
+
+Why not `<md-menu for="tree" trigger="contextmenu">`: it writes `aria-haspopup` /
+`aria-expanded` on `role="tree"`, opens on empty space and loading rows too, and doesn't say
+which item was hit.
 
 ## Migrating to the namespaces
 

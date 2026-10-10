@@ -184,6 +184,7 @@ export class TvxTreeView extends LitElement {
         getChildIds: (parentId = null) => this.#model.childIds(parentId),
         getPosition: (id) => (this.#model.has(id) ? this.#model.position(id) : null),
         move: (id, position) => this.#reorder.moveTo(id, position),
+        getIdFromEvent: (event) => this.#rowId(event),
       },
       editing: {
         start: (id) => this.#setEditedItem(id),

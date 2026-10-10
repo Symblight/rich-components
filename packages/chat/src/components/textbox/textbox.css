@@ -184,7 +184,14 @@
   }
 }
 
+/* never wraps — a wrapped placeholder would grow an empty field */
 .textbox__placeholder {
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   color: var(--chx-textbox-placeholder-color);
   pointer-events: none;
   user-select: none;

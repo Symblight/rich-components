@@ -114,7 +114,8 @@ export class Editor {
 
   /** @returns {boolean} */
   isEmpty() {
-    return this.view.state.doc.content.size === 0;
+    const { doc } = this.view.state; // "line+": empty is one empty line, never size 0
+    return doc.childCount === 1 && doc.child(0).content.size === 0;
   }
 
   /** @returns {boolean} True once Shift-Enter has split the doc into more than one `line`. */

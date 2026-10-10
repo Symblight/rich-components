@@ -75,10 +75,10 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     /** @type {Editor | undefined} */
     this.editor = undefined;
 
-    /** @type {ResizeObserver | undefined} Watches the role="textbox" div — see handleTextboxResize. */
+    /** @type {ResizeObserver | undefined} Re-checks the layout when the container resizes — see #updateLayout. */
     this.textboxObserver = undefined;
 
-    /** @type {boolean} False once Shift-Enter has split the doc and there's still content. */
+    /** @type {boolean} False once content is multiline or wraps; true again only when empty. */
     this.simplified = true;
 
     /** @type {Boolean} */
@@ -127,6 +127,8 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     this.removeEventListener("pointerdown", this.handlePointerdown);
     this.textboxObserver?.disconnect();
     this.textboxObserver = undefined;
+    if (this.#layoutFrame !== undefined) cancelAnimationFrame(this.#layoutFrame);
+    this.#layoutFrame = undefined;
     // EditorView holds document-level listeners — without destroy() a discarded
     // textbox stays reachable from the document and leaks.
     this.editor?.destroy();
@@ -163,6 +165,7 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     if (this.disabled) this.editor.setEditable(false); // disabled set before the editor mounted
     // Restore the draft across a disconnect/reconnect (e.g. the element being moved).
     if (this.value) this.editor.setText(this.value);
+    this.#scheduleLayout();
 
     this.textboxObserver = new ResizeObserver(this.handleTextboxResize);
     this.textboxObserver.observe(this.editor.view.dom);
@@ -222,6 +225,8 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     this.editor?.setText(text);
     this.setValue(text);
     this.value = text;
+    if (text === "") this.simplified = true;
+    else this.#scheduleLayout();
   }
 
   /** Inserts a chip at the caret — see Editor.insertChip. @param {Node} node */
@@ -247,49 +252,43 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     this.setValue(detail.value);
     this.value = detail.value;
     if (detail.value === "") this.simplified = true;
+    else this.#scheduleLayout();
     this.dispatchEvent(
       new CustomEvent("chx-textbox-change", { detail, bubbles: true, composed: true }),
     );
   };
 
-  /**
-   * initialHeight/lastHeight/isHandling live in this closure rather than
-   * on `this` — private to the handler, not part of the component's
-   * observable state. First call seeds initialHeight (ResizeObserver
-   * always fires once immediately on observe(), with the current size —
-   * not a real change). isHandling guards against reentrancy: a resize
-   * triggered synchronously from inside this callback (e.g. by
-   * console.log side effects growing later, or future DOM writes) would
-   * otherwise risk the "ResizeObserver loop" browser warning/recursion.
-   */
-  handleTextboxResize = (() => {
-    /** @type {number | undefined} */
-    let initialHeight;
-    /** @type {number | undefined} */
-    let lastHeight;
-    let isHandling = false;
-    /** @type {ResizeObserverCallback} */
-    return ([entry]) => {
-      if (!entry || isHandling) return;
-      isHandling = true;
-      try {
-        const height = entry.contentRect.height;
-        if (initialHeight === undefined || lastHeight === undefined) {
-          initialHeight = height;
-          lastHeight = height;
-          return;
-        }
-        const grew = height > initialHeight && lastHeight <= initialHeight;
-        const backToInitial =
-          height <= initialHeight && lastHeight > initialHeight && this.value === "";
-        if (grew) this.simplified = false;
-        if (backToInitial) this.simplified = true;
-        lastHeight = height;
-      } finally {
-        isHandling = false;
-      }
-    };
-  })();
+  /** @type {number | undefined} */
+  #layoutFrame;
+
+  /** Container resizes only re-check the layout — the state flip is deferred out of RO delivery. */
+  handleTextboxResize = () => this.#scheduleLayout();
+
+  #scheduleLayout() {
+    if (this.#layoutFrame !== undefined) return;
+    this.#layoutFrame = requestAnimationFrame(() => {
+      this.#layoutFrame = undefined;
+      this.#updateLayout();
+    });
+  }
+
+  /** One-way: leaves the one-row layout once real content wraps; only an empty doc goes back. */
+  #updateLayout() {
+    if (!this.editor || this.value === "") {
+      this.simplified = true;
+      return;
+    }
+    if (!this.simplified) return;
+    if (this.editor.isMultiline() || this.#wraps()) this.simplified = false;
+  }
+
+  /** Live against the computed line-height (no stale baseline); 1.5× tolerates chips taller than a line. */
+  #wraps() {
+    const line = /** @type {HTMLElement | null} */ (this.editor?.view.dom.firstElementChild);
+    if (!line) return false;
+    const lineHeight = parseFloat(getComputedStyle(line).lineHeight);
+    return line.getBoundingClientRect().height > lineHeight * 1.5;
+  }
 
   /** @param {{target: string | null, id: string | undefined}} detail */
   handleCommandSelected = (detail) => {

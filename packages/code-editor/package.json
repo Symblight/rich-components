@@ -70,7 +70,7 @@
     "@codemirror/lang-markdown": "^6.5.2",
     "@codemirror/language-data": "^6.5.2",
     "@replit/codemirror-indentation-markers": "^6.5.3",
-    "@symblight/wc-material": "^0.4.0"
+    "@symblight/wc-material": "^0.4.1"
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",
@@ -90,7 +90,7 @@
     "@storybook/addon-docs": "^10.3.3",
     "@storybook/web-components": "^10.3.1",
     "@storybook/web-components-vite": "^10.3.1",
-    "@symblight/md-colors": "^0.1.1",
+    "@symblight/md-colors": "^0.2.0",
     "@types/mocha": "^10.0.10",
     "@types/node": "^26.1.1",
     "@typescript-eslint/eslint-plugin": "^8.57.1",

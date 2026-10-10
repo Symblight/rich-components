@@ -282,8 +282,8 @@ attribute (both default to `"Release to attach"`):
 <chx-message-composer drop-hint="Drop to attach"> ... </chx-message-composer>
 ```
 
-Built on [`@atlaskit/pragmatic-drag-and-drop`](https://atlassian.design/components/pragmatic-drag-and-drop)'s
-external (OS file) adapter.
+Uses native drag events on `chx-chat` itself, so it works however deeply the chat is nested in
+other components' shadow roots.
 
 ## Attaching a file programmatically
 

@@ -2,6 +2,8 @@ import { html, svg } from "lit";
 
 /** Material Symbols paths, 24×24 — inline, so nothing depends on an icon font. */
 export const ICONS = /** @type {Record<string, string>} */ ({
+  unfold_more:
+    "M12 5.83 15.17 9l1.41-1.41L12 3 7.41 7.59 8.83 9 12 5.83zm0 12.34L8.83 15l-1.41 1.41L12 21l4.59-4.59L15.17 15 12 18.17z",
   check: "M9 16.17 4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z",
   warning: "M1 21h22L12 2 1 21zm12-3h-2v-2h2v2zm0-4h-2v-4h2v4z",
   error:

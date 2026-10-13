@@ -9,6 +9,7 @@ import {
 import { ChangeSet, Facet, StateField } from "@codemirror/state";
 import { Decoration, EditorView, keymap } from "@codemirror/view";
 
+import { collapseUnchanged } from "./collapse.js";
 import { ChunkHeaderWidget, clearFlash, flashLines, lineSpan } from "./shared.js";
 
 /** Caps diff work so a huge or wildly different file falls back to coarse chunks instead of
@@ -189,8 +190,9 @@ const headersField = StateField.define({
  * block above their replacement, a header per chunk with Reject / Accept. Accepting folds the
  * chunk into the review base; rejecting reverts the text.
  * @param {string} reviewBase @param {CdxDiffConfig} config @param {ReviewHooks} hooks
+ * @param {number} generation bumped with new data, so collapsed ranges are rebuilt
  */
-export function reviewFeature(reviewBase, config, hooks) {
+export function reviewFeature(reviewBase, config, hooks, generation) {
   return [
     reviewInput.of({ config, hooks }),
     unifiedMergeView({
@@ -199,10 +201,12 @@ export function reviewFeature(reviewBase, config, hooks) {
       highlightChanges: false,
       syntaxHighlightDeletions: true,
       mergeControls: false,
-      collapseUnchanged: config.collapseUnchanged,
       diffConfig: DIFF_CONFIG,
     }),
     headersField,
+    config.collapseUnchanged
+      ? collapseUnchanged("review", config.collapseUnchanged, generation, reviewChunks)
+      : [],
     keymap.of([
       { key: "Mod-Alt-Enter", run: (view) => acceptAt(view) },
       { key: "Mod-Alt-Backspace", run: (view) => rejectAt(view) },

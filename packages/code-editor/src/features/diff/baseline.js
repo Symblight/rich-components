@@ -2,6 +2,7 @@ import { Chunk } from "@codemirror/merge";
 import { Facet, StateEffect, StateField, Text } from "@codemirror/state";
 import { Decoration, EditorView, keymap } from "@codemirror/view";
 
+import { collapseUnchanged } from "./collapse.js";
 import { DIFF_CONFIG } from "./review.js";
 import { ChunkHeaderWidget, GhostLinesWidget, lineSpan } from "./shared.js";
 
@@ -201,12 +202,16 @@ const decorationsField = StateField.define({
  * Changes against a baseline (HEAD): quiet by default — only gutter marks, one chunk opens on a
  * mark click with Revert; `expanded` shows every chunk inline ("Diff vs HEAD").
  * @param {string} text @param {CdxDiffConfig} config @param {boolean} expanded
+ * @param {number} generation bumped with new data, so collapsed ranges are rebuilt
  */
-export function baselineFeature(text, config, expanded) {
+export function baselineFeature(text, config, expanded, generation) {
   return [
     baselineInput.of({ text, config, expanded }),
     baselineField,
     decorationsField,
+    config.collapseUnchanged
+      ? collapseUnchanged("baseline", config.collapseUnchanged, generation, baselineChunks)
+      : [],
     keymap.of([
       {
         key: "Escape",

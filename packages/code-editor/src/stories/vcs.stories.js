@@ -94,7 +94,7 @@ export default meta;
 /** Review: an agent's three proposals inline, each with its header, the review bar above. Accept
  *  folds a chunk into `reviewBase` (`cdx-review-base-change`), Reject reverts it (`cdx-change`).
  *  F7 / Shift-F7 walk the chunks, Mod-Alt-Enter / Mod-Alt-Backspace decide the one under the caret.
- *  `collapse-unchanged` folds untouched stretches into a bar; click it to expand.
+ *  `collapse-unchanged` folds untouched stretches into an "N hidden lines" row; click it to expand.
  *  @type {Story} */
 export const Review = {
   render: () => html`
@@ -227,9 +227,9 @@ export const CustomAuthor = {
   `,
 };
 
-/** Collapse unchanged: stretches of at least `minSize` untouched lines fold into an "N unchanged
- *  lines" bar, `margin` lines of context kept around each change; click the bar to expand it.
- *  The bare `collapse-unchanged` attribute takes merge's defaults (margin 3, minSize 4).
+/** Collapse unchanged: stretches of at least `minSize` untouched lines fold into an "N hidden
+ *  lines" row, `margin` lines of context kept around each change; click the row to expand it.
+ *  The bare `collapse-unchanged` attribute takes the defaults (margin 3, minSize 4).
  *  @type {Story} */
 export const CollapseUnchanged = {
   args: { margin: 2, minSize: 4 },

@@ -54,13 +54,14 @@
 .cdx-comment-add {
   background-color: var(--cdx-comment-add-background-color);
   color: var(--cdx-comment-add-color);
-  opacity: 0;
-  transition: opacity 0.12s;
+  cursor: pointer;
 }
 
-.cdx-comments-gutter-hovered .cdx-comment-add,
-.cm-focused .cdx-comments-gutter .cm-activeLineGutter .cdx-comment-add {
-  opacity: 1;
+/* In place of the hovered line's number, right-aligned like the numbers. */
+.cm-lineNumbers .cm-gutterElement:has(> .cdx-comment-add) {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
 }
 
 .cdx-comment-marker {

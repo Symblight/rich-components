@@ -42,8 +42,8 @@ import { functionHighlighter } from "../../core/theme.js";
  *   collapseUnchanged?: CdxCollapseUnchanged,
  * }} CdxDiffConfig
  * @typedef {{ margin?: number, minSize?: number }} CdxCollapseUnchanged
- * `@codemirror/merge`'s option: `margin` lines of context kept around a change (default 3),
- * stretches of at least `minSize` unchanged lines folded (default 4).
+ * `margin` lines of context kept around a change (default 3), stretches of at least `minSize`
+ * unchanged lines folded (default 4). When both layers collapse, the larger `minSize` wins.
  * @typedef {{ label: string, variant: "filled" | "text" | "danger" | "icon", icon?: string,
  *   title?: string, run: (view: EditorView, pos: number) => unknown }} HeaderAction
  */
@@ -277,10 +277,7 @@ export const isDeletedBlock = (widget) =>
 
 const headerGutterClasses = /** @type {Record<string, ClassMarker>} */ ({});
 const deletedGutterClass = new ClassMarker("cdx-gutter-deleted");
-const collapsedGutterClass = new ClassMarker("cdx-gutter-collapsed");
-
-/** Tints every gutter beside a header, a deleted block or merge's collapsed-lines bar, so the
- *  fills run edge to edge. */
+/** Tints every gutter beside a header or a deleted block, so the fills run edge to edge. */
 const gutterBackdrop = gutterWidgetClass.of((_view, widget) => {
   if (widget instanceof ChunkHeaderWidget) {
     const tone = widget.config.tone;
@@ -288,9 +285,6 @@ const gutterBackdrop = gutterWidgetClass.of((_view, widget) => {
       `cdx-gutter-chunk-header cdx-gutter-chunk-header_tone-${tone}`,
     ));
   }
-  // merge's CollapseWidget isn't exported; its `type` is
-  if (/** @type {{ type?: string }} */ (widget).type === "collapsed-unchanged-code")
-    return collapsedGutterClass;
   return isDeletedBlock(widget) ? deletedGutterClass : null;
 });
 

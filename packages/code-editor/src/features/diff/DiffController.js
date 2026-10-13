@@ -10,6 +10,7 @@ import {
   baselineModel,
   setPeek,
 } from "./baseline.js";
+import { collapsedLines } from "./collapse.js";
 import { changesGutter } from "./gutter.js";
 import { acceptAll, rejectAll, reviewChunks, reviewFeature } from "./review.js";
 import { diffBase } from "./shared.js";
@@ -19,7 +20,6 @@ import { diffBase } from "./shared.js";
  * @typedef {import("./diff.js").CdxDiff} CdxDiff
  * @typedef {import("./shared.js").CdxDiffConfig} CdxDiffConfig
  * @typedef {import("./shared.js").CdxDiffKind} CdxDiffKind
- * @typedef {import("./shared.js").CdxCollapseUnchanged} CdxCollapseUnchanged
  * @typedef {{ readonly reviewBase: string }} CdxReviewBaseChangeDetail
  * @typedef {{
  *   review: { pending: number, total: number, accepted: number, rejected: number, index: number },
@@ -32,10 +32,6 @@ import { diffBase } from "./shared.js";
  *   complete: boolean,
  * }} ReviewBar
  */
-
-/** @param {CdxCollapseUnchanged | undefined} a @param {CdxCollapseUnchanged | undefined} b */
-const sameCollapse = (a, b) =>
-  a === b || (!!a && !!b && a.margin === b.margin && a.minSize === b.minSize);
 
 /** When no <cdx-diff> of a kind is slotted, its data alone still turns the layer on with these. */
 const FALLBACK = /** @type {Record<CdxDiffKind, CdxDiffConfig>} */ ({
@@ -94,8 +90,8 @@ export class DiffController {
   #cachedDoc;
   #cachedString = "";
   #statsKey = "";
-  /** The review is momentarily off while #dropReview rebuilds it — no stats for that. */
-  #rebuilding = false;
+  /** Bumped when a layer gets new data, so its collapsed ranges are rebuilt. */
+  #generation = { review: 0, baseline: 0 };
 
   /**
    * @param {CdxCodeEditor} host
@@ -161,7 +157,7 @@ export class DiffController {
       this.#accepted = this.#rejected = 0;
       this.#dismissed = this.#completeReported = false;
       this.#reviewBaseKnown = next;
-      if (this.#configs.review.collapseUnchanged) this.#dropReview();
+      this.#generation.review++;
       this.#editor.dispatch({ effects: this.#reviewEffect(next) });
     }
     this.#applyBaseline(changed);
@@ -170,6 +166,7 @@ export class DiffController {
   /** @param {import("lit").PropertyValues} changed */
   #applyBaseline(changed) {
     if (changed.has("baseline")) {
+      this.#generation.baseline++;
       this.#editor.dispatch({ effects: this.#baselineEffect(this.#host.baseline) });
     }
     if (changed.has("baseline") || changed.has("reviewBase")) {
@@ -313,6 +310,7 @@ export class DiffController {
   #sharedExtensions() {
     return [
       diffBase,
+      collapsedLines,
       changesGutter,
       keymap.of([
         { key: "F7", run: () => this.navigate(1) },
@@ -331,26 +329,32 @@ export class DiffController {
     if (text === null) return this.#baseline.reconfigure([]);
     const element = this.#elements.baseline;
     const expanded = element ? element.expanded : this.#fallbackExpanded;
-    return this.#baseline.reconfigure(baselineFeature(text, this.#configs.baseline, expanded));
+    return this.#baseline.reconfigure(
+      baselineFeature(text, this.#configs.baseline, expanded, this.#generation.baseline),
+    );
   }
 
   /** @param {string | null} text */
   #reviewEffect(text) {
     if (text === null) return this.#review.reconfigure([]);
     return this.#review.reconfigure(
-      reviewFeature(text, this.#configs.review, {
-        onDecision: (decision, count) => {
-          if (decision === "accepted") this.#accepted += count;
-          else this.#rejected += count;
+      reviewFeature(
+        text,
+        this.#configs.review,
+        {
+          onDecision: (decision, count) => {
+            if (decision === "accepted") this.#accepted += count;
+            else this.#rejected += count;
+          },
         },
-      }),
+        this.#generation.review,
+      ),
     );
   }
 
   /** A `<cdx-diff>` changed or came/went: rebuild presentation over the same data. The review is
    *  rebuilt from the base the merge view holds now, so accepted chunks stay accepted. */
   #reconfigure() {
-    const collapse = this.#configs.review.collapseUnchanged;
     for (const kind of /** @type {CdxDiffKind[]} */ (["review", "baseline"])) {
       this.#configs[kind] = this.#elements[kind]?.config ?? FALLBACK[kind];
     }
@@ -362,21 +366,10 @@ export class DiffController {
     } catch {
       // no merge view yet
     }
-    if (reviewBase !== null && !sameCollapse(collapse, this.#configs.review.collapseUnchanged)) {
-      this.#dropReview();
-    }
     this.#editor.dispatch({
       effects: [this.#reviewEffect(reviewBase), this.#baselineEffect(this.#host.baseline)],
     });
     this.#afterChange();
-  }
-
-  /** merge's collapsed ranges are a StateField built only when it's created and kept across a
-   *  reconfigure, so a new review base or new margin/minSize need the merge view dropped first. */
-  #dropReview() {
-    this.#rebuilding = true;
-    this.#editor.dispatch({ effects: this.#review.reconfigure([]) });
-    this.#rebuilding = false;
   }
 
   /** `reviewBase` set to what the merge view already holds — an echo of `cdx-review-base-change`.
@@ -395,7 +388,6 @@ export class DiffController {
   /** Re-renders the host's review bar and fires cdx-diff-change / cdx-review-complete when the
    *  numbers actually moved. */
   #afterChange() {
-    if (this.#rebuilding) return;
     const stats = this.stats;
     const key = JSON.stringify(stats);
     if (key === this.#statsKey) return;

@@ -80,8 +80,8 @@ export class CdxDiff extends ReactiveElement {
     /** @type {boolean} Review only: hides the bar above the text. */
     this.noReviewBar = false;
 
-    /** @type {CdxCollapseUnchanged | undefined} Review only: folds unchanged stretches into a
-     *  "N unchanged lines" bar that expands on click. */
+    /** @type {CdxCollapseUnchanged | undefined} Folds unchanged stretches into an
+     *  "N hidden lines" row that expands on click. */
     this.collapseUnchanged = undefined;
 
     /** @type {((chunk?: CdxChunkModel) => string | null | undefined) | undefined} Per chunk;

@@ -1,8 +1,16 @@
-import { StateEffect, StateField } from "@codemirror/state";
-import { Decoration, EditorView, gutter, GutterMarker, WidgetType } from "@codemirror/view";
+import { RangeSet, StateEffect, StateField } from "@codemirror/state";
+import {
+  BlockType,
+  Decoration,
+  EditorView,
+  gutter,
+  GutterMarker,
+  lineNumberMarkers,
+  ViewPlugin,
+  WidgetType,
+} from "@codemirror/view";
 
 import "../../components/comment-thread/comment-thread.js";
-import { gutterHover } from "../../core/gutter-hover.js";
 import { iconElement } from "../../core/icons.js";
 import { stickyGeometry } from "../diff/shared.js";
 import { canDeleteComment, canEditComment, canResolveThread, toneOf } from "./shared.js";
@@ -370,21 +378,87 @@ export function createCommentsField(api) {
 
 /** @typedef {ReturnType<typeof createCommentsField>} CommentsField */
 
-/** "+" shows on the hovered line, wherever the pointer is on it. */
-const addHover = gutterHover({
-  gutter: "cdx-comments-gutter",
-  className: "cdx-comments-gutter-hovered",
-  rangeAt: (_view, block) => [block.from, block.from],
+/** The start of the line under the pointer. A field, not a DOM class: gutter elements are reused
+ *  across lines, so a class toggled on them could stay behind on another line. */
+const hoverEffect = /** @type {import("@codemirror/state").StateEffectType<number | null>} */ (
+  StateEffect.define()
+);
+const hoverField = StateField.define({
+  create: () => /** @type {number | null} */ (null),
+  update(value, tr) {
+    for (const effect of tr.effects) if (effect.is(hoverEffect)) return effect.value;
+    return tr.docChanged ? null : value;
+  },
+});
+
+const hoverTracker = ViewPlugin.define((view) => {
+  /** @param {number | null} next */
+  const set = (next) => {
+    if (next !== view.state.field(hoverField)) view.dispatch({ effects: hoverEffect.of(next) });
+  };
+  /** @param {MouseEvent} event */
+  const move = (event) => {
+    const block = view.elementAtHeight(event.clientY - view.documentTop);
+    set(block.type === BlockType.Text ? block.from : null);
+  };
+  const leave = () => set(null);
+  view.dom.addEventListener("mousemove", move);
+  view.dom.addEventListener("mouseleave", leave);
+  return {
+    destroy() {
+      view.dom.removeEventListener("mousemove", move);
+      view.dom.removeEventListener("mouseleave", leave);
+    },
+  };
 });
 
 class AddMarker extends GutterMarker {
-  toDOM() {
+  /** @param {CommentsApi} api */
+  constructor(api) {
+    super();
+    this.api = api;
+  }
+
+  /** @param {GutterMarker} other */
+  eq(other) {
+    return other instanceof AddMarker;
+  }
+
+  /** @param {EditorView} view */
+  toDOM(view) {
     const add = document.createElement("span");
     add.className = "cdx-comment-add";
     add.setAttribute("part", "comment-add");
     add.append(iconElement("add"));
+    // before the line-number gutter's own handler, which would move the caret
+    add.addEventListener("mousedown", (event) => {
+      if (event.button !== 0) return;
+      event.preventDefault();
+      event.stopPropagation();
+      const from = view.state.field(hoverField);
+      if (from !== null) this.api.open(view, view.state.doc.lineAt(from).number);
+    });
     return add;
   }
+}
+
+/** Whether the hovered line can take a new thread: none there yet, and the host allows it.
+ * @param {import("@codemirror/state").EditorState} state @param {CommentsField} field
+ * @param {CommentsApi} api */
+function addableLine(state, field, api) {
+  const from = state.field(hoverField);
+  if (from === null || state.field(field).lines.has(from)) return null;
+  return api.canAdd(state.doc.lineAt(from).number) ? from : null;
+}
+
+/** "+" replaces the hovered line's number.
+ * @param {CommentsField} field @param {CommentsApi} api */
+function addInLineNumbers(field, api) {
+  const marker = new AddMarker(api);
+  return lineNumberMarkers.compute([hoverField, field], (state) => {
+    const from = addableLine(state, field, api);
+    return from === null ? RangeSet.empty : RangeSet.of(marker.range(from));
+  });
 }
 
 class ThreadMarker extends GutterMarker {
@@ -420,12 +494,11 @@ class ThreadMarker extends GutterMarker {
   }
 }
 
-const addMarker = new AddMarker();
-
-/** The 24dp column left of the change marks: "+" while its line is hovered, a marker where a
- *  thread lives.
+/** The 24dp column left of the change marks: a marker where a thread lives, and the "+" only when
+ *  there are no line numbers to put it on.
  * @param {CommentsField} field @param {CommentsApi} api */
 function commentsGutter(field, api) {
+  const addMarker = new AddMarker(api);
   /** @type {Map<string, ThreadMarker>} */
   const markers = new Map();
   /** @param {string} tone @param {boolean} collapsed */
@@ -451,21 +524,21 @@ function commentsGutter(field, api) {
         const collapsed = threads.every((model) => model.collapsed);
         return markerOf(open ? "comment" : "resolved", collapsed, threads.length);
       }
-      if (all.length) return null;
-      return api.canAdd(view.state.doc.lineAt(line.from).number) ? addMarker : null;
+      if (all.length || view.dom.querySelector(".cm-lineNumbers")) return null;
+      return addableLine(view.state, field, api) === line.from ? addMarker : null;
     },
-    lineMarkerChange: (update) => update.startState.field(field) !== update.state.field(field),
+    lineMarkerChange: (update) =>
+      update.startState.field(field) !== update.state.field(field) ||
+      update.startState.field(hoverField) !== update.state.field(hoverField),
     initialSpacer: () => addMarker,
     domEventHandlers: {
       mousedown(view, line, event) {
         if (/** @type {MouseEvent} */ (event).button !== 0) return false;
-        const { all, threads } = modelsAt(view.state, line.from);
+        const { threads } = modelsAt(view.state, line.from);
         if (threads.length) {
           // all collapsed → expand all; otherwise collapse the open ones
           const expand = threads.every((model) => model.collapsed);
           for (const model of threads) if (model.collapsed === expand) api.toggle(model.id);
-        } else if (!all.some((model) => model.draft)) {
-          api.open(view, view.state.doc.lineAt(line.from).number);
         } else return false;
         return true;
       },
@@ -475,5 +548,12 @@ function commentsGutter(field, api) {
 
 /** @param {CommentsField} field @param {CommentsApi} api */
 export function commentsExtension(field, api) {
-  return [field, addHover, stickyGeometry, commentsGutter(field, api)];
+  return [
+    field,
+    hoverField,
+    hoverTracker,
+    addInLineNumbers(field, api),
+    stickyGeometry,
+    commentsGutter(field, api),
+  ];
 }

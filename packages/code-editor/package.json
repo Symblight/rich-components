@@ -70,7 +70,7 @@
     "@codemirror/lang-markdown": "^6.5.2",
     "@codemirror/language-data": "^6.5.2",
     "@replit/codemirror-indentation-markers": "^6.5.3",
-    "@symblight/wc-material": "^0.4.1"
+    "@symblight/wc-material": "^0.5.0"
   },
   "devDependencies": {
     "@babel/core": "^7.29.7",

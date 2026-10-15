@@ -14,3 +14,5 @@ export { ChxAttachment } from "./components/attachment/attachment.js";
 export { ChxCodeBlock } from "./components/code-block/code-block.js";
 export { ChxStreamingIndicator } from "./components/streaming-indicator/streaming-indicator.js";
 export { ChxScrollToBottomAffordance } from "./components/scroll-to-bottom-affordance/scroll-to-bottom-affordance.js";
+export { ChxSuggestionList } from "./components/suggestion-list/suggestion-list.js";
+export { ChxSuggestion } from "./components/suggestion/suggestion.js";

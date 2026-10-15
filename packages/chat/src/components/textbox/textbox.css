@@ -1,5 +1,5 @@
 :host([disabled]) {
-  opacity: 0.5;
+  opacity: var(--chx-textbox-disabled-opacity);
   cursor: not-allowed;
 }
 
@@ -11,26 +11,35 @@
   --chx-textbox-foreground-color: var(--_chx-color-on-surface);
   --chx-textbox-placeholder-color: var(--_chx-color-on-surface-variant);
   --chx-textbox-shape: var(--_chx-shape-corner-extra-large);
-  --chx-textbox-padding: 0.5rem 1rem;
-  --chx-textbox-min-height: 64px;
+  --chx-textbox-padding: 0.375rem 0.75rem;
+  /* MD3 filled field height */
+  --chx-textbox-min-height: 56px;
   --chx-textbox-hover-color: var(--_chx-color-on-surface);
   --chx-textbox-dragging-color: var(--_chx-color-primary);
   --chx-textbox-action-size: 1.45rem;
   --chx-textbox-action-padding: 0.237rem;
-  --chx-textbox-slot-min-height: 48px;
+  --chx-textbox-slot-min-height: 40px;
+  /* text row ↔ controls row, once the field is two rows */
+  --chx-textbox-row-gap: 0.25rem;
   /* shared with chx-message's text, so what you type and what you sent read the same */
   --chx-textbox-font-size: var(--_chx-body-large-font-size);
   --chx-textbox-line-height: var(--_chx-body-large-line-height);
   --chx-textbox-hint-font-size: var(--_chx-body-medium-font-size);
-  --chx-textbox-content-padding: 10px 0.5rem;
+  --chx-textbox-content-padding: 8px 0.5rem;
   --chx-textbox-scrollbar-color: var(--_chx-color-outline);
+  --chx-textbox-outline-color: transparent;
+  --chx-textbox-outline-width: 1px;
+  --chx-textbox-focus-outline-color: transparent;
+  --chx-textbox-focus-outline-width: 2px;
+  /* MD3 disabled content */
+  --chx-textbox-disabled-opacity: 0.38;
 }
 
 /* MD3 density −2: 48dp pill, body-medium text, 32dp send; slotted icon buttons keep their 40dp target */
 :host([compact]) {
   --chx-textbox-padding: 0.25rem 0.5rem;
   --chx-textbox-min-height: 48px;
-  --chx-textbox-slot-min-height: 40px;
+  --chx-textbox-row-gap: 0;
   --chx-textbox-font-size: var(--_chx-body-medium-font-size);
   --chx-textbox-line-height: var(--_chx-body-medium-line-height);
   --chx-textbox-content-padding: 10px 0.375rem;
@@ -42,21 +51,28 @@
   position: relative;
   display: flex;
   flex-direction: column;
+  /* rows shorter than min-height (one-row 40px + padding < 56px) sit centered, not top-aligned */
+  justify-content: center;
   width: 100%;
   min-height: var(--chx-textbox-min-height);
   box-sizing: border-box;
   padding: var(--chx-textbox-padding);
   border-radius: var(--chx-textbox-shape);
   background-color: var(--chx-textbox-background-color);
-  transition: background-color 0.15s;
+  /* inset, so the 1→2px focus change never shifts layout */
+  box-shadow: inset 0 0 0 var(--chx-textbox-outline-width) var(--chx-textbox-outline-color);
+  transition:
+    background-color 0.15s,
+    box-shadow 0.15s;
 
-  &:hover {
+  &:hover:not(:has(.textbox__content:focus-within)) {
     background-color: color-mix(in oklch, var(--chx-textbox-hover-color), transparent 88%);
   }
 
-  &:has(.textbox__attachments ::slotted(*)) .textbox__content {
-    order: 1;
-    flex-basis: 100%;
+  /* the editor, not a slotted button, so tabbing through the controls row doesn't light the field */
+  &:has(.textbox__content:focus-within) {
+    box-shadow: inset 0 0 0 var(--chx-textbox-focus-outline-width)
+      var(--chx-textbox-focus-outline-color);
   }
 }
 
@@ -109,7 +125,7 @@
       auto
     )
     1fr auto;
-  row-gap: 0.5rem;
+  row-gap: var(--chx-textbox-row-gap);
 }
 
 .textbox__trailing {
@@ -123,6 +139,7 @@
 .textbox__leading {
   display: flex;
   align-items: center;
+  gap: 0.25rem;
   min-height: var(--chx-textbox-slot-min-height);
   grid-area: leading-actions;
 

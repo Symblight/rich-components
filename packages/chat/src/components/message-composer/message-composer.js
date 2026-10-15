@@ -1,5 +1,6 @@
 import { html, LitElement } from "lit";
 import { customElement } from "lit/decorators.js";
+import { classMap } from "lit/directives/class-map.js";
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 
 import "@symblight/wc-material/icon";
@@ -24,13 +25,32 @@ export class ChxMessageComposer extends LitElement {
     loading: { type: Boolean, reflect: true },
     disabled: { type: Boolean, reflect: true },
     compact: { type: Boolean, reflect: true },
+    layout: { type: String, reflect: true },
+    sendButton: { type: String, attribute: "send-button", reflect: true },
+    busyAction: { type: String, attribute: "busy-action", reflect: true },
     placeholder: { type: String },
     sendLabel: { type: String, attribute: "send-label" },
     stopLabel: { type: String, attribute: "stop-label" },
     dropHint: { type: String, attribute: "drop-hint" },
     dragging: { type: Boolean, reflect: true },
     messagesEmpty: { type: Boolean },
+    hasFooter: { state: true },
+    hasAttachments: { state: true },
   };
+
+  /** Inner chx-textbox parts, prefixed so they don't clash with the composer's own. */
+  static TEXTBOX_EXPORTPARTS = [
+    "box",
+    "row",
+    "content",
+    "leading",
+    "trailing",
+    "action",
+    "attachments",
+    "drop-hint",
+  ]
+    .map((name) => `${name}:textbox-${name}`)
+    .join(", ");
 
   constructor() {
     super();
@@ -62,6 +82,21 @@ export class ChxMessageComposer extends LitElement {
 
     /** @type {boolean} Pushed down by chx-chat — true while #internalMessages is empty. See #pushSuggestionListProperties. */
     this.messagesEmpty = true;
+
+    /** @type {"auto" | "stacked"} `stacked`: text on top, `leading`/`actions` always on a row below. */
+    this.layout = "auto";
+
+    /** @type {"auto" | "always"} `always`: an empty draft shows the action button disabled, not hidden. */
+    this.sendButton = "auto";
+
+    /** @type {"send" | "stop"} `stop`: while `loading` the button is always stop; Enter still sends. */
+    this.busyAction = "send";
+
+    /** @type {boolean} Something is slotted into `footer` — draws the surface around field and footer. */
+    this.hasFooter = false;
+
+    /** @type {boolean} Mirrors the slotted chx-attachments — an attachments-only draft enables send. */
+    this.hasAttachments = false;
   }
 
   /** @returns {import("lit").CSSResultGroup} */
@@ -73,6 +108,7 @@ export class ChxMessageComposer extends LitElement {
     super.connectedCallback();
     this.addEventListener("paste", this.#handlePasteFiles);
     this.addEventListener("chx-insert-chip", this.#handleInsertChip);
+    this.addEventListener("chx-attachments-change", this.#handleAttachmentsChange);
     this.#registerInput();
     this.#syncAttachmentsOwner();
   }
@@ -81,6 +117,7 @@ export class ChxMessageComposer extends LitElement {
     super.disconnectedCallback();
     this.removeEventListener("paste", this.#handlePasteFiles);
     this.removeEventListener("chx-insert-chip", this.#handleInsertChip);
+    this.removeEventListener("chx-attachments-change", this.#handleAttachmentsChange);
     this.#unregisterAll();
   }
 
@@ -345,6 +382,18 @@ export class ChxMessageComposer extends LitElement {
     this.#clearValue();
   }
 
+  /** @param {Event} event */
+  #handleAttachmentsChange = (event) => {
+    const { attachments } = /** @type {CustomEvent<{attachments: File[]}>} */ (event).detail;
+    this.hasAttachments = attachments.length > 0;
+  };
+
+  /** @param {Event} event */
+  #handleFooterSlotchange(event) {
+    const slot = /** @type {HTMLSlotElement} */ (event.target);
+    this.hasFooter = slot.assignedElements({ flatten: true }).length > 0;
+  }
+
   /** Resets the editor's document and any attached files. */
   #clearValue() {
     this.#textbox?.clear();
@@ -383,40 +432,56 @@ export class ChxMessageComposer extends LitElement {
         @chx-suggestion-select=${this.#handleSuggestionSelect}
       ></slot>
       <slot name="command-field" @slotchange=${this.#handleCommandFieldSlotchange}></slot>
-      <form class="message-composer__form" @submit=${this.#handleSend}>
-        <chx-textbox
-          name="message"
-          class="message-composer__field"
-          part="textbox"
-          .placeholder=${this.placeholder}
-          .sendLabel=${this.sendLabel}
-          .stopLabel=${this.stopLabel}
-          .dropHint=${this.dropHint}
-          .getTriggerFields=${this.#getTriggerFields}
-          .getExtensions=${this.#getExtensions}
-          ?loading=${this.loading}
-          ?disabled=${this.disabled}
-          ?dragging=${this.dragging}
-          ?compact=${this.compact}
-          @chx-textbox-change=${this.#handleTextboxChange}
-        >
-          <slot name="leading" slot="leading"></slot>
-          <slot
-            name="attachments"
-            slot="attachments"
-            @slotchange=${this.#handleAttachmentsSlotchange}
-          ></slot>
-          <!-- The default lives here, not in chx-textbox: a forwarding <slot> counts as assigned
+      <div
+        class=${classMap({
+          "message-composer__surface": true,
+          "message-composer__surface_footer": this.hasFooter,
+        })}
+        part="surface"
+      >
+        <form class="message-composer__form" @submit=${this.#handleSend}>
+          <chx-textbox
+            name="message"
+            class="message-composer__field"
+            part="textbox"
+            exportparts=${ChxMessageComposer.TEXTBOX_EXPORTPARTS}
+            .placeholder=${this.placeholder}
+            .sendLabel=${this.sendLabel}
+            .stopLabel=${this.stopLabel}
+            .dropHint=${this.dropHint}
+            .getTriggerFields=${this.#getTriggerFields}
+            .getExtensions=${this.#getExtensions}
+            ?loading=${this.loading}
+            ?disabled=${this.disabled}
+            ?dragging=${this.dragging}
+            ?compact=${this.compact}
+            .layout=${this.layout}
+            .sendButton=${this.sendButton}
+            .busyAction=${this.busyAction}
+            .hasAttachments=${this.hasAttachments}
+            @chx-textbox-change=${this.#handleTextboxChange}
+          >
+            <slot name="leading" slot="leading"></slot>
+            <slot
+              name="attachments"
+              slot="attachments"
+              @slotchange=${this.#handleAttachmentsSlotchange}
+            ></slot>
+            <!-- The default lives here, not in chx-textbox: a forwarding <slot> counts as assigned
                content, so the inner fallback would never render through it. -->
-          <slot name="stop" slot="stop"><md-icon>${unsafeSVG(stop)}</md-icon></slot>
+            <slot name="stop" slot="stop"><md-icon>${unsafeSVG(stop)}</md-icon></slot>
 
-          <div slot="trailing" class="message-composer__actions-wrapper">
-            <div class="message-composer__actions">
-              <slot name="actions"></slot>
+            <div slot="trailing" class="message-composer__actions-wrapper">
+              <div class="message-composer__actions">
+                <slot name="actions"></slot>
+              </div>
             </div>
-          </div>
-        </chx-textbox>
-      </form>
+          </chx-textbox>
+        </form>
+        <div class="message-composer__footer" part="footer">
+          <slot name="footer" @slotchange=${this.#handleFooterSlotchange}></slot>
+        </div>
+      </div>
     `;
   }
 }

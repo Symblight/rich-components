@@ -38,6 +38,10 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     loading: { type: Boolean, reflect: true, attribute: true },
     disabled: { type: Boolean, reflect: true, attribute: true },
     compact: { type: Boolean, reflect: true, attribute: true },
+    layout: { type: String, reflect: true },
+    sendButton: { type: String, attribute: "send-button" },
+    busyAction: { type: String, attribute: "busy-action" },
+    hasAttachments: { type: Boolean, attribute: false },
     sendLabel: { type: String, attribute: "send-label" },
     stopLabel: { type: String, attribute: "stop-label" },
     simplified: { state: true },
@@ -95,6 +99,18 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
 
     /** @type {boolean} Set by chx-message-composer — MD3 density −2 sizing, CSS-only. */
     this.compact = false;
+
+    /** @type {"auto" | "stacked"} Pushed down by chx-message-composer — `stacked` keeps the controls row under the text. */
+    this.layout = "auto";
+
+    /** @type {"auto" | "always"} Pushed down by chx-message-composer — `always` disables the action button instead of hiding it. */
+    this.sendButton = "auto";
+
+    /** @type {"send" | "stop"} Pushed down by chx-message-composer — `stop` keeps the button on stop for the whole turn. */
+    this.busyAction = "send";
+
+    /** @type {boolean} Pushed down by chx-message-composer — an attachments-only draft can be sent. */
+    this.hasAttachments = false;
 
     /** @type {String} Mirrors the editor's live value — drives the submit button's visibility. */
     this.value = "";
@@ -180,6 +196,8 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     if (changedProperties.has("disabled") && this.editor) {
       this.editor.setEditable(!this.disabled);
     }
+    // back to `auto`: `simplified` went stale while stacked
+    if (changedProperties.get("layout") === "stacked") this.#scheduleLayout();
   }
 
   /** FormControlMixin's formResetCallback hook. */
@@ -274,6 +292,7 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
 
   /** One-way: leaves the one-row layout once real content wraps; only an empty doc goes back. */
   #updateLayout() {
+    if (this.layout === "stacked") return;
     if (!this.editor || this.value === "") {
       this.simplified = true;
       return;
@@ -335,42 +354,49 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     this.dispatchEvent(new CustomEvent("chx-stop", { bubbles: true, composed: true }));
   };
 
-  /** The action button stops the turn only while the draft is empty — typed text turns it back into send. */
+  /** Under `busy-action="send"` typed text turns stop back into send; Enter still submits under `"stop"`. */
   get #stopping() {
-    return this.loading && !this.value.trim();
+    return this.loading && (this.busyAction === "stop" || !this.value.trim());
+  }
+
+  get #hasDraft() {
+    return this.value.trim() !== "" || this.hasAttachments;
   }
 
   render() {
     const stopping = this.#stopping;
+    const simplified = this.simplified && this.layout !== "stacked";
+    const showAction =
+      this.sendButton === "always" || this.loading || (this.value !== "" && !this.disabled);
     return html`
-            <div class=${classMap({ textbox: true, textbox_dragging: this.dragging })} part="box">
-                ${when(
+      <div class=${classMap({ textbox: true, textbox_dragging: this.dragging })} part="box">
+        ${when(
                   this.dragging,
                   () => html`
                     <div class="textbox__drop-hint" part="drop-hint">${this.dropHint}</div>
                   `,
                 )}
-                <div class="textbox__container">
-                    <div
-                            class=${classMap({
-                              textbox__row: !this.simplified,
-                              textbox__row_simplified: this.simplified,
+        <div class="textbox__container">
+          <div
+            class=${classMap({
+                              textbox__row: !simplified,
+                              textbox__row_simplified: simplified,
                             })}
-                            part="row"
-                    >
-                        <div class="textbox__box">
-                            <div class="textbox__content" part="content"></div>
-                        </div>
-                        <div class="textbox__attachments" part="attachments">
-                            <slot name="attachments"></slot>
-                        </div>
-                        <div class="textbox__leading" part="leading">
-                            <slot name="leading"></slot>
-                        </div>
-                        <div class="textbox__trailing" part="trailing">
-                            <slot name="trailing"></slot>
-                            ${when(
-                              this.loading || (this.value !== "" && !this.disabled),
+            part="row"
+          >
+            <div class="textbox__box">
+              <div class="textbox__content" part="content"></div>
+            </div>
+            <div class="textbox__attachments" part="attachments">
+              <slot name="attachments"></slot>
+            </div>
+            <div class="textbox__leading" part="leading">
+              <slot name="leading"></slot>
+            </div>
+            <div class="textbox__trailing" part="trailing">
+              <slot name="trailing"></slot>
+              ${when(
+                              showAction,
                               () => html`
                                 <md-icon-button
                                   class="textbox__submit"
@@ -379,6 +405,11 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
                                   .form=${this.closest("form")}
                                   variant=${stopping ? "tonal" : "filled"}
                                   ?selected=${!stopping}
+                                  ?disabled=${
+                                    this.sendButton === "always" &&
+                                    !stopping &&
+                                    (this.disabled || !this.#hasDraft)
+                                  }
                                   @click=${this.handleActionClick}
                                 >
                                   ${
@@ -397,11 +428,10 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
                                 </md-icon-button>
                               `,
                             )}
-                        </div>
-                    </div>
-                </div>
             </div>
-            </div>
-        `;
+          </div>
+        </div>
+      </div>
+    `;
   }
 }

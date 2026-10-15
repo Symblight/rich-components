@@ -9,12 +9,13 @@
   --_container: var(--cdx-comment-tone-comment-container);
   --_on-container: var(--cdx-comment-tone-comment-on-container);
 
+  --md-elevation-level: var(--cdx-comment-elevation);
+
+  position: relative;
   box-sizing: border-box;
   padding: 0.5rem 1rem 0.75rem var(--cdx-line-padding-inline);
   background-color: var(--cdx-comment-background-color);
-  box-shadow:
-    inset var(--cdx-comment-accent-width) 0 0 var(--_accent),
-    var(--cdx-comment-shadow);
+  box-shadow: inset var(--cdx-comment-accent-width) 0 0 var(--_accent);
   color: var(--_cdx-color-on-surface);
 }
 

@@ -47,8 +47,8 @@ importers:
         specifier: ^1.0.0
         version: 1.0.0
       '@symblight/wc-material':
-        specifier: ^0.4.1
-        version: 0.4.1(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)
+        specifier: ^0.5.0
+        version: 0.5.0(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)
       '@tanstack/lit-virtual':
         specifier: ^3.13.36
         version: 3.13.36(lit@3.3.3)
@@ -168,8 +168,8 @@ importers:
         specifier: ^6.5.3
         version: 6.5.3(@codemirror/language@6.12.4)(@codemirror/state@6.7.6)(@codemirror/view@6.43.13)
       '@symblight/wc-material':
-        specifier: ^0.4.1
-        version: 0.4.1(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)
+        specifier: ^0.5.0
+        version: 0.5.0(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)
     devDependencies:
       '@babel/core':
         specifier: ^7.29.7
@@ -286,8 +286,8 @@ importers:
         specifier: ^1.1.6
         version: 1.1.6
       '@symblight/wc-material':
-        specifier: ^0.4.1
-        version: 0.4.1(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)
+        specifier: ^0.5.0
+        version: 0.5.0(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)
       '@tanstack/lit-virtual':
         specifier: ^3.13.36
         version: 3.13.36(lit@3.3.3)
@@ -380,8 +380,8 @@ importers:
         specifier: ^1.1.6
         version: 1.1.6
       '@symblight/wc-material':
-        specifier: ^0.4.1
-        version: 0.4.1(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)
+        specifier: ^0.5.0
+        version: 0.5.0(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)
       '@tanstack/lit-virtual':
         specifier: ^3.13.36
         version: 3.13.36(lit@3.3.3)
@@ -1675,8 +1675,8 @@ packages:
     resolution: {integrity: sha512-YamBxiQkDYC8vusJRf8Ol2mDItPOLmWn/UdUCWmuvLoBM+EVMuJsGK/em3QjhlGsiLLCV5OH9zndR+TXMJGSPg==}
     hasBin: true
 
-  '@symblight/wc-material@0.4.1':
-    resolution: {integrity: sha512-N9MKS4Va7d20JidJsla7mHKKhHqHR3rlW98tyZj3gA6BzKzOWIODELnjJpeuIM7aC0/oLvq0KCr+FEcmjTWW+w==}
+  '@symblight/wc-material@0.5.0':
+    resolution: {integrity: sha512-cGbHxMfL45PPS/I+/kaTAT6JNfh84z1FCkYUMJhUWM0wrF6gZzhnsuUVPWv2l7vPG80DIGuKtz+OCt2RQSEFMw==}
     peerDependencies:
       '@open-wc/form-control': ^1.0.0
       '@open-wc/form-helpers': ^1.0.0
@@ -5316,7 +5316,7 @@ snapshots:
       '@material/material-color-utilities': 0.3.0
       culori: 4.0.2
 
-  '@symblight/wc-material@0.4.1(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)':
+  '@symblight/wc-material@0.5.0(@open-wc/form-control@1.0.0)(@open-wc/form-helpers@1.0.0)(lit@3.3.3)(rollup@4.62.4)':
     dependencies:
       '@floating-ui/dom': 1.8.0
       '@lit-labs/observers': 2.1.0

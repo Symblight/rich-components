@@ -5,11 +5,14 @@ import { ref } from "lit/directives/ref.js";
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 
 import plus from "@material-design-icons/svg/outlined/add.svg?raw";
+import computerIcon from "@material-design-icons/svg/outlined/computer.svg?raw";
+import branchIcon from "@material-design-icons/svg/outlined/fork_right.svg?raw";
 import "@symblight/wc-material/button";
 import "@symblight/wc-material/icon";
 import "@symblight/wc-material/icon-button";
 import "@symblight/wc-material/avatar";
 import "@symblight/wc-material/skeleton";
+import "@symblight/wc-material/menu";
 
 import "../index.js";
 import "../components/typing-indicator/typing-indicator.js";
@@ -783,6 +786,95 @@ export const ComposerOnly = {
     <chx-chat .compact=${args.compact}>
       <chx-message-composer slot="message-composer" placeholder="Write your prompt...">
         <md-button slot="actions" variant="text">Opus 4.8</md-button>
+      </chx-message-composer>
+    </chx-chat>
+  `,
+};
+
+const composerFooterStyles = html`
+  <style>
+    .composer-footer-story {
+      --chx-message-composer-background: var(--md-sys-color-surface-container-high);
+    }
+    .composer-footer-story::part(textbox) {
+      --chx-textbox-background-color: var(--md-sys-color-surface-container-lowest);
+      --chx-textbox-outline-color: var(--md-sys-color-outline-variant);
+      --chx-textbox-focus-outline-color: var(--md-sys-color-primary);
+    }
+    .composer-footer-story__tray {
+      display: flex;
+      gap: 0.25rem;
+    }
+  </style>
+`;
+
+/**
+ * The `footer` slot holds an app-owned tray under the field (here: where the agent runs and on which
+ * branch). Once it has content the composer draws one surface around field and tray —
+ * `--chx-message-composer-background` — and the field gets an outline through the `textbox` part.
+ * `layout="stacked"` keeps the controls on their own row, `send-button="always"` keeps the send button
+ * in place (disabled while empty), and `busy-action="stop"` keeps it on stop for the whole reply.
+ */
+/** @type {Story} */
+export const ComposerFooter = {
+  args: {
+    compact: false,
+    layout: "stacked",
+    sendButton: "always",
+    busyAction: "stop",
+    footer: true,
+  },
+  argTypes: {
+    compact: { name: "Compact mode", control: "boolean" },
+    layout: { control: "inline-radio", options: ["auto", "stacked"] },
+    sendButton: { name: "send-button", control: "inline-radio", options: ["auto", "always"] },
+    busyAction: { name: "busy-action", control: "inline-radio", options: ["send", "stop"] },
+    footer: { name: "Footer content", control: "boolean" },
+  },
+  render: (args) => html`
+    ${composerFooterStyles}
+    <chx-chat .compact=${args.compact} .adapter=${createReplyAdapter({ delayMs: 2500 })}>
+      <chx-message-list slot="message-list">
+        <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
+      </chx-message-list>
+      <chx-message-composer
+        slot="message-composer"
+        class="composer-footer-story"
+        placeholder="Describe a task, @ to mention, / for commands"
+        layout=${args.layout}
+        send-button=${args.sendButton}
+        busy-action=${args.busyAction}
+      >
+        <md-icon-button slot="leading" aria-label="Attach">
+          <md-icon>${unsafeSVG(plus)}</md-icon>
+        </md-icon-button>
+        <md-button slot="leading" variant="text">Codex · GPT 5.6</md-button>
+        <md-button slot="actions" variant="text">Agent</md-button>
+        ${
+          args.footer
+            ? html`
+                <div slot="footer" class="composer-footer-story__tray">
+                  <md-button id="composer-footer-env" variant="text">
+                    <md-icon slot="icon">${unsafeSVG(computerIcon)}</md-icon>
+                    Local
+                  </md-button>
+                  <md-menu for="composer-footer-env" placement="bottom-start">
+                    <md-menu-item value="local" selected>Local</md-menu-item>
+                    <md-menu-item value="worktree">Worktree</md-menu-item>
+                    <md-menu-item value="docker">Docker</md-menu-item>
+                  </md-menu>
+                  <md-button id="composer-footer-branch" variant="text">
+                    <md-icon slot="icon">${unsafeSVG(branchIcon)}</md-icon>
+                    main
+                  </md-button>
+                  <md-menu for="composer-footer-branch" placement="bottom-start">
+                    <md-menu-item value="main" selected>main</md-menu-item>
+                    <md-menu-item value="develop">develop</md-menu-item>
+                  </md-menu>
+                </div>
+              `
+            : ""
+        }
       </chx-message-composer>
     </chx-chat>
   `,

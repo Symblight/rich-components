@@ -67,7 +67,7 @@
     "@lit-labs/observers": "^2.1.0",
     "@lit/context": "^1.1.6",
     "@open-wc/form-control": "^1.0.0",
-    "@symblight/wc-material": "^0.4.1",
+    "@symblight/wc-material": "^0.5.0",
     "@tanstack/lit-virtual": "^3.13.36",
     "prosemirror-commands": "^1.7.2",
     "prosemirror-history": "^1.4.1",

@@ -113,6 +113,78 @@ resolves `null` on abort for exactly this). Without that the agent keeps running
 listening, while the UI already reads `cancelled`. Closing the stream with an explicit
 `{kind: "abort"}` chunk is cleaner than letting the read throw.
 
+## Composer for agent controls
+
+The package doesn't ship model, mode or context controls. The app builds them (with ACP's
+`configOptions`, `usage_update`, …) and slots them in. `chx-message-composer` provides the layout:
+
+```html
+<chx-message-composer
+  slot="message-composer"
+  layout="stacked"
+  send-button="always"
+  busy-action="stop"
+>
+  <md-icon-button slot="leading" aria-label="Attach">…</md-icon-button>
+  <my-model-picker slot="leading"></my-model-picker>
+  <my-mode-chip slot="actions"></my-mode-chip>
+  <my-context-ring slot="actions"></my-context-ring>
+  <div slot="footer">…Local ▾ · main ▾…</div>
+</chx-message-composer>
+```
+
+| Attribute     | Values                        | Effect                                                                                                                                                                                                        |
+| ------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `layout`      | `auto` (default) \| `stacked` | `stacked`: text always on top, `leading` (start) and `actions` (end) always on a row below. `auto` stays on one row until the text wraps.                                                                     |
+| `send-button` | `auto` (default) \| `always`  | `always`: an empty draft shows the action button disabled instead of hiding it, so controls next to it don't move on the first keystroke. A draft with attachments only counts as non-empty.                  |
+| `busy-action` | `send` (default) \| `stop`    | `stop`: while `loading`, the button stays Stop even with text in the draft. Enter still fires the cancelable `chx-send-message`, so the app queues the message or calls `preventDefault()` to keep the draft. |
+
+**`footer` slot.** Content slotted here goes under the field. Once the slot has content, the
+composer draws a surface around field and footer:
+
+| Token                                      | Default                                |
+| ------------------------------------------ | -------------------------------------- |
+| `--chx-message-composer-background`        | `transparent`                          |
+| `--chx-message-composer-shape`             | `var(--_chx-shape-corner-extra-large)` |
+| `--chx-message-composer-footer-padding`    | `0.125rem 0.75rem`                     |
+| `--chx-message-composer-footer-min-height` | `40px`                                 |
+
+With nothing slotted, nothing changes: no surface and no footer row.
+
+**Field outline.** `chx-textbox` draws its outline as an inset `box-shadow`, so it causes no layout
+shift. The focus ring appears only while the editor has focus, not while focus is on a control in
+the controls row. While the editor is focused, the hover tint is off.
+
+| Token                               | Default                                                      |
+| ----------------------------------- | ------------------------------------------------------------ |
+| `--chx-textbox-outline-color`       | `transparent`                                                |
+| `--chx-textbox-outline-width`       | `1px`                                                        |
+| `--chx-textbox-focus-outline-color` | `transparent`                                                |
+| `--chx-textbox-focus-outline-width` | `2px`                                                        |
+| `--chx-textbox-disabled-opacity`    | `0.38` (MD3)                                                 |
+| `--chx-textbox-row-gap`             | `0.25rem` (`0` compact) — between the text and controls rows |
+
+```css
+chx-message-composer {
+  --chx-message-composer-background: var(--md-sys-color-surface-container-high);
+}
+chx-message-composer::part(textbox) {
+  --chx-textbox-background-color: var(--md-sys-color-surface-container-lowest);
+  --chx-textbox-outline-color: var(--md-sys-color-outline-variant);
+  --chx-textbox-focus-outline-color: var(--md-sys-color-primary);
+}
+```
+
+**Parts.** On top of its own `surface`, `textbox` and `footer` parts, the composer re-exports the
+parts of its inner `chx-textbox` with a `textbox-` prefix: `textbox-box`, `textbox-row`,
+`textbox-content`, `textbox-leading`, `textbox-trailing`, `textbox-action` (the send/stop button),
+`textbox-attachments`, `textbox-drop-hint`.
+
+**Narrow composer.** The composer's `<form>` is an inline-size query container named
+`chx-message-composer`. Slotted controls can condense with `@container (width < 28rem)` in their own
+styles. Use an unnamed query: whether a named query matches a container from another shadow tree has
+not been checked in WebKit.
+
 ## Row layout and density
 
 `chx-thought`, `chx-plan` and `chx-tool-call` share one row shape (`agent-row.css`): no card, no

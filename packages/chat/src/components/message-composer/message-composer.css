@@ -4,6 +4,10 @@
   box-sizing: border-box;
   --chx-message-composer-gap: 0.5rem;
   --chx-message-composer-actions-min-height: 2.5rem;
+  --chx-message-composer-background: transparent;
+  --chx-message-composer-shape: var(--_chx-shape-corner-extra-large);
+  --chx-message-composer-footer-padding: 0.125rem 0.75rem;
+  --chx-message-composer-footer-min-height: 40px;
   max-width: 60rem;
   width: 100%;
 }
@@ -17,7 +21,32 @@
   margin-block-end: var(--chx-message-composer-gap);
 }
 
+.message-composer__surface {
+  display: flex;
+  flex-direction: column;
+}
+
+.message-composer__surface_footer {
+  border-radius: var(--chx-message-composer-shape);
+  background-color: var(--chx-message-composer-background);
+}
+
+.message-composer__footer {
+  display: none;
+  align-items: center;
+  box-sizing: border-box;
+  min-height: var(--chx-message-composer-footer-min-height);
+  padding: var(--chx-message-composer-footer-padding);
+  gap: var(--chx-message-composer-gap);
+
+  .message-composer__surface_footer & {
+    display: flex;
+  }
+}
+
 .message-composer__form {
+  /* slotted agent controls (chx-model-picker, …) condense against this width */
+  container: chx-message-composer / inline-size;
   display: flex;
   width: 100%;
   gap: var(--chx-message-composer-gap);

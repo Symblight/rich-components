@@ -5,7 +5,7 @@
   --cdx-comment-background-color: var(--_cdx-color-surface-container-low);
   --cdx-comment-accent-width: 3px;
   --cdx-comment-max-width: 35rem;
-  --cdx-comment-shadow: var(--cdx-tooltip-shadow);
+  --cdx-comment-elevation: 2;
   --cdx-comment-row-gap: 0.25rem;
   /* the field's label (its placeholder) and typed text — the size of a comment's body */
   --cdx-comment-field-font-size: 0.8125rem;

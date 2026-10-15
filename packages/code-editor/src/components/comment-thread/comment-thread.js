@@ -1,5 +1,6 @@
 import { html, LitElement, nothing } from "lit";
 import { customElement } from "lit/decorators.js";
+import "@symblight/wc-material/shadow";
 
 import "../comment-field/comment-field.js";
 import "../comment-item/comment-item.js";
@@ -202,6 +203,7 @@ export class CdxCommentThread extends LitElement {
         role="group"
         aria-label="Comment thread on line ${model.line}"
       >
+        <md-shadow></md-shadow>
         <div class="thread__in">
           ${this.#renderBar(model)}
           ${

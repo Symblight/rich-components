@@ -41,8 +41,6 @@ export class PlainListController {
   #mutationObserver = null;
   /** @type {ResizeObserver | null} */
   #resizeObserver = null;
-  /** @type {number | null} */
-  #scrollFrame = null;
   #disposed = false;
 
   /** @param {PlainListConfig} config */
@@ -101,7 +99,6 @@ export class PlainListController {
     this.#mutationObserver = null;
     this.#resizeObserver?.disconnect();
     this.#resizeObserver = null;
-    this.#cancelScrollFrame();
   }
 
   releaseRows() {
@@ -111,11 +108,8 @@ export class PlainListController {
   /** Call synchronously from the scroll handler, so a stale `atBottom` can't yank the view mid-gesture. */
   handleScroll = () => {
     this.#updateAtBottom();
-    if (this.#scrollFrame !== null) return;
-    this.#scrollFrame = requestAnimationFrame(() => {
-      this.#scrollFrame = null;
-      this.captureAnchor();
-    });
+    // now, not next frame: a mutation in between would restore the pre-scroll anchor
+    this.captureAnchor();
   };
 
   /** `"auto"` also re-engages the bottom pin synchronously. @param {Behavior} [behavior] */
@@ -246,9 +240,6 @@ export class PlainListController {
   /** Waits for row readiness instead of reconciling inline, against the pre-mutation anchor. */
   #handleMutation = () => {
     if (this.#disposed) return;
-    // a capture queued by an in-flight scroll would land after the prepend and re-baseline onto the
-    // shifted layout, zeroing the restore delta — drop it; #reconcile() re-captures
-    this.#cancelScrollFrame();
     this.#measurer.schedule();
   };
 
@@ -261,7 +252,8 @@ export class PlainListController {
   /** Hold the bottom or the reading position, then re-baseline. */
   #reconcile() {
     this.#config.beforeReconcile?.();
-    // a smooth pin scroll in flight: restoring a mid-animation anchor would cancel it
+    // a landing pin keeps its own position; restoring an anchor would cancel a smooth pin scroll
+    //   mid-animation, or keep the row above the pin still while it's measured
     if (this.#config.getHold?.()) {
       this.#updateAtBottom();
       this.#config.onReconciled?.();
@@ -286,12 +278,6 @@ export class PlainListController {
     }
     if (align === "end") return rowRect.bottom - viewportRect.bottom;
     return rowRect.top - viewportRect.top;
-  }
-
-  #cancelScrollFrame() {
-    if (this.#scrollFrame === null) return;
-    cancelAnimationFrame(this.#scrollFrame);
-    this.#scrollFrame = null;
   }
 
   /** @param {number} index @returns {HTMLElement | undefined} */

@@ -41,6 +41,8 @@ export class PlainListController {
   #mutationObserver = null;
   /** @type {ResizeObserver | null} */
   #resizeObserver = null;
+  /** @type {number | null} */
+  #scrollFrame = null;
   #disposed = false;
 
   /** @param {PlainListConfig} config */
@@ -99,6 +101,7 @@ export class PlainListController {
     this.#mutationObserver = null;
     this.#resizeObserver?.disconnect();
     this.#resizeObserver = null;
+    this.#cancelScrollFrame();
   }
 
   releaseRows() {
@@ -108,8 +111,11 @@ export class PlainListController {
   /** Call synchronously from the scroll handler, so a stale `atBottom` can't yank the view mid-gesture. */
   handleScroll = () => {
     this.#updateAtBottom();
-    // now, not next frame: a mutation in between would restore the pre-scroll anchor
-    this.captureAnchor();
+    if (this.#scrollFrame !== null) return;
+    this.#scrollFrame = requestAnimationFrame(() => {
+      this.#scrollFrame = null;
+      this.captureAnchor();
+    });
   };
 
   /** `"auto"` also re-engages the bottom pin synchronously. @param {Behavior} [behavior] */
@@ -240,6 +246,9 @@ export class PlainListController {
   /** Waits for row readiness instead of reconciling inline, against the pre-mutation anchor. */
   #handleMutation = () => {
     if (this.#disposed) return;
+    // a capture queued by an in-flight scroll would land after the prepend and re-baseline onto the
+    // shifted layout, zeroing the restore delta — drop it; #reconcile() re-captures
+    this.#cancelScrollFrame();
     this.#measurer.schedule();
   };
 
@@ -277,6 +286,12 @@ export class PlainListController {
     }
     if (align === "end") return rowRect.bottom - viewportRect.bottom;
     return rowRect.top - viewportRect.top;
+  }
+
+  #cancelScrollFrame() {
+    if (this.#scrollFrame === null) return;
+    cancelAnimationFrame(this.#scrollFrame);
+    this.#scrollFrame = null;
   }
 
   /** @param {number} index @returns {HTMLElement | undefined} */

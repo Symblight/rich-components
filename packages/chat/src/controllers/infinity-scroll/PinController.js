@@ -121,7 +121,8 @@ export class PinController {
     if (!this.#config.getEnabled() || this.#pinning) return;
 
     const atVeryBottom = distanceToBottom(el) <= FOLLOW_THRESHOLD;
-    if (scrolledUp) this.#setFollowing(false);
+    // still at the bottom, it's no scroll away: rows above shrinking (a wider column) move scrollTop up
+    if (scrolledUp && !atVeryBottom) this.#setFollowing(false);
     else if (atVeryBottom && !this.#suppressResume) this.#setFollowing(true);
   }
 

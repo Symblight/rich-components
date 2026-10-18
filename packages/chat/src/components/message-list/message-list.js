@@ -20,7 +20,7 @@ import { groupAt } from "./group.js";
 import { PartRenderer } from "./PartRenderer.js";
 import { StatusController } from "../../controllers/message-list/StatusController.js";
 import { StickyController } from "../../controllers/message-list/StickyController.js";
-import { CONNECT_REGISTRY, NOTE_SEND } from "../../api/keys.js";
+import { CONNECT_REGISTRY } from "../../api/keys.js";
 import { indexById } from "../../utils/messages.js";
 import { pollFrames } from "../../utils/dom.js";
 import tokens from "../../styles/tokens.css?inline";
@@ -231,8 +231,6 @@ export class ChxMessageList extends LitElement {
     groupAt(this.messages, index, (message, i) => this.#dividerController.shouldShow(message, i));
   /** @type {import("../../context/chat-api-context.js").ChatApiRegistry | undefined} */
   #registry; // pushed by chx-chat, see [CONNECT_REGISTRY]
-  /** @type {string | undefined} */
-  #sentId; // see [NOTE_SEND]
   /** @type {(() => void) | undefined} */
   #unregisterViewport;
 
@@ -395,12 +393,6 @@ export class ChxMessageList extends LitElement {
     this.#unregisterViewport = undefined;
     this.#registry = registry;
     this.#registerViewport();
-  }
-
-  /** Internal: chx-chat names the message it's about to add for a send or `store.add()`; only the
-   *  next `messages` change can use it. @param {string} id */
-  [NOTE_SEND](id) {
-    this.#sentId = id;
   }
 
   #registerViewport() {
@@ -639,19 +631,14 @@ export class ChxMessageList extends LitElement {
   }
 
   /**
-   * `scroll-mode="pin-top"`: a send is an own message appended at the tail that chx-chat named through
-   * `[NOTE_SEND]` (a send or `store.add()`, not the adapter's history) — any own append, for a list used
-   * without chx-chat. Runs before
+   * `scroll-mode="pin-top"`: a send is an own message appended at the tail. Runs before
    * chx-infinity-scroll receives the new `messages`, which `pinToStart()` requires.
    * @param {ChxMessage[] | undefined} previous
    */
   #pinSentMessage(previous) {
-    const sentId = this.#sentId;
-    this.#sentId = undefined;
     if (this.scrollMode !== "pin-top" || !previous) return;
     const last = this.messages.at(-1);
     if (!last?.own || !this.#isAppendTo(previous)) return;
-    if (this.#registry && last.id !== sentId) return;
     if (this.#infinityScrollElement) this.#infinityScrollElement.pinToStart(last.id);
     else this.#pendingPinId = last.id;
   }

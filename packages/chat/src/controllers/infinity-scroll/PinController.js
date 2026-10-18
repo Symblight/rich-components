@@ -2,14 +2,8 @@ import { distanceToBottom } from "../../utils/dom.js";
 
 /** px from the true bottom that counts as "the very bottom" for resuming the follow. */
 const FOLLOW_THRESHOLD = 8;
-/** a smooth scroll counts as done after this long with no `scroll` event (no `scrollend` before Safari 26) */
+/** without `scrollend` (Safari < 26) a smooth scroll counts as done after this long with no `scroll` event */
 const SCROLL_IDLE_MS = 150;
-/** …or this long before its first one: WebKit can drop a smooth scroll without any event at all */
-const SCROLL_START_MS = 500;
-/** after landing, the pin is re-checked every frame until it held this many frames in a row… */
-const SETTLE_FRAMES = 5;
-/** …or this long passed — a timer, since frames can stall (a hidden window runs none) */
-const SETTLE_MS = 500;
 const SCROLLEND_SUPPORTED = typeof window !== "undefined" && "onscrollend" in window;
 const GESTURES = /** @type {const} */ (["wheel", "touchstart", "keydown", "pointerdown"]);
 const PINNED_CLASS = "infinity-scroll__content_pinned";
@@ -28,12 +22,9 @@ const PINNED_CLASS = "infinity-scroll__content_pinned";
  */
 
 /**
- * `scroll-mode="pin-top"`: scrolls a sent item to the top and reserves the space below it in CSS
- * (`PINNED_CLASS` + `--_chx-pin-offset`), so layout never clamps the scroll. Once the scroll ends it
- * settles: a few frames of re-checking that put the item back if the scroll stopped short, never
- * moved, or rows above it were measured since. A user gesture or `release()` ends that early; after
- * it, nothing moves the view. Also owns whether the list follows new content: off after a pin or
- * any upward scroll, back on at the very bottom.
+ * `scroll-mode="pin-top"`: scrolls a sent item to the top once and reserves the space below it in
+ * CSS (`PINNED_CLASS` + `--_chx-pin-offset`), so layout never clamps the scroll. Also owns whether
+ * the list follows new content: off after a pin or any upward scroll, back on at the very bottom.
  */
 export class PinController {
   /** @type {PinConfig} */
@@ -50,11 +41,6 @@ export class PinController {
   #suppressResume = false;
   /** a smooth pin scroll is in flight */
   #pinning = false;
-  /** @type {number | null} */
-  #settleFrame = null;
-  /** @type {ReturnType<typeof setTimeout> | undefined} */
-  #settleTimer;
-  #settledFrames = 0;
   /** @type {ReturnType<typeof setTimeout> | undefined} */
   #pinningTimer;
   #lastScrollTop = 0;
@@ -71,16 +57,15 @@ export class PinController {
     return !this.#config.getEnabled() || this.#following;
   }
 
-  /** The pin scroll or its settle is under way, so anchor restoration must leave the view alone. */
-  get landing() {
-    return this.#pinning || this.#settleFrame !== null;
+  /** A smooth pin scroll is still running, so anchor restoration must not interrupt it. */
+  get pinning() {
+    return this.#pinning;
   }
 
   /** Call before the data carrying `key` lands, so the follow is off when the append is seen.
    *  @param {string | number} key */
   pin(key) {
     if (!this.#config.getEnabled()) return;
-    this.#stopLanding();
     this.#pendingKey = key;
     this.#suppressResume = true;
     this.#setFollowing(false);
@@ -88,14 +73,9 @@ export class PinController {
 
   /** An explicit jump to the bottom is a request to follow again. */
   noteScrollToBottom() {
-    this.#stopLanding();
+    this.#endPinning();
     this.#suppressResume = false;
     this.#setFollowing(true);
-  }
-
-  /** The app scrolled somewhere on purpose, so a landing pin must not pull the view back. */
-  release() {
-    this.#stopLanding();
   }
 
   /** Re-reads the pinned row's offset (it moves when older rows are prepended), or drops the pin
@@ -137,7 +117,7 @@ export class PinController {
     const top = el.scrollTop;
     const scrolledUp = top < this.#lastScrollTop - 0.5;
     this.#lastScrollTop = top;
-    if (this.#pinning) this.#restartPinningTimer(SCROLL_IDLE_MS);
+    if (this.#pinning && !SCROLLEND_SUPPORTED) this.#restartPinningTimer();
     if (!this.#config.getEnabled() || this.#pinning) return;
 
     const atVeryBottom = distanceToBottom(el) <= FOLLOW_THRESHOLD;
@@ -146,11 +126,11 @@ export class PinController {
   }
 
   dispose() {
-    this.#stopLanding();
+    clearTimeout(this.#pinningTimer);
     const el = this.#attachedTo;
     if (!el) return;
     for (const type of GESTURES) el.removeEventListener(type, this.#onGesture);
-    el.removeEventListener("scrollend", this.#onPinScrollEnd);
+    el.removeEventListener("scrollend", this.#endPinning);
     this.#attachedTo = undefined;
   }
 
@@ -159,16 +139,13 @@ export class PinController {
     const el = this.#config.getScrollElement();
     if (!el) return;
     const behavior = this.#config.getScrollBehavior();
-    const smooth = behavior === "smooth" && Math.abs(el.scrollTop - offset) > 1;
-    if (smooth) {
+    if (behavior === "smooth" && Math.abs(el.scrollTop - offset) > 1) {
       this.#pinning = true;
-      if (SCROLLEND_SUPPORTED)
-        el.addEventListener("scrollend", this.#onPinScrollEnd, { once: true });
-      this.#restartPinningTimer(SCROLL_START_MS);
+      if (SCROLLEND_SUPPORTED) el.addEventListener("scrollend", this.#endPinning, { once: true });
+      else this.#restartPinningTimer();
     }
     this.#config.scrollTo(offset, behavior);
     this.#lastScrollTop = el.scrollTop;
-    if (!smooth) this.#settle();
   }
 
   /** @param {number} offset */
@@ -184,7 +161,7 @@ export class PinController {
     this.#pendingKey = undefined;
     this.#pinnedKey = undefined;
     this.#offset = undefined;
-    this.#stopLanding();
+    this.#endPinning();
     this.#suppressResume = false;
     const content = this.#config.getContentElement();
     content?.classList.remove(PINNED_CLASS);
@@ -199,70 +176,20 @@ export class PinController {
     if (this.following !== before) this.#config.onFollowChange(this.following);
   }
 
-  /** @param {number} ms */
-  #restartPinningTimer(ms) {
+  #restartPinningTimer() {
     clearTimeout(this.#pinningTimer);
-    this.#pinningTimer = setTimeout(this.#onPinScrollEnd, ms);
+    this.#pinningTimer = setTimeout(this.#endPinning, SCROLL_IDLE_MS);
   }
 
-  #endPinning() {
+  #endPinning = () => {
     this.#pinning = false;
     clearTimeout(this.#pinningTimer);
     this.#pinningTimer = undefined;
-    this.#attachedTo?.removeEventListener("scrollend", this.#onPinScrollEnd);
-  }
-
-  /** ended, stopped short or never started — the settle tells them apart */
-  #onPinScrollEnd = () => {
-    this.#endPinning();
-    this.#settle();
   };
-
-  #settle() {
-    this.#cancelSettle();
-    this.#settledFrames = 0;
-    this.#settleFrame = requestAnimationFrame(this.#settleTick);
-    this.#settleTimer = setTimeout(() => this.#cancelSettle(), SETTLE_MS);
-  }
-
-  #settleTick = () => {
-    this.#settleFrame = null;
-    this.refresh();
-    const el = this.#config.getScrollElement();
-    if (!el || this.#pinnedKey === undefined || this.#offset === undefined) {
-      this.#cancelSettle();
-      return;
-    }
-    if (Math.abs(el.scrollTop - this.#offset) > 1) {
-      this.#config.scrollTo(this.#offset, "auto");
-      this.#lastScrollTop = el.scrollTop;
-      this.#settledFrames = 0;
-    } else {
-      this.#settledFrames += 1;
-    }
-    if (this.#settledFrames >= SETTLE_FRAMES) {
-      this.#cancelSettle();
-      return;
-    }
-    this.#settleFrame = requestAnimationFrame(this.#settleTick);
-  };
-
-  #cancelSettle() {
-    clearTimeout(this.#settleTimer);
-    this.#settleTimer = undefined;
-    if (this.#settleFrame === null) return;
-    cancelAnimationFrame(this.#settleFrame);
-    this.#settleFrame = null;
-  }
-
-  #stopLanding() {
-    this.#cancelSettle();
-    this.#endPinning();
-  }
 
   #onGesture = () => {
     this.#suppressResume = false;
-    this.#stopLanding();
+    this.#endPinning();
   };
 
   #attach() {

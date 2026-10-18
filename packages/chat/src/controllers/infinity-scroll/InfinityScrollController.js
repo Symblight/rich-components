@@ -146,7 +146,7 @@ export class InfinityScrollController {
       // the only maybeLoad() check in this mode — scrollTop is post-correction here, unlike in hostUpdated
       onReconciled: () => this.#loader.maybeLoad(),
       getFollowing: () => this.#pin.following,
-      getHold: () => this.#pin.landing,
+      getHold: () => this.#pin.pinning,
       beforeReconcile: () => this.#pin.refresh(),
     });
 
@@ -371,17 +371,11 @@ export class InfinityScrollController {
     this.#pin.noteScrollToBottom();
   }
 
-  /** The app scrolled somewhere on purpose, so a landing pin mustn't pull the view back. */
-  releasePin() {
-    this.#pin.release();
-  }
-
   /**
    * @param {number} index
    * @param {{align?: "auto" | "start" | "center" | "end", behavior?: "auto" | "smooth" | "instant"}} [options]
    */
   scrollToIndex(index, options) {
-    this.#pin.release();
     if (this.#noVirtualization) {
       this.#plainList.scrollToIndex(index, options);
       return;

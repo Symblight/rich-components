@@ -252,8 +252,7 @@ export class PlainListController {
   /** Hold the bottom or the reading position, then re-baseline. */
   #reconcile() {
     this.#config.beforeReconcile?.();
-    // a landing pin keeps its own position; restoring an anchor would cancel a smooth pin scroll
-    //   mid-animation, or keep the row above the pin still while it's measured
+    // a smooth pin scroll in flight: restoring a mid-animation anchor would cancel it
     if (this.#config.getHold?.()) {
       this.#updateAtBottom();
       this.#config.onReconciled?.();

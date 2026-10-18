@@ -18,7 +18,7 @@ import { RealtimeSyncController } from "../../controllers/chat/RealtimeSyncContr
 import { DEFAULT_CONVERSATION_ID } from "../../constants.js";
 import { ApiRegistry } from "../../api/ApiRegistry.js";
 import { CHAT_API_DEFAULTS } from "../../api/chat-api-defaults.js";
-import { CONNECT_REGISTRY } from "../../api/keys.js";
+import { CONNECT_REGISTRY, NOTE_SEND } from "../../api/keys.js";
 import { chatApiContext } from "../../context/chat-api-context.js";
 
 import tokens from "../../styles/tokens.css?inline";
@@ -444,6 +444,7 @@ export class ChxChat extends LitElement {
       conversationId: this.activeConversationId,
       ...message,
     });
+    this.#list?.[NOTE_SEND]?.(resolved.id);
     this.#applyMessages(
       reconcileMessages(this.#internalMessages, resolved, this.userId),
       resolved.conversationId,
@@ -549,6 +550,7 @@ export class ChxChat extends LitElement {
       ],
     };
 
+    this.#list?.[NOTE_SEND]?.(id);
     this.#applyMessages(
       reconcileMessages(this.#internalMessages, message, this.userId),
       conversationId,

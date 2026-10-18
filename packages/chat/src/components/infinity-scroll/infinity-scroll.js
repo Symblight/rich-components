@@ -272,6 +272,7 @@ export class ChxInfinityScroll extends LitElement {
    * @param {{align?: "auto" | "start" | "center" | "end", behavior?: "auto" | "smooth" | "instant"}} [options]
    */
   scrollToOffset(offset, options) {
+    this.#controller.releasePin();
     if (this.noVirtualization) {
       this.#controller.plainList.scrollToOffset(offset, options);
       return;

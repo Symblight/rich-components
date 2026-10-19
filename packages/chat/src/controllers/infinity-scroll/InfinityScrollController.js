@@ -72,6 +72,10 @@ export class InfinityScrollController {
   /** "At the bottom" for following, updated once per scroll event for whichever strategy is active. */
   #latch = new BottomLatch();
   #grace = new GestureGrace(() => this.#resume());
+  /** A mouse/pen button held on the content — selecting text, which a follow would drag along. */
+  #pointerHeld = false;
+  /** Text in the list is selected — following would move it out from under the user. */
+  #selectionHeld = false;
 
   /** @param {ReactiveControllerHost} host @param {InfinityScrollConfig} config */
   constructor(host, config) {
@@ -114,7 +118,7 @@ export class InfinityScrollController {
       getVirtualizer: () => this.#list.virtualizer,
       latch: this.#latch,
       getFollowing: () => this.#pin.following,
-      isPaused: () => this.#grace.paused,
+      isPaused: () => this.#paused,
     });
 
     this.#initialLock = new InitialBottomLock({
@@ -147,7 +151,7 @@ export class InfinityScrollController {
       getEndElement: config.getEndElement,
       beforeReconcile: () => this.#pin.refresh(),
       latch: this.#latch,
-      isPaused: () => this.#grace.paused,
+      isPaused: () => this.#paused,
     });
 
     this.#loader = new LoadMoreController({
@@ -177,7 +181,7 @@ export class InfinityScrollController {
 
   /** virtual-core's own end-following (append, resize at the end) is off while paused too. */
   #syncFollowing() {
-    this.#list.setFollowing(this.#pin.following && !this.#grace.paused);
+    this.#list.setFollowing(this.#pin.following && !this.#paused);
   }
 
   hostConnected() {
@@ -219,6 +223,8 @@ export class InfinityScrollController {
     if (this.#scrollFrame !== null) cancelAnimationFrame(this.#scrollFrame);
     this.#scrollFrame = null;
     this.#grace.dispose();
+    this.#releasePointer();
+    this.#releaseSelection();
     this.#disposed = true;
     this.#loader.dispose();
     this.#visibility.dispose();
@@ -242,7 +248,7 @@ export class InfinityScrollController {
 
   /** Growth at the end is followed right now: the mode allows it, and the user hasn't scrolled away. */
   get following() {
-    return this.#pin.following && this.#latch.atBottom && !this.#grace.paused;
+    return this.#pin.following && this.#latch.atBottom && !this.#paused;
   }
 
   /** From the tail — a pin is almost always the last item. @param {string | number} key */
@@ -290,6 +296,7 @@ export class InfinityScrollController {
     handleEvent: (event) => {
       // any interaction ends the initial pin, even one that can't scroll
       if (this.#initialLock.active) this.#initialLock.end();
+      this.#holdForPointer(event);
       if (!isScrollGesture(event, this.#config.getScrollElement())) return;
       this.#grace.note();
       // keys drive their own scrolls (roving focus), which a cancel or pause would fight
@@ -315,9 +322,63 @@ export class InfinityScrollController {
   }
 
   /** The gesture didn't leave the bottom (e.g. a nested scroller took it): catch up on any growth. */
+  /** Follows hold off while a gesture's grace runs, a button is held on the content, or text in
+   *  the list is selected. */
+  get #paused() {
+    return this.#grace.paused || this.#pointerHeld || this.#selectionHeld;
+  }
+
+  /** @param {Event} event */
+  #holdForPointer(event) {
+    if (event.type !== "pointerdown") return;
+    const { pointerType, button, target } = /** @type {PointerEvent} */ (event);
+    // touch is a scroll gesture already; the scroller itself is its scrollbar
+    if (pointerType === "touch" || button !== 0 || target === this.#config.getScrollElement())
+      return;
+    this.#pointerHeld = true;
+    this.#syncFollowing();
+    addEventListener("pointerup", this.#onPointerRelease);
+    addEventListener("pointercancel", this.#onPointerRelease);
+  }
+
+  /** A plain click resumes; a selection holds following until it's cleared or `scrollToBottom()`. */
+  #onPointerRelease = () => {
+    this.#releasePointer();
+    if (this.#hasSelection()) {
+      this.#selectionHeld = true;
+      document.addEventListener("selectionchange", this.#onSelectionChange);
+      return;
+    }
+    this.#resume();
+  };
+
+  #onSelectionChange = () => {
+    if (this.#hasSelection()) return;
+    this.#releaseSelection();
+    this.#resume();
+  };
+
+  #releaseSelection() {
+    this.#selectionHeld = false;
+    document.removeEventListener("selectionchange", this.#onSelectionChange);
+  }
+
+  /** Chromium keeps a shadow tree's selection off `document.getSelection()`. */
+  #hasSelection() {
+    const root = /** @type {any} */ (this.#config.getScrollElement()?.getRootNode());
+    return Boolean((root?.getSelection?.() ?? getSelection())?.toString());
+  }
+
+  #releasePointer() {
+    this.#pointerHeld = false;
+    removeEventListener("pointerup", this.#onPointerRelease);
+    removeEventListener("pointercancel", this.#onPointerRelease);
+  }
+
   #resume() {
     if (this.#disposed) return;
     this.#syncFollowing();
+    if (this.#paused) return; // the other hold is still on
     if (this.#noVirtualization) this.#plainList.resumeFollow();
     else this.#stick.follow();
   }
@@ -331,6 +392,7 @@ export class InfinityScrollController {
       ? this.#latch.update(el, this.#config.getBuffer(), {
           layoutJumps: this.#noVirtualization && !this.#grace.recent,
           contentChanged,
+          held: this.#pointerHeld,
         })
       : false;
     if (this.#noVirtualization) {
@@ -356,6 +418,7 @@ export class InfinityScrollController {
   /** An explicit jump to the bottom — re-engages following. @param {"auto" | "smooth" | "instant"} behavior */
   scrollToBottom(behavior) {
     this.#pin.noteScrollToBottom();
+    this.#releaseSelection(); // asked for the end, selection or not
     if (this.#noVirtualization) {
       // rests the content's end, footer included, at the bottom edge
       this.#plainList.scrollToBottom(behavior);

@@ -169,7 +169,8 @@ describe("chx-infinity-scroll", () => {
       });
       const behaviors = recordBehaviors(scroller);
 
-      await grow(el, 14);
+      // one 240px row: within a viewport of the bottom, so it animates
+      await grow(el, 11);
       await settled(scroller);
 
       expect(behaviors).to.include("smooth");

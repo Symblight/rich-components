@@ -57,7 +57,7 @@ export class BottomAnchorController {
 
   /** @param {Event} event */
   #handleScrollToBottomClick = (event) => {
-    const { behavior } = /** @type {CustomEvent<{behavior: "auto" | "smooth" | "instant"}>} */ (
+    const { behavior } = /** @type {CustomEvent<{behavior?: "auto" | "smooth" | "instant"}>} */ (
       event
     ).detail;
     this.scrollToBottom(behavior);

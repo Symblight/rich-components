@@ -239,17 +239,9 @@ export class ChxInfinityScroll extends LitElement {
       // already includes the footer — no separate correction needed, unlike the virtualized branch.
       this.#controller.plainList.scrollToBottom(resolvedBehavior);
     } else {
-      // virtualizer.scrollToEnd() only knows about virtualized rows — it aligns the *last row* with
-      // the viewport edge, oblivious to any non-virtualized trailing content in the `footer` slot
-      // (e.g. a typing/streaming indicator). Following it with a plain `scrollTop = scrollHeight`
-      // snap corrects for that: `scrollHeight` is a real DOM measurement that already includes the
-      // footer. A no-op in the common no-footer case (both already agree on the same offset), so
-      // this stays cheap and doesn't need a conditional.
+      // virtual-core aims the last row's "end" at the real max scroll offset, so this clears the
+      // `footer` too, and its reconcile re-aims while rows are measured on the way
       this.#controller.virtualizer.scrollToEnd({ behavior: resolvedBehavior });
-      this.#scrollElement?.scrollTo({
-        top: this.#scrollElement.scrollHeight,
-        behavior: resolvedBehavior,
-      });
     }
     this.dispatchEvent(new CustomEvent("chx-scroll-to-bottom", { bubbles: true, composed: true }));
   }

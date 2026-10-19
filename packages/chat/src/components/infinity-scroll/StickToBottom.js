@@ -18,6 +18,14 @@ export class StickToBottom {
   /** @type {() => boolean} */
   #getFollowing;
 
+  /**
+   * An explicit `scrollToBottom()` not yet seen through: `"sent"` until its first scroll event,
+   * `"moving"` after. WebKit ends a smooth scroll short when `scrollHeight` shrinks mid-animation,
+   * and virtual-core's reconcile only re-aims when its target moves, so `follow()` finishes it.
+   * @type {"none" | "sent" | "moving"}
+   */
+  #request = "none";
+
   /** @param {{getVirtualizer: () => any, getBuffer: () => number, getFollowing?: () => boolean}} config */
   constructor(config) {
     this.#getVirtualizer = config.getVirtualizer;
@@ -37,7 +45,18 @@ export class StickToBottom {
    * new message still auto-follows anywhere the affordance would stay hidden, matching v1.
    */
   refresh() {
-    this.atBottom = this.#getVirtualizer().isAtEnd(this.#getBuffer());
+    const virtualizer = this.#getVirtualizer();
+    this.atBottom = virtualizer.isAtEnd(this.#getBuffer());
+    if (this.#request === "none") return;
+    // scrolled up and away: the user's; a clamp from a shrinking scrollHeight lands at the end
+    if (virtualizer.scrollDirection === "backward" && !virtualizer.isAtEnd())
+      this.#request = "none";
+    else this.#request = "moving";
+  }
+
+  /** Call on `scrollToBottom()`: once that scroll goes quiet, `follow()` finishes it. */
+  requestBottom() {
+    this.#request = this.#getVirtualizer().isAtEnd() ? "none" : "sent";
   }
 
   /**
@@ -59,12 +78,17 @@ export class StickToBottom {
     const grew = total > this.#lastTotalSize;
     this.#lastTotalSize = total;
 
-    if (!this.atBottom || !grew || !this.#getFollowing()) return;
+    if (!this.#getFollowing()) {
+      this.#request = "none";
+      return;
+    }
+    if (this.#request !== "moving" && !(this.atBottom && grew)) return;
 
     // Never argue with a gesture in progress — without this guard, the first pixels of an upward
     // scroll still read as "at the bottom" and this would pull the view straight back down.
     if (virtualizer.isScrolling || virtualizer.scrollDirection === "backward") return;
 
+    this.#request = "none";
     if (virtualizer.isAtEnd()) return;
     virtualizer.scrollToEnd();
   }

@@ -27,11 +27,11 @@ export class ChxScrollToBottomAffordance extends LitElement {
     super();
 
     /**
-     * Behavior for the scroll this button triggers — independent of chx-message-list's own
-     * `scroll-behavior`, carried in the `chx-scroll-to-bottom-click` event detail instead.
-     * @type {"auto" | "smooth" | "instant"}
+     * Overrides chx-message-list's `scroll-behavior` for this button's scroll, carried in the
+     * `chx-scroll-to-bottom-click` event detail; unset, the list's own applies.
+     * @type {"auto" | "smooth" | "instant" | undefined}
      */
-    this.scrollBehavior = "smooth";
+    this.scrollBehavior = undefined;
 
     /** @type {string} */
     this.label = "Scroll to latest messages";

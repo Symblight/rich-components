@@ -14,11 +14,15 @@ describe("chx-scroll-to-bottom-affordance", () => {
     expect(el.shadowRoot?.querySelector("md-icon")).to.exist;
   });
 
-  it("defaults scrollBehavior to smooth", async () => {
+  it("leaves the behavior to the list's scroll-behavior unless set", async () => {
     const el = /** @type {ChxScrollToBottomAffordance} */ (
       await fixture(html`<chx-scroll-to-bottom-affordance></chx-scroll-to-bottom-affordance>`)
     );
-    expect(el.scrollBehavior).to.equal("smooth");
+    const button = /** @type {HTMLElement} */ (el.shadowRoot?.querySelector("md-icon-button"));
+    const listener = oneEvent(el, "chx-scroll-to-bottom-click");
+    button.click();
+    const event = await listener;
+    expect(event.detail.behavior).to.be.undefined;
   });
 
   it("fires chx-scroll-to-bottom-click with the current scrollBehavior on click", async () => {

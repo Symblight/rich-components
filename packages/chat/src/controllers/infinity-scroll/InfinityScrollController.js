@@ -369,6 +369,7 @@ export class InfinityScrollController {
   /** An explicit jump to the bottom re-engages following. */
   noteScrollToBottom() {
     this.#pin.noteScrollToBottom();
+    if (!this.#noVirtualization) this.#stick.requestBottom();
   }
 
   /**

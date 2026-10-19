@@ -435,6 +435,7 @@ export class ChxMessageList extends LitElement {
         const rendered = /** @type {Set<string>} */ (this.#pendingRenderedMessageIds);
         this.#partRenderer.sweep();
         this.#dividerController.sweep(rendered);
+        this.#focusBehavior.keepOnRendered(rendered);
         for (const id of this.#messageClones.keys()) {
           if (!rendered.has(id)) this.#messageClones.delete(id);
         }

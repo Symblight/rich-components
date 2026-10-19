@@ -1,6 +1,9 @@
 import { indexById } from "../../utils/messages.js";
 import { pollFrames } from "../../utils/dom.js";
 
+/** ms of scroll quiet before the tab stop moves to the viewport */
+const VIEWPORT_IDLE = 150;
+
 /** @import { ChxMessage } from "../../types/message.js" */
 
 /**
@@ -47,6 +50,10 @@ export class FocusBehaviorController {
   #actionableId = null;
   /** a `#moveFocusTo` target not mounted yet @type {string | null} */
   #pendingFocusId = null;
+  /** @type {Element | undefined} */
+  #scroller;
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  #idleTimer;
 
   /** @param {Host} host @param {FocusBehaviorConfig} config */
   constructor(host, config) {
@@ -58,6 +65,43 @@ export class FocusBehaviorController {
    *  Called from the render path. @param {string} id */
   ensureSeeded(id) {
     if (this.#focusedId === null) this.#focusedId = id;
+  }
+
+  /**
+   * Keeps the tab stop on a rendered row. Its row can leave the rendered window (scrolled out of a
+   * virtualized list) or its message can go (a conversation switch); either way Tab would skip the
+   * list, so the rendered row nearest to it takes the stop. Call once per render pass.
+   * @param {Set<string>} rendered
+   */
+  keepOnRendered(rendered) {
+    this.#attachScroller(); // the scroller mounts in chx-infinity-scroll's own render, after ours
+    if (rendered.size === 0 || this.#pendingFocusId !== null) return; // a Home/End move is landing
+    let changed = false;
+    if (this.#actionableId !== null && !rendered.has(this.#actionableId)) {
+      this.#actionableId = null; // its controls left with it
+      changed = true;
+    }
+    if (this.#focusedId === null || !rendered.has(this.#focusedId)) {
+      const byId = indexById(this.#config.getMessages());
+      const old = this.#focusedId === null ? undefined : byId.get(this.#focusedId);
+      let nearest = null;
+      let best = Infinity;
+      for (const id of rendered) {
+        const index = byId.get(id);
+        if (index === undefined) continue;
+        // its message gone: the newest rendered row; otherwise the one closest to where it was
+        const distance = old === undefined ? -index : Math.abs(index - old);
+        if (distance < best) {
+          best = distance;
+          nearest = id;
+        }
+      }
+      if (nearest !== null && nearest !== this.#focusedId) {
+        this.#focusedId = nearest;
+        changed = true;
+      }
+    }
+    if (changed) this.#config.requestRerender();
   }
 
   /** @param {string} id */
@@ -211,4 +255,59 @@ export class FocusBehaviorController {
   hostConnected() {
     this.#pendingFocusId = null;
   }
+
+  hostUpdated() {
+    this.#attachScroller();
+  }
+
+  /** (Re)attaches the scroll listener as chx-infinity-scroll's scroller mounts or remounts, and
+   *  places the stop once — the first landing at the bottom may come before any scroll event. */
+  #attachScroller() {
+    const scroller = this.#config.getRenderRoot()?.querySelector(".infinity-scroll__scroller");
+    if (scroller === this.#scroller) return;
+    this.#scroller?.removeEventListener("scroll", this.#handleScroll);
+    this.#scroller = scroller ?? undefined;
+    this.#scroller?.addEventListener("scroll", this.#handleScroll, { passive: true });
+    if (this.#scroller) this.#handleScroll();
+  }
+
+  hostDisconnected() {
+    this.#scroller?.removeEventListener("scroll", this.#handleScroll);
+    this.#scroller = undefined;
+    clearTimeout(this.#idleTimer);
+  }
+
+  #handleScroll = () => {
+    clearTimeout(this.#idleTimer);
+    this.#idleTimer = setTimeout(this.#followViewport, VIEWPORT_IDLE);
+  };
+
+  /**
+   * With focus outside the list, the tab stop moves to the newest visible row once scrolling
+   * settles, so Tab lands on what the user sees rather than scrolling back to where it was.
+   */
+  #followViewport = () => {
+    const root = this.#config.getRenderRoot();
+    const scroller = this.#scroller;
+    if (!root || !scroller || this.#pendingFocusId !== null || this.#actionableId !== null) return;
+    if (/** @type {ShadowRoot} */ (root).activeElement) return; // keyboard navigation owns it
+    const view = scroller.getBoundingClientRect();
+    const rows = root.querySelectorAll("[role='article'][data-message-id]");
+    // rows are in order: from the end, the newest one fully in view, else the newest partly in
+    // view, so Tab lands without scrolling
+    /** @type {Element | undefined} */
+    let row;
+    for (let i = rows.length - 1; i >= 0; i--) {
+      const rect = rows[i].getBoundingClientRect();
+      if (rect.top >= view.bottom) continue;
+      if (rect.bottom <= view.top) break;
+      row ??= rows[i];
+      if (rect.top >= view.top && rect.bottom <= view.bottom) {
+        row = rows[i];
+        break;
+      }
+    }
+    const id = /** @type {HTMLElement | undefined} */ (row)?.dataset.messageId;
+    if (id && id !== this.#focusedId) this.#claimFocus(id);
+  };
 }

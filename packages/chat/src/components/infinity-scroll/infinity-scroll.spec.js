@@ -37,13 +37,14 @@ function distanceToBottom(scroller) {
 
 /**
  * Rows far taller than the estimate, like agent replies with code blocks.
- * @param {{ count?: number, scrollMode?: "pin-top" | "stick-bottom", footer?: boolean, scrollBehavior?: "auto" | "smooth" }} [options]
+ * @param {{ count?: number, scrollMode?: "pin-top" | "stick-bottom", footer?: boolean, scrollBehavior?: "auto" | "smooth", noVirtualization?: boolean }} [options]
  */
 async function tallRows({
   count = 60,
   scrollMode = "stick-bottom",
   footer = false,
   scrollBehavior = "auto",
+  noVirtualization = false,
 } = {}) {
   /** @type {Map<number, number>} */
   const heights = new Map();
@@ -53,6 +54,7 @@ async function tallRows({
         style="height: 400px;"
         scroll-mode=${scrollMode}
         scroll-behavior=${scrollBehavior}
+        ?no-virtualization=${noVirtualization}
         .hasMore=${false}
         .data=${Array.from({ length: count }, (_, i) => i)}
         .estimateItemSize=${() => 40}
@@ -108,6 +110,104 @@ async function growWhileScrolling(el, heights, index) {
 }
 
 describe("chx-infinity-scroll", () => {
+  describe("scrollToBottom() with pin-top's reserved space", function () {
+    this.timeout(15000);
+
+    for (const behavior of /** @type {const} */ (["auto", "smooth"])) {
+      it(`rests the content's end at the bottom, not the blank space below it (${behavior})`, async () => {
+        const { el, scroller } = await tallRows({
+          count: 10,
+          scrollMode: "pin-top",
+          noVirtualization: true,
+        });
+        el.pinToStart(9);
+        await settled(scroller);
+        await userScrollToTop(scroller);
+
+        el.scrollToBottom(behavior);
+        await settled(scroller);
+
+        const end = /** @type {HTMLElement} */ (
+          el.shadowRoot?.querySelector(".infinity-scroll__end")
+        );
+        const padding = parseFloat(getComputedStyle(scroller).paddingBlockEnd);
+        const gap =
+          scroller.getBoundingClientRect().bottom - padding - end.getBoundingClientRect().bottom;
+        expect(Math.abs(gap)).to.be.at.most(2);
+      });
+    }
+  });
+
+  describe("following the bottom without virtualization", function () {
+    this.timeout(15000);
+
+    /** @param {HTMLElement} scroller */
+    function recordBehaviors(scroller) {
+      /** @type {(ScrollToOptions["behavior"])[]} */
+      const behaviors = [];
+      const scrollTo = scroller.scrollTo.bind(scroller);
+      scroller.scrollTo = /** @type {typeof scroller.scrollTo} */ (
+        (/** @type {ScrollToOptions} */ options) => {
+          behaviors.push(options.behavior);
+          return scrollTo(options);
+        }
+      );
+      return behaviors;
+    }
+
+    /** @param {ChxInfinityScroll} el @param {number} count */
+    async function grow(el, count) {
+      el.data = Array.from({ length: count }, (_, i) => i);
+      await el.updateComplete;
+    }
+
+    it("follows new rows with the scroll-behavior", async () => {
+      const { el, scroller } = await tallRows({
+        count: 10,
+        scrollBehavior: "smooth",
+        noVirtualization: true,
+      });
+      const behaviors = recordBehaviors(scroller);
+
+      await grow(el, 14);
+      await settled(scroller);
+
+      expect(behaviors).to.include("smooth");
+      expect(distanceToBottom(scroller)).to.be.at.most(1);
+    });
+
+    it("keeps following when a smooth scroll is still underway", async () => {
+      const { el, scroller } = await tallRows({
+        count: 10,
+        scrollBehavior: "smooth",
+        noVirtualization: true,
+      });
+
+      await grow(el, 14);
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      await grow(el, 18);
+      await settled(scroller);
+
+      expect(distanceToBottom(scroller)).to.be.at.most(1);
+    });
+
+    it("stops following once the user scrolls away", async () => {
+      const { el, scroller } = await tallRows({
+        count: 10,
+        scrollBehavior: "smooth",
+        noVirtualization: true,
+      });
+
+      await grow(el, 14);
+      await new Promise((resolve) => setTimeout(resolve, 60));
+      await userScrollToTop(scroller);
+      await grow(el, 18);
+      await settled(scroller);
+
+      expect(scroller.scrollTop).to.be.below(100);
+    });
+  });
+
   describe("pinToStart()", function () {
     this.timeout(15000);
 

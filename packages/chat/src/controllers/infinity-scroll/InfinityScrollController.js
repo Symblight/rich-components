@@ -35,6 +35,7 @@ import { distanceToBottom } from "../../utils/dom.js";
  *   getPinEnabled?: () => boolean,
  *   getContentElement?: () => HTMLElement | undefined,
  *   getEndElement?: () => Element | undefined,
+ *   getFollowBehavior?: () => "auto" | "smooth" | "instant",
  * }} InfinityScrollConfig
  */
 
@@ -144,6 +145,8 @@ export class InfinityScrollController {
       // the only maybeLoad() check in this mode — scrollTop is post-correction here, unlike in hostUpdated
       onReconciled: () => this.#loader.maybeLoad(),
       getFollowing: () => this.#pin.following,
+      getFollowBehavior: config.getFollowBehavior,
+      getEndElement: config.getEndElement,
       beforeReconcile: () => this.#pin.refresh(),
     });
 

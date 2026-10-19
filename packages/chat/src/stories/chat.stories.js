@@ -616,7 +616,7 @@ export const Pagination = {
             .partElements=${sentCards.partElements}
             style="flex: 1; min-height: 0;"
           >
-            <chx-message-list slot="message-list" author-display="all">
+            <chx-message-list slot="message-list" author-display="all" scroll-behavior="smooth">
               <chx-divider slot="divider" sticky></chx-divider>
               <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
               <chx-scroll-to-bottom-affordance

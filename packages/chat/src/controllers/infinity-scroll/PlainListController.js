@@ -11,6 +11,8 @@ import { distanceToBottom } from "../../utils/dom.js";
  *   getBuffer: () => number,
  *   onReconciled?: () => void,
  *   getFollowing?: () => boolean,
+ *   getFollowBehavior?: () => Behavior,
+ *   getEndElement?: () => Element | undefined,
  *   beforeReconcile?: () => void,
  * }} PlainListConfig
  */
@@ -31,6 +33,7 @@ export class PlainListController {
   #anchor = null;
   #prevScrollTop = 0;
   #prevScrollHeight = 0;
+  #lastScrollTop = 0;
   /** the last recompute found the view within `buffer` of the bottom */
   #atBottom = true;
   /** `observe()` has started once — gates the initial pin */
@@ -109,7 +112,7 @@ export class PlainListController {
 
   /** Call synchronously from the scroll handler, so a stale `atBottom` can't yank the view mid-gesture. */
   handleScroll = () => {
-    this.#updateAtBottom();
+    this.#trackAtBottom();
     if (this.#scrollFrame !== null) return;
     this.#scrollFrame = requestAnimationFrame(() => {
       this.#scrollFrame = null;
@@ -117,16 +120,17 @@ export class PlainListController {
     });
   };
 
-  /** `"auto"` also re-engages the bottom pin synchronously. @param {Behavior} [behavior] */
+  /**
+   * Rests the content's end at the bottom edge. Not `scrollHeight`: pin-top's reserved space sits
+   * below the end, and landing there shows a blank screen.
+   * @param {Behavior} [behavior]
+   */
   scrollToBottom(behavior = "auto") {
     const el = this.#config.getScrollElement();
     if (!el) return;
-    if (behavior === "auto") {
-      el.scrollTop = el.scrollHeight;
-      this.#atBottom = true;
-    } else {
-      el.scrollTo({ top: el.scrollHeight, behavior });
-    }
+    // set up front: a smooth scroll is still on its way, and must not read as having left the bottom
+    this.#atBottom = true;
+    el.scrollTo({ top: this.#bottomOffset(el), behavior });
   }
 
   /** @param {number} offset @param {{behavior?: Behavior}} [options] */
@@ -261,12 +265,12 @@ export class PlainListController {
   #reconcile() {
     this.#config.beforeReconcile?.();
     if (this.#atBottom && (this.#config.getFollowing?.() ?? true)) {
-      this.scrollToBottom();
+      this.scrollToBottom(this.#config.getFollowBehavior?.() ?? "auto");
     } else {
       this.restoreAnchor();
+      this.#updateAtBottom();
     }
     this.captureAnchor();
-    this.#updateAtBottom();
     this.#config.onReconciled?.();
   }
 
@@ -293,6 +297,30 @@ export class PlainListController {
       if (Number(row.dataset.index) === index) return row;
     }
     return undefined;
+  }
+
+  /** @param {Element} el */
+  #bottomOffset(el) {
+    const max = el.scrollHeight - el.clientHeight;
+    const end = this.#config.getEndElement?.();
+    if (!end) return max;
+    const padding = parseFloat(getComputedStyle(el).paddingBlockEnd) || 0;
+    const endBottom =
+      end.getBoundingClientRect().bottom - el.getBoundingClientRect().top + el.scrollTop;
+    return Math.min(max, Math.max(0, endBottom + padding - el.clientHeight));
+  }
+
+  /**
+   * From a scroll event. Scrolling down never leaves the bottom: a smooth scroll to it reads as
+   * "far away" on the way, so only arriving or scrolling back up settles it.
+   */
+  #trackAtBottom() {
+    const el = this.#config.getScrollElement();
+    if (!el) return;
+    const up = el.scrollTop < this.#lastScrollTop - 0.5;
+    this.#lastScrollTop = el.scrollTop;
+    const near = distanceToBottom(el) <= this.#config.getBuffer();
+    if (near || up) this.#atBottom = near;
   }
 
   #updateAtBottom() {

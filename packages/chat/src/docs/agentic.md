@@ -145,7 +145,7 @@ composer draws a surface around field and footer:
 | Token                                      | Default                                |
 | ------------------------------------------ | -------------------------------------- |
 | `--chx-message-composer-background`        | `transparent`                          |
-| `--chx-message-composer-shape`             | `var(--_chx-shape-corner-extra-large)` |
+| `--chx-message-composer-shape`             | `calc(var(--_chx-shape-corner-extra-large) / 1.4)` |
 | `--chx-message-composer-footer-padding`    | `0.125rem 0.75rem`                     |
 | `--chx-message-composer-footer-min-height` | `40px`                                 |
 

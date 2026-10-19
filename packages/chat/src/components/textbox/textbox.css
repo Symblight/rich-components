@@ -10,7 +10,7 @@
   /* MD3 filled field: input text on-surface, only the placeholder is on-surface-variant */
   --chx-textbox-foreground-color: var(--_chx-color-on-surface);
   --chx-textbox-placeholder-color: var(--_chx-color-on-surface-variant);
-  --chx-textbox-shape: var(--_chx-shape-corner-extra-large);
+  --chx-textbox-shape: calc(var(--_chx-shape-corner-extra-large) / 1.4);
   --chx-textbox-padding: 0.375rem 0.75rem;
   /* MD3 filled field height */
   --chx-textbox-min-height: 56px;

@@ -5,7 +5,7 @@
   --chx-message-composer-gap: 0.5rem;
   --chx-message-composer-actions-min-height: 2.5rem;
   --chx-message-composer-background: transparent;
-  --chx-message-composer-shape: var(--_chx-shape-corner-extra-large);
+  --chx-message-composer-shape: calc(var(--_chx-shape-corner-extra-large) / 1.4);
   --chx-message-composer-footer-padding: 0.125rem 0.75rem;
   --chx-message-composer-footer-min-height: 40px;
   max-width: 60rem;

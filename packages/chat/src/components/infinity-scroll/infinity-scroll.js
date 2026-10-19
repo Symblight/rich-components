@@ -60,6 +60,8 @@ export class ChxInfinityScroll extends LitElement {
   #contentElement;
   /** @type {Element | undefined} */
   #endElement;
+  /** @type {Element | undefined} */
+  #footerElement;
 
   /** `ref()` fires only on create/remove; `undefined` means the row left the DOM. @param {Element | undefined} row */
   #rowRef = (row) => {
@@ -152,6 +154,7 @@ export class ChxInfinityScroll extends LitElement {
       getPinEnabled: () => this.scrollMode === "pin-top",
       getContentElement: () => this.#contentElement,
       getEndElement: () => this.#endElement,
+      getFooterElement: () => this.#footerElement,
       getData: () => this.data,
       getItemKey: (item, index) => this.itemKey(item, index),
       getEstimateItemSize: () => this.estimateItemSize,
@@ -199,6 +202,11 @@ export class ChxInfinityScroll extends LitElement {
   /** @param {Element | undefined} el */
   #setCanvasElement = (el) => {
     this.#canvasElement = /** @type {HTMLElement | undefined} */ (el);
+  };
+
+  /** @param {Element | undefined} el */
+  #setFooterElement = (el) => {
+    this.#footerElement = el;
   };
 
   /** @param {Element | undefined} el */
@@ -340,7 +348,7 @@ export class ChxInfinityScroll extends LitElement {
               },
             )}
           </div>
-          <slot name="footer"></slot>
+          <slot name="footer" ${ref(this.#setFooterElement)}></slot>
           <div class="infinity-scroll__end" aria-hidden="true" ${ref(this.#setEndElement)}></div>
         </div>
       </div>

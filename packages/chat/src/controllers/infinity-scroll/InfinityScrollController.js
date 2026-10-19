@@ -9,7 +9,7 @@ import { VisibilityController } from "./VisibilityController.js";
 import { PlainListController } from "./PlainListController.js";
 import { PinController } from "./PinController.js";
 import { BottomSentinelController } from "./BottomSentinelController.js";
-import { isScrollGesture } from "../../utils/dom.js";
+import { distanceToBottom, isScrollGesture } from "../../utils/dom.js";
 
 /**
  * @typedef {import("lit").ReactiveController} ReactiveController
@@ -38,6 +38,7 @@ import { isScrollGesture } from "../../utils/dom.js";
  *   getPinEnabled?: () => boolean,
  *   getContentElement?: () => HTMLElement | undefined,
  *   getEndElement?: () => Element | undefined,
+ *   getFooterElement?: () => Element | undefined,
  *   getFollowBehavior?: () => "auto" | "smooth" | "instant",
  * }} InfinityScrollConfig
  */
@@ -68,6 +69,10 @@ export class InfinityScrollController {
   #initialLock;
   /** @type {number | null} */
   #scrollFrame = null;
+  /** @type {ResizeObserver | undefined} */
+  #footerObserver;
+  /** @type {Element | undefined} */
+  #footer;
   #disposed = false;
   /** "At the bottom" for following, updated once per scroll event for whichever strategy is active. */
   #latch = new BottomLatch();
@@ -205,6 +210,7 @@ export class InfinityScrollController {
   }
 
   hostUpdated() {
+    this.#observeFooter();
     this.#visibility.schedule();
     this.#bottomSentinel.sync();
     if (this.#noVirtualization) {
@@ -223,6 +229,8 @@ export class InfinityScrollController {
     if (this.#scrollFrame !== null) cancelAnimationFrame(this.#scrollFrame);
     this.#scrollFrame = null;
     this.#grace.dispose();
+    this.#footerObserver?.disconnect();
+    this.#footer = undefined;
     this.#releasePointer();
     this.#releaseSelection();
     this.#disposed = true;
@@ -322,6 +330,31 @@ export class InfinityScrollController {
   }
 
   /** The gesture didn't leave the bottom (e.g. a nested scroller took it): catch up on any growth. */
+  /** Idempotent — (re)observes the `footer` slot as it mounts. */
+  #observeFooter() {
+    const footer = this.#config.getFooterElement?.();
+    if (footer === this.#footer) return;
+    this.#footerObserver ??= new ResizeObserver(this.#followFooter);
+    if (this.#footer) this.#footerObserver.unobserve(this.#footer);
+    this.#footer = footer;
+    if (footer) this.#footerObserver.observe(footer);
+  }
+
+  /** The footer (typing/streaming indicators) sits outside both strategies' rows, so neither
+   *  follows it on its own. */
+  #followFooter = () => {
+    const el = this.#config.getScrollElement();
+    if (this.#disposed || !el || !this.following) return;
+    if (this.#noVirtualization) {
+      this.#plainList.resumeFollow();
+      return;
+    }
+    // the DOM, not isAtEnd(): virtual-core's end is the last row, before the footer
+    if (distanceToBottom(el) <= 1) return;
+    this.#stick.requestBottom();
+    this.#list.virtualizer.scrollToEnd({ behavior: this.#config.getFollowBehavior?.() ?? "auto" });
+  };
+
   /** Follows hold off while a gesture's grace runs, a button is held on the content, or text in
    *  the list is selected. */
   get #paused() {

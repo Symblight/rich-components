@@ -2,12 +2,14 @@ import { VirtualListController } from "./VirtualListController.js";
 import { RowMeasurer } from "../../components/infinity-scroll/RowMeasurer.js";
 import { StickToBottom } from "../../components/infinity-scroll/StickToBottom.js";
 import { InitialBottomLock } from "../../components/infinity-scroll/InitialBottomLock.js";
+import { BottomLatch } from "../../components/infinity-scroll/BottomLatch.js";
+import { GestureGrace } from "../../components/infinity-scroll/GestureGrace.js";
 import { LoadMoreController } from "./LoadMoreController.js";
 import { VisibilityController } from "./VisibilityController.js";
 import { PlainListController } from "./PlainListController.js";
 import { PinController } from "./PinController.js";
 import { BottomSentinelController } from "./BottomSentinelController.js";
-import { isScrollGesture, USER_SCROLL_GRACE } from "../../utils/dom.js";
+import { isScrollGesture } from "../../utils/dom.js";
 
 /**
  * @typedef {import("lit").ReactiveController} ReactiveController
@@ -46,7 +48,8 @@ import { isScrollGesture, USER_SCROLL_GRACE } from "../../utils/dom.js";
  *    `InitialBottomLock`;
  *  - `noVirtualization`: `PlainListController` (real DOM, `MutationObserver`-driven).
  * Shared by both: `LoadMoreController`, `VisibilityController`, `BottomSentinelController`,
- * `PinController`. `VirtualListController.sync()` runs in both modes — it's what disables
+ * `PinController`, and the `BottomLatch` and `GestureGrace` both strategies read.
+ * `VirtualListController.sync()` runs in both modes — it's what disables
  * virtual-core under `noVirtualization`. The only class that branches on the mode.
  * @implements {ReactiveController}
  */
@@ -66,8 +69,9 @@ export class InfinityScrollController {
   /** @type {number | null} */
   #scrollFrame = null;
   #disposed = false;
-  /** Set while follows are held off: a programmatic scroll before a gesture's first scroll event cancels the browser's wheel animation. @type {ReturnType<typeof setTimeout> | null} */
-  #graceTimer = null;
+  /** "At the bottom" for following, updated once per scroll event for whichever strategy is active. */
+  #latch = new BottomLatch();
+  #grace = new GestureGrace(() => this.#resume());
 
   /** @param {ReactiveControllerHost} host @param {InfinityScrollConfig} config */
   constructor(host, config) {
@@ -90,6 +94,7 @@ export class InfinityScrollController {
       getOffset: (index) => this.#pinOffset(index),
       scrollTo: (offset) => this.#scrollToPin(offset),
       onFollowChange: () => this.#syncFollowing(),
+      isUserScroll: () => this.#grace.recent,
     });
 
     this.#list = new VirtualListController(host, {
@@ -107,9 +112,9 @@ export class InfinityScrollController {
 
     this.#stick = new StickToBottom({
       getVirtualizer: () => this.#list.virtualizer,
-      getBuffer: config.getBuffer,
+      latch: this.#latch,
       getFollowing: () => this.#pin.following,
-      isPaused: () => this.#paused,
+      isPaused: () => this.#grace.paused,
     });
 
     this.#initialLock = new InitialBottomLock({
@@ -141,7 +146,8 @@ export class InfinityScrollController {
       getFollowBehavior: config.getFollowBehavior,
       getEndElement: config.getEndElement,
       beforeReconcile: () => this.#pin.refresh(),
-      isPaused: () => this.#paused,
+      latch: this.#latch,
+      isPaused: () => this.#grace.paused,
     });
 
     this.#loader = new LoadMoreController({
@@ -169,13 +175,9 @@ export class InfinityScrollController {
     return this.#config.getNoVirtualization?.() ?? false;
   }
 
-  get #paused() {
-    return this.#graceTimer !== null;
-  }
-
   /** virtual-core's own end-following (append, resize at the end) is off while paused too. */
   #syncFollowing() {
-    this.#list.setFollowing(this.#pin.following && !this.#paused);
+    this.#list.setFollowing(this.#pin.following && !this.#grace.paused);
   }
 
   hostConnected() {
@@ -216,8 +218,7 @@ export class InfinityScrollController {
   hostDisconnected() {
     if (this.#scrollFrame !== null) cancelAnimationFrame(this.#scrollFrame);
     this.#scrollFrame = null;
-    if (this.#graceTimer !== null) clearTimeout(this.#graceTimer);
-    this.#graceTimer = null;
+    this.#grace.dispose();
     this.#disposed = true;
     this.#loader.dispose();
     this.#visibility.dispose();
@@ -241,8 +242,7 @@ export class InfinityScrollController {
 
   /** Growth at the end is followed right now: the mode allows it, and the user hasn't scrolled away. */
   get following() {
-    const atBottom = this.#noVirtualization ? this.#plainList.atBottom : this.#stick.atBottom;
-    return this.#pin.following && atBottom && !this.#paused;
+    return this.#pin.following && this.#latch.atBottom && !this.#grace.paused;
   }
 
   /** From the tail — a pin is almost always the last item. @param {string | number} key */
@@ -291,12 +291,15 @@ export class InfinityScrollController {
       // any interaction ends the initial pin, even one that can't scroll
       if (this.#initialLock.active) this.#initialLock.end();
       if (!isScrollGesture(event, this.#config.getScrollElement())) return;
-      this.#pin.noteGesture();
+      this.#grace.note();
       // keys drive their own scrolls (roving focus), which a cancel or pause would fight
       if (event.type === "keydown") return;
       this.#cancelProgrammaticScroll();
       // a wheel down can't leave the bottom, so following needn't wait for it
-      if (event.type !== "wheel" || /** @type {WheelEvent} */ (event).deltaY < 0) this.#pause();
+      if (event.type !== "wheel" || /** @type {WheelEvent} */ (event).deltaY < 0) {
+        this.#grace.pause();
+        this.#syncFollowing();
+      }
     },
   };
 
@@ -309,28 +312,23 @@ export class InfinityScrollController {
     this.#stick.cancelRequest();
   }
 
-  #pause() {
-    if (this.#graceTimer !== null) clearTimeout(this.#graceTimer);
-    this.#graceTimer = setTimeout(this.#resume, USER_SCROLL_GRACE);
-    this.#syncFollowing();
-  }
-
   /** The gesture didn't leave the bottom (e.g. a nested scroller took it): catch up on any growth. */
-  #resume = () => {
-    this.#graceTimer = null;
+  #resume() {
     if (this.#disposed) return;
     this.#syncFollowing();
     if (this.#noVirtualization) this.#plainList.resumeFollow();
     else this.#stick.follow();
-  };
+  }
 
   handleScroll = () => {
     this.#pin.handleScroll();
     // `atBottom` must flip in the same task as the scroll, or the next follow yanks the user down
+    const el = this.#config.getScrollElement();
+    const left = el ? this.#latch.update(el, this.#config.getBuffer()) : false;
     if (this.#noVirtualization) {
       this.#plainList.handleScroll();
     } else {
-      this.#stick.refresh();
+      this.#stick.refresh(left);
     }
 
     if (this.#scrollFrame !== null) return;

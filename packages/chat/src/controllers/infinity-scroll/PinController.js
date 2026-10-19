@@ -1,4 +1,4 @@
-import { distanceToBottom, USER_SCROLL_GRACE } from "../../utils/dom.js";
+import { distanceToBottom } from "../../utils/dom.js";
 import { VERY_BOTTOM } from "../../components/infinity-scroll/BottomLatch.js";
 
 const PINNED_CLASS = "infinity-scroll__content_pinned";
@@ -12,6 +12,7 @@ const PINNED_CLASS = "infinity-scroll__content_pinned";
  *   getOffset: (index: number) => number | undefined,
  *   scrollTo: (offset: number) => void,
  *   onFollowChange: (following: boolean) => void,
+ *   isUserScroll: () => boolean,
  * }} PinConfig
  */
 
@@ -35,7 +36,6 @@ export class PinController {
   #following = true;
   /** our own pin scroll must not count as "the user reached the bottom" — cleared by a user scroll */
   #suppressResume = false;
-  #lastGestureAt = -Infinity;
   #lastScrollTop = 0;
 
   /** @param {PinConfig} config */
@@ -104,16 +104,11 @@ export class PinController {
     if (!this.#config.getEnabled()) return;
 
     // only a scroll a gesture just started is the user's — a later layout clamp to the bottom isn't
-    if (performance.now() - this.#lastGestureAt < USER_SCROLL_GRACE) this.#suppressResume = false;
+    if (this.#config.isUserScroll()) this.#suppressResume = false;
     const atVeryBottom = distanceToBottom(el) <= VERY_BOTTOM;
     // still at the bottom, it's no scroll away: rows above shrinking (a wider column) move scrollTop up
     if (scrolledUp && !atVeryBottom) this.#setFollowing(false);
     else if (atVeryBottom && !this.#suppressResume) this.#setFollowing(true);
-  }
-
-  /** A user scroll gesture on the scroller — the next scroll within `USER_SCROLL_GRACE` is the user's. */
-  noteGesture() {
-    this.#lastGestureAt = performance.now();
   }
 
   /** @param {number} offset */

@@ -20,9 +20,6 @@ export async function pollFrames(find, maxFrames = 30) {
   return undefined;
 }
 
-/** ms after a scroll gesture during which a scroll event counts as the user's. */
-export const USER_SCROLL_GRACE = 200;
-
 /**
  * Whether `event`, heard on `scroller`, can start a user scroll of it. Excluded: a horizontal wheel
  * or a pinch (`ctrlKey`), and a press on content — only one on the scroller itself (its scrollbar).

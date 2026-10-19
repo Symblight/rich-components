@@ -1,4 +1,4 @@
-import { BottomLatch } from "./BottomLatch.js";
+/** @import { BottomLatch } from "./BottomLatch.js" */
 
 /**
  * Covers the one case `anchorTo: "end"` + `followOnAppend` don't handle on their own: a prepend
@@ -9,10 +9,8 @@ import { BottomLatch } from "./BottomLatch.js";
 export class StickToBottom {
   /** @type {() => any} */
   #getVirtualizer;
-  /** @type {() => number} */
-  #getBuffer;
-
-  #latch = new BottomLatch();
+  /** @type {BottomLatch} */
+  #latch;
   /** last seen `getTotalSize()`, so `follow()` only acts on an actual increase. @type {number} */
   #lastTotalSize = -1;
 
@@ -29,17 +27,12 @@ export class StickToBottom {
    */
   #request = "none";
 
-  /** @param {{getVirtualizer: () => any, getBuffer: () => number, getFollowing?: () => boolean, isPaused?: () => boolean}} config */
+  /** @param {{getVirtualizer: () => any, latch: BottomLatch, getFollowing?: () => boolean, isPaused?: () => boolean}} config */
   constructor(config) {
     this.#getVirtualizer = config.getVirtualizer;
-    this.#getBuffer = config.getBuffer;
+    this.#latch = config.latch;
     this.#getFollowing = config.getFollowing ?? (() => true);
     this.#isPaused = config.isPaused ?? (() => false);
-  }
-
-  /** Whether scroll events left the view at the bottom — see `BottomLatch`. */
-  get atBottom() {
-    return this.#latch.atBottom;
   }
 
   /** Forget the last known size — call on reconnect, so a stale pre-disconnect snapshot can't be
@@ -49,13 +42,11 @@ export class StickToBottom {
   }
 
   /**
-   * Call on every scroll event. Reads the DOM, not the virtualizer: this listener runs before
-   * virtual-core's own, so its offset and direction are still the previous event's.
+   * Call on every scroll event, after the latch read it — the DOM, not the virtualizer: this
+   * listener runs before virtual-core's own, so its offset and direction are still the previous
+   * event's. @param {boolean} left this scroll left the bottom
    */
-  refresh() {
-    const el = this.#getVirtualizer().scrollElement;
-    if (!el) return;
-    const left = this.#latch.update(el, this.#getBuffer());
+  refresh(left) {
     if (this.#request === "none") return;
     // scrolled up and away: the user's; a clamp from a shrinking scrollHeight lands at the end
     this.#request = left ? "none" : "moving";
@@ -96,7 +87,7 @@ export class StickToBottom {
       this.#request = "none";
       return;
     }
-    if (this.#request !== "moving" && !(this.atBottom && grew)) return;
+    if (this.#request !== "moving" && !(this.#latch.atBottom && grew)) return;
 
     // Never argue with a gesture in progress — without this guard, the first pixels of an upward
     // scroll still read as "at the bottom" and this would pull the view straight back down.

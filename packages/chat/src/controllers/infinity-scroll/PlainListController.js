@@ -1,9 +1,10 @@
 import { RowMeasurer } from "../../components/infinity-scroll/RowMeasurer.js";
-import { BottomLatch, VERY_BOTTOM } from "../../components/infinity-scroll/BottomLatch.js";
+import { VERY_BOTTOM } from "../../components/infinity-scroll/BottomLatch.js";
 import { distanceToBottom } from "../../utils/dom.js";
 
 /**
  * @typedef {"auto" | "smooth" | "instant"} Behavior
+ * @typedef {import("../../components/infinity-scroll/BottomLatch.js").BottomLatch} BottomLatch
  * @typedef {{element: HTMLElement, offset: number, bottomOffset: number, index: string | undefined}} Anchor
  * @typedef {{
  *   getScrollElement: () => Element | undefined,
@@ -15,6 +16,7 @@ import { distanceToBottom } from "../../utils/dom.js";
  *   getFollowBehavior?: () => Behavior,
  *   getEndElement?: () => Element | undefined,
  *   beforeReconcile?: () => void,
+ *   latch: BottomLatch,
  *   isPaused?: () => boolean,
  * }} PlainListConfig
  */
@@ -37,7 +39,8 @@ export class PlainListController {
   #prevScrollHeight = 0;
   #prevClientHeight = 0;
   #prevClientWidth = 0;
-  #latch = new BottomLatch();
+  /** @type {BottomLatch} */
+  #latch;
   /** `observe()` has started once — gates the initial pin */
   #everStarted = false;
 
@@ -54,6 +57,7 @@ export class PlainListController {
   /** @param {PlainListConfig} config */
   constructor(config) {
     this.#config = config;
+    this.#latch = config.latch;
     this.#measurer = new RowMeasurer({
       rows: config.rows,
       // real DOM already has its real height — nothing to cache, and nothing keyed by index
@@ -93,11 +97,6 @@ export class PlainListController {
     this.#measurer.schedule();
   }
 
-  /** Whether scroll events left the view at the bottom — see `BottomLatch`. */
-  get atBottom() {
-    return this.#latch.atBottom;
-  }
-
   /** Re-arms after a reconnect. */
   reset() {
     this.#disposed = false;
@@ -120,10 +119,8 @@ export class PlainListController {
     this.#measurer.releaseRows();
   }
 
-  /** Call synchronously from the scroll handler, so a stale `atBottom` can't yank the view mid-gesture. */
+  /** Call from the scroll handler, after the latch read the event. */
   handleScroll = () => {
-    const el = this.#config.getScrollElement();
-    if (el) this.#latch.update(el, this.#config.getBuffer());
     if (this.#scrollFrame !== null) return;
     this.#scrollFrame = requestAnimationFrame(() => {
       this.#scrollFrame = null;

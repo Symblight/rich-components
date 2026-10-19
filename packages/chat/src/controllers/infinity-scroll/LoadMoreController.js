@@ -3,8 +3,6 @@ const LOAD_THRESHOLD = 450;
 /** first retry delay after a failed load, doubled per consecutive failure up to `RETRY_MAX` */
 const RETRY_BASE = 1000;
 const RETRY_MAX = 30000;
-/** failures retried on a timer; past that, only the host's next scroll/render re-checks */
-const AUTO_RETRIES = 3;
 
 /**
  * @typedef {{
@@ -21,7 +19,7 @@ const AUTO_RETRIES = 3;
  * Decides *when* to ask for an older page; the consumer's awaited `onLoadMore` fetches it. Never
  * re-checks on its own after a load — that ran before the list's scroll correction landed and
  * fired a spurious second fetch. The host's next render/scroll does the re-check instead. The one
- * exception is a failed load's retry timer, which fires a backoff of at least `RETRY_BASE` later.
+ * exception is a failed load's retry, a doubling backoff that holds every re-check until it fires.
  */
 export class LoadMoreController {
   /** @type {LoadMoreConfig} */
@@ -30,8 +28,6 @@ export class LoadMoreController {
   #blockedAtCount = null;
   #disposed = false;
   #failures = 0;
-  /** `performance.now()` before which a failed load isn't retried */
-  #retryAt = 0;
   /** @type {ReturnType<typeof setTimeout> | null} */
   #retryTimer = null;
 
@@ -49,8 +45,7 @@ export class LoadMoreController {
     if (this.#disposed || this.loading || !config.getHasMore()) return;
 
     const count = config.getData().length;
-    if (this.#blockedAtCount === count) return;
-    if (performance.now() < this.#retryAt) return;
+    if (this.#blockedAtCount === count || this.#retryTimer !== null) return;
 
     const el = config.getScrollElement();
     if ((el ? el.scrollTop : Infinity) > LOAD_THRESHOLD) return;
@@ -78,7 +73,6 @@ export class LoadMoreController {
         if (failed) this.#scheduleRetry();
         else {
           this.#failures = 0;
-          this.#retryAt = 0;
           this.#blockedAtCount = length > count ? null : length;
         }
       }
@@ -86,20 +80,11 @@ export class LoadMoreController {
   }
 
   #scheduleRetry() {
-    const delay = Math.min(RETRY_BASE * 2 ** this.#failures, RETRY_MAX);
-    this.#failures++;
-    this.#retryAt = performance.now() + delay;
-    if (this.#failures > AUTO_RETRIES) return;
-    this.#clearRetryTimer();
+    const delay = Math.min(RETRY_BASE * 2 ** this.#failures++, RETRY_MAX);
     this.#retryTimer = setTimeout(() => {
       this.#retryTimer = null;
       this.maybeLoad();
     }, delay);
-  }
-
-  #clearRetryTimer() {
-    if (this.#retryTimer !== null) clearTimeout(this.#retryTimer);
-    this.#retryTimer = null;
   }
 
   /** Re-arms after the host is re-attached. */
@@ -107,11 +92,11 @@ export class LoadMoreController {
     this.#disposed = false;
     this.#blockedAtCount = null;
     this.#failures = 0;
-    this.#retryAt = 0;
   }
 
   dispose() {
     this.#disposed = true;
-    this.#clearRetryTimer();
+    if (this.#retryTimer !== null) clearTimeout(this.#retryTimer);
+    this.#retryTimer = null;
   }
 }

@@ -156,6 +156,7 @@ export class ChxInfinityScroll extends LitElement {
       getPaddingStart: () => this.paddingStart,
       getPaddingEnd: () => this.paddingEnd,
       getScrollMargin: () => this.scrollMargin,
+      getFollowBehavior: () => motionSafe(this.scrollBehavior),
       getUseScrollendEvent: () => this.useScrollendEvent,
       getBuffer: () => this.buffer,
       getHasMore: () => this.hasMore,

@@ -2,8 +2,11 @@ import { RowMeasurer } from "../../components/infinity-scroll/RowMeasurer.js";
 import { VERY_BOTTOM } from "../../components/infinity-scroll/BottomLatch.js";
 import { distanceToBottom } from "../../utils/dom.js";
 
-/** Share of the remaining distance a smooth follow covers per 60Hz frame — an ease-out that keeps up with growth. */
-const FOLLOW_EASE = 0.25;
+/** A smooth follow's duration grows with its distance, like a native smooth scroll's: short steps
+ *  as a reply streams in, longer for a jump from far up. */
+const FOLLOW_MIN_MS = 200;
+const FOLLOW_MAX_MS = 600;
+const FOLLOW_MS_PER_PX = 0.4;
 
 /**
  * @typedef {"auto" | "smooth" | "instant"} Behavior
@@ -55,7 +58,9 @@ export class PlainListController {
   #scrollFrame = null;
   /** @type {number | null} */
   #followFrame = null;
-  #followTime = 0;
+  #followStart = 0;
+  #followFrom = 0;
+  #followDuration = 0;
   /** rows mutated since the last scroll event — see `takeContentChanged()` */
   #contentChanged = false;
   #disposed = false;
@@ -174,6 +179,7 @@ export class PlainListController {
 
   /** @param {number} offset @param {{behavior?: Behavior}} [options] */
   scrollToOffset(offset, options = {}) {
+    this.stopFollow();
     this.#config
       .getScrollElement()
       ?.scrollTo({ top: offset, behavior: options.behavior ?? "auto" });
@@ -211,6 +217,7 @@ export class PlainListController {
       delta = this.#alignDelta(el, row, align);
     }
 
+    this.stopFollow();
     el.scrollTo({ top: el.scrollTop + delta, behavior });
     this.captureAnchor();
   }
@@ -340,33 +347,32 @@ export class PlainListController {
   }
 
   /**
-   * Smooth scrolling is ours, one `scrollTop` step per frame from wherever the view is toward a target
-   * re-read every frame. A native smooth `scrollTo` doesn't survive a layout jump mid-animation (see
+   * Smooth scrolling is ours: an eased, time-based `scrollTop` animation toward a target re-read
+   * every frame. A native smooth `scrollTo` doesn't survive a layout jump mid-animation (see
    * `BottomLatch`), which streaming content causes in WebKit (confirmed live); ours just carries on.
    */
   #startFollow() {
-    if (this.#followFrame !== null) return;
-    this.#followTime = performance.now();
+    const el = this.#config.getScrollElement();
+    if (this.#followFrame !== null || !el) return;
+    const distance = Math.abs(this.#bottomOffset(el) - el.scrollTop);
+    if (distance <= 0.5) return;
+    this.#followFrom = el.scrollTop;
+    this.#followStart = performance.now();
+    this.#followDuration = Math.min(FOLLOW_MAX_MS, FOLLOW_MIN_MS + distance * FOLLOW_MS_PER_PX);
     this.#followFrame = requestAnimationFrame(this.#followStep);
   }
 
-  /** @param {number} now */
+  /** Each frame writes an absolute position, so a layout clamp mid-way is simply overwritten.
+   *  @param {number} now */
   #followStep = (now) => {
     this.#followFrame = null;
     const el = this.#config.getScrollElement();
     if (!el || this.#disposed || !this.#latch.atBottom || this.#config.isPaused?.()) return;
-    const remaining = this.#bottomOffset(el) - el.scrollTop;
-    if (remaining <= 0.5) {
-      if (remaining < -0.5) el.scrollTop += remaining; // the end moved up past us
-      return;
-    }
-    const ease = 1 - Math.pow(1 - FOLLOW_EASE, (now - this.#followTime) / (1000 / 60));
-    this.#followTime = now;
-    const before = el.scrollTop;
-    el.scrollTop += Math.min(remaining, Math.max(1, remaining * ease));
-    // clamped: the next reconcile restarts it once the content has grown
-    if (el.scrollTop <= before) return;
-    this.#followFrame = requestAnimationFrame(this.#followStep);
+    if (!(this.#config.getFollowing?.() ?? true)) return; // a pin took over
+    const t = Math.min(1, Math.max(0, (now - this.#followStart) / this.#followDuration));
+    const eased = t < 0.5 ? 4 * t ** 3 : 1 - (-2 * t + 2) ** 3 / 2; // ease-in-out cubic
+    el.scrollTop = this.#followFrom + (this.#bottomOffset(el) - this.#followFrom) * eased;
+    if (t < 1) this.#followFrame = requestAnimationFrame(this.#followStep);
   };
 
   /** px to scroll so `row`'s edge meets the viewport's. @param {Element} el @param {HTMLElement} row @param {"start" | "center" | "end"} align */

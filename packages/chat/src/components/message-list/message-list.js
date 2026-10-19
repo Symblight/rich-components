@@ -1,6 +1,5 @@
 import { html, LitElement, nothing, render } from "lit";
 import { customElement } from "lit/decorators.js";
-import { directive, Directive, PartType } from "lit/directive.js";
 import { when } from "lit/directives/when.js";
 import { choose } from "lit/directives/choose.js";
 import { ref } from "lit/directives/ref.js";
@@ -13,10 +12,18 @@ import "../infinity-scroll/infinity-scroll.js";
 import "../loading-history/loading-history.js";
 import "../divider/divider.js";
 import { FocusBehaviorController } from "../../controllers/message-list/FocusBehaviorController.js";
-import { BottomAnchorController } from "../../controllers/message-list/BottomAnchorController.js";
 import { ReadTrackingController } from "../../controllers/message-list/ReadTrackingController.js";
 import { DividerController } from "../../controllers/message-list/DividerController.js";
 import { groupAt } from "./group.js";
+import { authorFor } from "./authors.js";
+import { estimateMessageSize } from "./estimate.js";
+import { interiorTabbing } from "./interior-tabbing.js";
+import {
+  INFINITY_SCROLL_EXPORTPARTS,
+  isSending,
+  MESSAGE_EXPORTPARTS,
+  messagePartNames,
+} from "./parts.js";
 import { PartRenderer } from "./PartRenderer.js";
 import { StatusController } from "../../controllers/message-list/StatusController.js";
 import { StickyController } from "../../controllers/message-list/StickyController.js";
@@ -30,35 +37,6 @@ import styles from "./message-list.css?inline";
 /** @import { ChxPartRenderer } from "../../types/adapter.js" */
 /** @import { ChxInfinityScroll } from "../infinity-scroll/infinity-scroll.js" */
 
-// chx-message sits two shadow roots deep (message-list → infinity-scroll → message), so a page-level
-// ::part() only reaches it with an exportparts hop at *every* host in between — see CLAUDE.md's
-// "::part() only forwards one shadow level". Prefixed on the way out so they can't collide with
-// chx-infinity-scroll's own parts.
-const MESSAGE_PARTS = [
-  "unread-marker",
-  "avatar",
-  "body",
-  "meta",
-  "attachments",
-  "before-content",
-  "content",
-  "after-content",
-  "status",
-  "actions",
-];
-const MESSAGE_EXPORTPARTS = MESSAGE_PARTS.map((part) => `${part}: message-${part}`).join(", ");
-// Per-row state names on the chx-message host itself, a deliberately closed vocabulary: exportparts
-// has no wildcard, so every name a page can ever target has to be listed literally here.
-const MESSAGE_STATE_PARTS = [
-  "message-own",
-  "message-incoming", // own's complement: part selectors can't be negated, so "not own" needs a name
-  "message-unread",
-  "message-streaming",
-  "message-system",
-  "message-compact",
-  "message-loading",
-  "message-selected",
-];
 // attributes chx-message reflects on itself — a pattern mutating only these is not a consumer change
 const MESSAGE_OWN_ATTRIBUTES = new Set([
   "role",
@@ -71,73 +49,6 @@ const MESSAGE_OWN_ATTRIBUTES = new Set([
   "selected",
   "data-actionable",
 ]);
-const INFINITY_SCROLL_EXPORTPARTS = [
-  "scroller",
-  "sticky",
-  "viewport",
-  "item",
-  "message",
-  ...MESSAGE_STATE_PARTS,
-  ...MESSAGE_PARTS.map((part) => `message-${part}`),
-].join(", ");
-
-// Pre-measurement geometry, mirroring message.css — only an estimate, the virtualizer measures the real row.
-const ESTIMATE = {
-  regular: { charsPerLine: 52, lineHeight: 24, padding: 16, meta: 20 },
-  compact: { charsPerLine: 70, lineHeight: 20, padding: 6, meta: 19, avatar: 25 },
-  rowPadding: 2, // .infinity-scroll__row
-  groupGap: 12, // --chx-message-group-gap
-  attachments: 128, // one wrapped row of attachment cards
-};
-
-/** Own message still being delivered — an incoming reply shell is also "sending" while it streams,
- * but that's `busy`, not a delivery state. @param {ChxMessage} message */
-function isSending(message) {
-  return message.own && message.status === "sending";
-}
-
-/** The row's part names, drawn from MESSAGE_STATE_PARTS. Custom properties set in a matching
- * `::part()` rule inherit into chx-message's shadow tree, which is how a page restyles a row's
- * interior (e.g. a chrome-free system row) without a nested part selector — those don't exist.
- * @param {ChxMessage} message @param {{streaming: boolean, compact: boolean, selected: boolean}} state */
-function messagePartNames(message, { streaming, compact, selected }) {
-  const names = ["message"];
-  names.push(message.own ? "message-own" : "message-incoming");
-  if (message.readState === "unread") names.push("message-unread");
-  if (streaming) names.push("message-streaming");
-  if (message.parts?.[0]?.type === "system") names.push("message-system");
-  if (compact) names.push("message-compact");
-  if (isSending(message)) names.push("message-loading");
-  if (selected) names.push("message-selected");
-  return names.join(" ");
-}
-
-/**
- * Element directive that re-runs `FocusBehaviorController.syncInteriorTabbing` on every render pass.
- * `ref()` can't stand in for it — that only fires when the element itself changes, and the tab order
- * has to be re-applied whenever a message's children change too.
- */
-class InteriorTabbingDirective extends Directive {
-  /** @param {import("lit/directive.js").PartInfo} partInfo */
-  constructor(partInfo) {
-    super(partInfo);
-    if (partInfo.type !== PartType.ELEMENT) throw new Error("interiorTabbing(): element directive");
-  }
-
-  /** Never called — an element directive commits nothing. Declared with the real signature anyway,
-   *  since that's what types the `interiorTabbing(...)` call site.
-   *  @param {FocusBehaviorController} _focusBehavior @param {string} _id */
-  render(_focusBehavior, _id) {}
-
-  /**
-   * @param {import("lit/directive.js").ElementPart} part
-   * @param {[FocusBehaviorController, string]} args
-   */
-  update(part, [focusBehavior, id]) {
-    focusBehavior.syncInteriorTabbing(id, /** @type {HTMLElement} */ (part.element));
-  }
-}
-const interiorTabbing = directive(InteriorTabbingDirective);
 
 /**
  * @tag chx-message-list
@@ -184,9 +95,6 @@ export class ChxMessageList extends LitElement {
   #partRenderer; // per-part element rendering + cache — assigned in the constructor, below
   /** @type {DividerController} */
   #dividerController; // date dividers — assigned in the constructor, below
-  /** Last known author per authorId, rebuilt when `messages` changes by reference.
-   *  @type {{messages: ChxMessage[], byId: Map<string, import("../../types/message.js").ChxMessageAuthor>} | undefined} */
-  #knownAuthors;
   /** @type {StickyController} */
   #stickyController; // floating stuck-section date label — assigned in the constructor, below
   /** @type {StatusController} */
@@ -197,8 +105,8 @@ export class ChxMessageList extends LitElement {
   #focusBehavior; // roving tabindex — assigned in the constructor, below
   /** @type {ReadTrackingController} */
   #readTracking; // fire-once chx-message-read dedup + readState gate — assigned in the constructor, below
-  /** @type {BottomAnchorController} */
-  #bottomAnchor; // away-from-bottom state + scrollToBottom — assigned in the constructor, below
+  /** Further than `buffer` px from the bottom — reported by chx-infinity-scroll. */
+  #awayFromBottom = false;
   /** The app's `<chx-message slot="message">`, cloned into every row. @type {HTMLElement | undefined} */
   #messagePattern;
   /** message id → that row's clone of the pattern. @type {Map<string, HTMLElement>} */
@@ -356,13 +264,13 @@ export class ChxMessageList extends LitElement {
       dividerController: this.#dividerController,
       getMessages: () => this.messages,
       getInfinityScrollElement: () => this.#infinityScrollElement,
-      getAwayFromBottom: () => this.#bottomAnchor.awayFromBottom,
+      getAwayFromBottom: () => this.#awayFromBottom,
     });
 
-    // after StickyController — it takes the instance, while StickyController only takes a lazy getter
-    this.#bottomAnchor = new BottomAnchorController(this, {
-      getInfinityScrollElement: () => this.#infinityScrollElement,
-      stickyController: this.#stickyController,
+    // on the host, not a template binding: the affordance is slotted light DOM
+    this.addEventListener("chx-scroll-to-bottom-click", (event) => {
+      const { detail } = /** @type {CustomEvent<{behavior?: ScrollBehavior}>} */ (event);
+      this.#scrollToBottom(detail.behavior);
     });
   }
 
@@ -401,18 +309,30 @@ export class ChxMessageList extends LitElement {
       "viewport",
       this,
       {
-        toBottom: (behavior) => this.#bottomAnchor.scrollToBottom(behavior),
+        toBottom: (behavior) => this.#scrollToBottom(behavior),
         toMessage: (messageId, options) => this.#scrollToMessage(messageId, options),
-        isAwayFromBottom: () => this.#bottomAnchor.awayFromBottom,
+        isAwayFromBottom: () => this.#awayFromBottom,
         getScrollOffset: () => this.#infinityScrollElement?.getScrollOffset(),
         scrollToOffset: async (offset) => {
           await this.updateComplete;
           this.#infinityScrollElement?.scrollToOffset(offset);
         },
       },
-      () => [this.#bottomAnchor.awayFromBottom],
+      () => [this.#awayFromBottom],
     );
   }
+
+  /** @param {ScrollBehavior} [behavior] */
+  #scrollToBottom(behavior) {
+    this.#infinityScrollElement?.scrollToBottom(behavior);
+  }
+
+  /** @param {boolean} away */
+  #handleAwayFromBottomChange = (away) => {
+    this.#awayFromBottom = away;
+    this.#stickyController.handleAwayFromBottomChange(away);
+    this.requestUpdate();
+  };
 
   /**
    * Scrolls a loaded message into view; `false` when it isn't in `messages`. Resolves once the row
@@ -491,52 +411,19 @@ export class ChxMessageList extends LitElement {
     this.#requestRerender(); // a divider appearing/disappearing changes every row
   };
 
-  /** Rough pre-measurement height — text length → line count → px, cheap and approximate on purpose.
-   * @param {ChxMessage} message @param {number} index */
+  /** @param {ChxMessage} message @param {number} index */
   #estimateMessageSize(message, index) {
-    const parts = message.parts ?? [];
-    const chars = parts.reduce(
-      (sum, part) =>
-        part.type === "attachment" ? sum : sum + (part.text?.length ?? part.html?.length ?? 0),
-      0,
-    );
-    const density = this.compact ? ESTIMATE.compact : ESTIMATE.regular;
-    const lines = Math.max(1, Math.ceil(chars / density.charsPerLine));
-    let size = lines * density.lineHeight + density.padding;
-    if (parts.some((part) => part.type === "attachment")) size += ESTIMATE.attachments;
-
-    const { groupStart, groupEnd } = this.#groupAt(index);
-    // regular own rows hide their meta and avatar in CSS, so their author adds no height
-    const authorShown = this.#authorFor(message) !== undefined && (this.compact || !message.own);
-    if (groupStart && authorShown) size += density.meta;
-    if (this.compact && authorShown)
-      size = Math.max(size, ESTIMATE.compact.avatar + density.padding);
-    if (groupEnd) size += ESTIMATE.groupGap;
-
-    // divider folds into the row
-    return size + ESTIMATE.rowPadding + this.#dividerController.estimateExtra(message, index);
+    return estimateMessageSize(message, {
+      compact: this.compact,
+      ...this.#groupAt(index),
+      hasAuthor: this.#authorFor(message) !== undefined,
+      dividerExtra: this.#dividerController.estimateExtra(message, index),
+    });
   }
 
-  /** The row's author, per `author-display`. @param {ChxMessage} message */
+  /** @param {ChxMessage} message */
   #authorFor(message) {
-    if (this.authorDisplay !== "all" && (this.authorDisplay !== "incoming" || message.own))
-      return undefined;
-    // an optimistic send or a realtime event often carries only authorId — borrow the author from
-    // another message by the same authorId
-    if (message.author || message.authorId === undefined) return message.author;
-    return this.#authorsById().get(message.authorId);
-  }
-
-  #authorsById() {
-    if (this.#knownAuthors?.messages !== this.messages) {
-      const byId = new Map();
-      for (const message of this.messages) {
-        if (message.author && message.authorId !== undefined)
-          byId.set(message.authorId, message.author);
-      }
-      this.#knownAuthors = { messages: this.messages, byId };
-    }
-    return this.#knownAuthors.byId;
+    return authorFor(message, this.messages, this.authorDisplay);
   }
 
   /** Passed to chx-infinity-scroll as `.renderItem`. @param {ChxMessage} message @param {number} index */
@@ -666,10 +553,10 @@ export class ChxMessageList extends LitElement {
     }
     if (
       (changedProperties.has("typing") || changedProperties.has("streaming")) &&
-      !this.#bottomAnchor.awayFromBottom &&
+      !this.#awayFromBottom &&
       (this.#infinityScrollElement?.following ?? true)
     ) {
-      this.#bottomAnchor.scrollToBottom(this.scrollBehavior);
+      this.#scrollToBottom(this.scrollBehavior);
     }
     this.#stickyController.sync();
     if (changedProperties.has("messages")) this.#stickyController.notifyMessagesChanged();
@@ -732,7 +619,7 @@ export class ChxMessageList extends LitElement {
             .onLoadMore=${this.onLoadMore}
             .onScrollerKeydown=${this.#focusBehavior.handleKeyDown}
             .onScrollerFocusin=${this.#focusBehavior.handleFocusIn}
-            .onAwayFromBottomChange=${this.#bottomAnchor.handleAwayFromBottomChange}
+            .onAwayFromBottomChange=${this.#handleAwayFromBottomChange}
             ${ref((el) => (this.#infinityScrollElement = /** @type {ChxInfinityScroll | undefined} */ (el)))}
           >
             <slot name="streaming" slot="footer" ?hidden=${!this.streaming}></slot>
@@ -766,7 +653,7 @@ export class ChxMessageList extends LitElement {
       )}
       <!-- hidden, never removed: WebKit aborts a running smooth scroll when a slot is inserted or removed -->
       <slot name="loading-history" ?hidden=${!this.#status.loadingHistory}></slot>
-      <slot name="scroll-to-bottom" ?hidden=${!this.#bottomAnchor.awayFromBottom}></slot>
+      <slot name="scroll-to-bottom" ?hidden=${!this.#awayFromBottom}></slot>
       <slot name="divider" hidden @slotchange=${this.#handleDividerSlotchange}></slot>
       <slot name="message" hidden @slotchange=${this.#handleMessagePatternSlotchange}></slot>
     `;

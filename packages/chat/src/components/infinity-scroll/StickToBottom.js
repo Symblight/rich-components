@@ -1,3 +1,5 @@
+/** @import { BottomLatch } from "./BottomLatch.js" */
+
 /**
  * Covers the one case `anchorTo: "end"` + `followOnAppend` don't handle on their own: a prepend
  * landing while the viewport isn't full yet — older items arrive, the content finally overflows,
@@ -7,16 +9,15 @@
 export class StickToBottom {
   /** @type {() => any} */
   #getVirtualizer;
-  /** @type {() => number} */
-  #getBuffer;
-
-  /** Whether the last `refresh()` found the view within `buffer` of the true bottom. */
-  atBottom = true;
+  /** @type {BottomLatch} */
+  #latch;
   /** last seen `getTotalSize()`, so `follow()` only acts on an actual increase. @type {number} */
   #lastTotalSize = -1;
 
   /** @type {() => boolean} */
   #getFollowing;
+  /** @type {() => boolean} */
+  #isPaused;
 
   /**
    * An explicit `scrollToBottom()` not yet seen through: `"sent"` until its first scroll event,
@@ -26,11 +27,12 @@ export class StickToBottom {
    */
   #request = "none";
 
-  /** @param {{getVirtualizer: () => any, getBuffer: () => number, getFollowing?: () => boolean}} config */
+  /** @param {{getVirtualizer: () => any, latch: BottomLatch, getFollowing?: () => boolean, isPaused?: () => boolean}} config */
   constructor(config) {
     this.#getVirtualizer = config.getVirtualizer;
-    this.#getBuffer = config.getBuffer;
+    this.#latch = config.latch;
     this.#getFollowing = config.getFollowing ?? (() => true);
+    this.#isPaused = config.isPaused ?? (() => false);
   }
 
   /** Forget the last known size — call on reconnect, so a stale pre-disconnect snapshot can't be
@@ -40,18 +42,19 @@ export class StickToBottom {
   }
 
   /**
-   * Re-reads the offset through the virtualizer's own end test — call on every scroll event. Uses the
-   * host's `buffer` (the same "near the bottom" band that gates the away-from-bottom affordance) so a
-   * new message still auto-follows anywhere the affordance would stay hidden, matching v1.
+   * Call on every scroll event, after the latch read it — the DOM, not the virtualizer: this
+   * listener runs before virtual-core's own, so its offset and direction are still the previous
+   * event's. @param {boolean} left this scroll left the bottom
    */
-  refresh() {
-    const virtualizer = this.#getVirtualizer();
-    this.atBottom = virtualizer.isAtEnd(this.#getBuffer());
+  refresh(left) {
     if (this.#request === "none") return;
     // scrolled up and away: the user's; a clamp from a shrinking scrollHeight lands at the end
-    if (virtualizer.scrollDirection === "backward" && !virtualizer.isAtEnd())
-      this.#request = "none";
-    else this.#request = "moving";
+    this.#request = left ? "none" : "moving";
+  }
+
+  /** A user gesture took over: an unfinished `scrollToBottom()` is no longer ours to finish. */
+  cancelRequest() {
+    this.#request = "none";
   }
 
   /** Call on `scrollToBottom()`: once that scroll goes quiet, `follow()` finishes it. */
@@ -70,6 +73,8 @@ export class StickToBottom {
    * real size increase since the last call closes that gap without touching either threshold.
    */
   follow() {
+    // before the size read, so growth during a gesture's grace still counts once it ends
+    if (this.#isPaused()) return;
     const virtualizer = this.#getVirtualizer();
 
     // cheap and memoized on the virtual-core side — safe to read unconditionally so the comparison
@@ -82,7 +87,7 @@ export class StickToBottom {
       this.#request = "none";
       return;
     }
-    if (this.#request !== "moving" && !(this.atBottom && grew)) return;
+    if (this.#request !== "moving" && !(this.#latch.atBottom && grew)) return;
 
     // Never argue with a gesture in progress — without this guard, the first pixels of an upward
     // scroll still read as "at the bottom" and this would pull the view straight back down.

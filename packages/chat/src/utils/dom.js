@@ -19,3 +19,17 @@ export async function pollFrames(find, maxFrames = 30) {
   }
   return undefined;
 }
+
+/**
+ * Whether `event`, heard on `scroller`, can start a user scroll of it. Excluded: a horizontal wheel
+ * or a pinch (`ctrlKey`), and a press on content — only one on the scroller itself (its scrollbar).
+ * @param {Event} event @param {Element | undefined} scroller
+ */
+export function isScrollGesture(event, scroller) {
+  if (event.type === "wheel") {
+    const { deltaY, ctrlKey } = /** @type {WheelEvent} */ (event);
+    return Boolean(deltaY) && !ctrlKey;
+  }
+  if (event.type === "pointerdown") return event.target === scroller;
+  return true;
+}

@@ -11,6 +11,7 @@
  *   getInfinityScrollElement: () => ChxInfinityScroll | undefined,
  *   getAwayFromBottom: () => boolean,
  * }} StickyConfig
+ * @typedef {{element: HTMLElement, rect: DOMRect}} DividerBox
  */
 
 /** ms of scroll-idle after which the label fades out */
@@ -175,11 +176,16 @@ export class StickyController {
     const label = this.#labelFor(topIndex);
     const visible = this.#active && label !== "";
 
-    const distance = this.#distanceToNextDivider(pin);
+    // every rect read before #occlude's writes — interleaving them forces a style recalc per divider
+    const dividers = [...this.#config.dividerController.connectedDividers()].map((element) => ({
+      element,
+      rect: element.getBoundingClientRect(),
+    }));
+    const distance = this.#distanceToNextDivider(dividers, pin);
     const translateY = visible && height > 0 && distance < height ? distance - height : 0;
 
     const bandTop = pin + translateY;
-    this.#occlude(visible ? { top: bandTop, bottom: bandTop + height } : null);
+    this.#occlude(dividers, visible ? { top: bandTop, bottom: bandTop + height } : null);
 
     this.#topIndex = topIndex;
     this.#translateY = translateY;
@@ -199,7 +205,9 @@ export class StickyController {
   }
 
   #reset() {
-    this.#occlude(null);
+    for (const element of this.#config.dividerController.connectedDividers()) {
+      element.style.visibility = "";
+    }
     this.#translateY = 0;
     this.#pin = undefined;
     this.#clearHideTimer();
@@ -215,19 +223,15 @@ export class StickyController {
   #topVisibleIndex(pin) {
     const rows = this.#config
       .getInfinityScrollElement()
-      ?.renderRoot?.querySelectorAll(".infinity-scroll__canvas > .infinity-scroll__row");
+      ?.renderRoot?.querySelector(".infinity-scroll__canvas")?.children;
     if (!this.#scroller || !rows) return -1;
-    let bestIndex = -1;
-    let bestTop = Infinity;
+    // rows render in index order, so the first whose bottom passes the pin is the top one
     for (const row of rows) {
-      const rect = row.getBoundingClientRect();
-      if (rect.bottom <= pin) continue;
-      if (rect.top < bestTop) {
-        bestTop = rect.top;
-        bestIndex = Number(/** @type {HTMLElement} */ (row).dataset.index);
+      if (row.getBoundingClientRect().bottom > pin) {
+        return Number(/** @type {HTMLElement} */ (row).dataset.index);
       }
     }
-    return bestIndex;
+    return -1;
   }
 
   /** @param {number} topIndex */
@@ -249,25 +253,22 @@ export class StickyController {
     return -1;
   }
 
-  /** Gap (px) from `pin` down to the next inline divider; Infinity when none. @param {number} pin */
-  #distanceToNextDivider(pin) {
+  /** Gap (px) from `pin` down to the next inline divider; Infinity when none.
+   *  @param {DividerBox[]} dividers @param {number} pin */
+  #distanceToNextDivider(dividers, pin) {
     let min = Infinity;
-    for (const element of this.#config.dividerController.connectedDividers()) {
-      const offset = element.getBoundingClientRect().top - pin;
+    for (const { rect } of dividers) {
+      const offset = rect.top - pin;
       if (offset > 1 && offset < min) min = offset;
     }
     return min;
   }
 
   /** Hides inline dividers under `band` (`visibility`, so rows keep their height); null restores all.
-   *  @param {{top: number, bottom: number} | null} band */
-  #occlude(band) {
-    for (const element of this.#config.dividerController.connectedDividers()) {
-      let hidden = false;
-      if (band) {
-        const rect = element.getBoundingClientRect();
-        hidden = rect.bottom > band.top && rect.top < band.bottom;
-      }
+   *  @param {DividerBox[]} dividers @param {{top: number, bottom: number} | null} band */
+  #occlude(dividers, band) {
+    for (const { element, rect } of dividers) {
+      const hidden = band !== null && rect.bottom > band.top && rect.top < band.bottom;
       element.style.visibility = hidden ? "hidden" : "";
     }
   }

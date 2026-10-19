@@ -34,7 +34,8 @@ describe("chx-chat", () => {
       expect(messages).to.have.lengthOf(1);
       expect(messages[0].own).to.be.true;
       expect(messages[0].authorId).to.equal("me");
-      expect(messages[0].status).to.equal("sending");
+      // no adapter.sendMessage: a local echo, marked sent straight away
+      expect(messages[0].status).to.equal("sent");
       expect(messages[0].parts[0]).to.include({ type: "text", text: "hello", html: "hello" });
 
       await el.updateComplete;
@@ -957,7 +958,7 @@ describe("chx-chat", () => {
       await el.updateComplete;
 
       expect(list.typing).to.be.true;
-      expect(changeEvent?.detail).to.deep.equal({ typing: true });
+      expect(changeEvent?.detail).to.include({ typing: true });
     });
 
     it("is a no-op (no re-fired event) when called with the value already in effect", async () => {

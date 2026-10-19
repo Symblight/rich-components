@@ -1,8 +1,13 @@
 import { RowMeasurer } from "../../components/infinity-scroll/RowMeasurer.js";
+import { VERY_BOTTOM } from "../../components/infinity-scroll/BottomLatch.js";
 import { distanceToBottom } from "../../utils/dom.js";
+
+/** Share of the remaining distance a smooth follow covers per 60Hz frame — an ease-out that keeps up with growth. */
+const FOLLOW_EASE = 0.25;
 
 /**
  * @typedef {"auto" | "smooth" | "instant"} Behavior
+ * @typedef {import("../../components/infinity-scroll/BottomLatch.js").BottomLatch} BottomLatch
  * @typedef {{element: HTMLElement, offset: number, bottomOffset: number, index: string | undefined}} Anchor
  * @typedef {{
  *   getScrollElement: () => Element | undefined,
@@ -14,6 +19,8 @@ import { distanceToBottom } from "../../utils/dom.js";
  *   getFollowBehavior?: () => Behavior,
  *   getEndElement?: () => Element | undefined,
  *   beforeReconcile?: () => void,
+ *   latch: BottomLatch,
+ *   isPaused?: () => boolean,
  * }} PlainListConfig
  */
 
@@ -33,9 +40,10 @@ export class PlainListController {
   #anchor = null;
   #prevScrollTop = 0;
   #prevScrollHeight = 0;
-  #lastScrollTop = 0;
-  /** the last recompute found the view within `buffer` of the bottom */
-  #atBottom = true;
+  #prevClientHeight = 0;
+  #prevClientWidth = 0;
+  /** @type {BottomLatch} */
+  #latch;
   /** `observe()` has started once — gates the initial pin */
   #everStarted = false;
 
@@ -45,11 +53,17 @@ export class PlainListController {
   #resizeObserver = null;
   /** @type {number | null} */
   #scrollFrame = null;
+  /** @type {number | null} */
+  #followFrame = null;
+  #followTime = 0;
+  /** rows mutated since the last scroll event — see `takeContentChanged()` */
+  #contentChanged = false;
   #disposed = false;
 
   /** @param {PlainListConfig} config */
   constructor(config) {
     this.#config = config;
+    this.#latch = config.latch;
     this.#measurer = new RowMeasurer({
       rows: config.rows,
       // real DOM already has its real height — nothing to cache, and nothing keyed by index
@@ -78,7 +92,7 @@ export class PlainListController {
     this.#resizeObserver.observe(canvas);
 
     if (this.#everStarted) {
-      if (this.#atBottom) this.scrollToBottom();
+      if (this.#latch.atBottom) this.scrollToBottom();
       this.captureAnchor();
       return;
     }
@@ -104,15 +118,15 @@ export class PlainListController {
     this.#resizeObserver?.disconnect();
     this.#resizeObserver = null;
     this.#cancelScrollFrame();
+    this.stopFollow();
   }
 
   releaseRows() {
     this.#measurer.releaseRows();
   }
 
-  /** Call synchronously from the scroll handler, so a stale `atBottom` can't yank the view mid-gesture. */
+  /** Call from the scroll handler, after the latch read the event. */
   handleScroll = () => {
-    this.#trackAtBottom();
     if (this.#scrollFrame !== null) return;
     this.#scrollFrame = requestAnimationFrame(() => {
       this.#scrollFrame = null;
@@ -129,8 +143,33 @@ export class PlainListController {
     const el = this.#config.getScrollElement();
     if (!el) return;
     // set up front: a smooth scroll is still on its way, and must not read as having left the bottom
-    this.#atBottom = true;
+    this.#latch.atBottom = true;
+    if (behavior === "smooth") {
+      this.#startFollow();
+      return;
+    }
+    this.stopFollow();
     el.scrollTo({ top: this.#bottomOffset(el), behavior });
+  }
+
+  /** Whether rows mutated since the last call — once per scroll event, for `BottomLatch`. */
+  takeContentChanged() {
+    const changed = this.#contentChanged;
+    this.#contentChanged = false;
+    return changed;
+  }
+
+  /** A user gesture took over: our animated follow is no longer ours to finish. */
+  stopFollow() {
+    if (this.#followFrame !== null) cancelAnimationFrame(this.#followFrame);
+    this.#followFrame = null;
+  }
+
+  /** After a gesture's grace ran out without leaving the bottom: catch up with what grew meanwhile. */
+  resumeFollow() {
+    const el = this.#config.getScrollElement();
+    if (!el || !this.#latch.atBottom || !(this.#config.getFollowing?.() ?? true)) return;
+    if (Math.abs(el.scrollTop - this.#bottomOffset(el)) > 1) this.#followToBottom();
   }
 
   /** @param {number} offset @param {{behavior?: Behavior}} [options] */
@@ -187,8 +226,10 @@ export class PlainListController {
 
     this.#prevScrollTop = el.scrollTop;
     this.#prevScrollHeight = el.scrollHeight;
+    this.#prevClientHeight = el.clientHeight;
+    this.#prevClientWidth = el.clientWidth;
 
-    const items = Array.from(this.#config.rows());
+    const items = this.#rowList();
     if (items.length === 0) {
       this.#anchor = null;
       return null;
@@ -209,7 +250,7 @@ export class PlainListController {
       }
     }
 
-    const element = items[found >= 0 ? found : items.length - 1];
+    const element = /** @type {HTMLElement} */ (items[found >= 0 ? found : items.length - 1]);
     const rect = element.getBoundingClientRect();
     this.#anchor = {
       element,
@@ -240,7 +281,7 @@ export class PlainListController {
     }
 
     // anchor row replaced (unkeyed re-render): fall back to growth above the viewport
-    if (!this.#atBottom) {
+    if (!this.#latch.atBottom) {
       const delta = el.scrollHeight - this.#prevScrollHeight;
       if (delta !== 0) el.scrollTop = this.#prevScrollTop + delta;
     }
@@ -249,6 +290,7 @@ export class PlainListController {
   /** Waits for row readiness instead of reconciling inline, against the pre-mutation anchor. */
   #handleMutation = () => {
     if (this.#disposed) return;
+    this.#contentChanged = true;
     // a capture queued by an in-flight scroll would land after the prepend and re-baseline onto the
     // shifted layout, zeroing the restore delta — drop it; #reconcile() re-captures
     this.#cancelScrollFrame();
@@ -263,16 +305,69 @@ export class PlainListController {
 
   /** Hold the bottom or the reading position, then re-baseline. */
   #reconcile() {
+    const el = this.#config.getScrollElement();
+    // first: a moved pin changes the reserved min-height, which the skip below must see
     this.#config.beforeReconcile?.();
-    if (this.#atBottom && (this.#config.getFollowing?.() ?? true)) {
-      this.scrollToBottom(this.#config.getFollowBehavior?.() ?? "auto");
+    // nothing moved since the last baseline: a streamed chunk that didn't wrap a line, or the
+    // resize half of a change its mutation already reconciled
+    if (el && this.#unchangedSinceCapture(el)) return;
+    if (this.#latch.atBottom && (this.#config.getFollowing?.() ?? true)) {
+      // a programmatic scroll cancels the browser's wheel animation — the gesture's scroll decides
+      if (!this.#config.isPaused?.()) this.#followToBottom();
     } else {
       this.restoreAnchor();
-      this.#updateAtBottom();
+      // layout alone never rejoins from inside `buffer` — that's where a user's upward scroll rests
+      const distance = el ? distanceToBottom(el) : 0;
+      if (distance > this.#config.getBuffer()) this.#latch.atBottom = false;
+      else if (distance <= VERY_BOTTOM) this.#latch.atBottom = true;
     }
+    if (el) this.#latch.baseline(el);
     this.captureAnchor();
     this.#config.onReconciled?.();
   }
+
+  /**
+   * Smooth only follows growth that starts within a viewport of the bottom. Catching up from
+   * farther (rows that just got their height on first render) jumps: animating it shows the top
+   * first, and it's the scroll position `onReconciled`'s load check reads straight after.
+   */
+  #followToBottom() {
+    const el = this.#config.getScrollElement();
+    if (!el) return;
+    const smooth = (this.#config.getFollowBehavior?.() ?? "auto") === "smooth";
+    const near = this.#bottomOffset(el) - el.scrollTop <= el.clientHeight;
+    this.scrollToBottom(smooth && near ? "smooth" : "auto");
+  }
+
+  /**
+   * Smooth scrolling is ours, one `scrollTop` step per frame from wherever the view is toward a target
+   * re-read every frame. A native smooth `scrollTo` doesn't survive a layout jump mid-animation (see
+   * `BottomLatch`), which streaming content causes in WebKit (confirmed live); ours just carries on.
+   */
+  #startFollow() {
+    if (this.#followFrame !== null) return;
+    this.#followTime = performance.now();
+    this.#followFrame = requestAnimationFrame(this.#followStep);
+  }
+
+  /** @param {number} now */
+  #followStep = (now) => {
+    this.#followFrame = null;
+    const el = this.#config.getScrollElement();
+    if (!el || this.#disposed || !this.#latch.atBottom || this.#config.isPaused?.()) return;
+    const remaining = this.#bottomOffset(el) - el.scrollTop;
+    if (remaining <= 0.5) {
+      if (remaining < -0.5) el.scrollTop += remaining; // the end moved up past us
+      return;
+    }
+    const ease = 1 - Math.pow(1 - FOLLOW_EASE, (now - this.#followTime) / (1000 / 60));
+    this.#followTime = now;
+    const before = el.scrollTop;
+    el.scrollTop += Math.min(remaining, Math.max(1, remaining * ease));
+    // clamped: the next reconcile restarts it once the content has grown
+    if (el.scrollTop <= before) return;
+    this.#followFrame = requestAnimationFrame(this.#followStep);
+  };
 
   /** px to scroll so `row`'s edge meets the viewport's. @param {Element} el @param {HTMLElement} row @param {"start" | "center" | "end"} align */
   #alignDelta(el, row, align) {
@@ -291,8 +386,34 @@ export class PlainListController {
     this.#scrollFrame = null;
   }
 
+  /** @param {Element} el */
+  #unchangedSinceCapture(el) {
+    const anchor = this.#anchor;
+    if (
+      !anchor?.element.isConnected ||
+      el.scrollTop !== this.#prevScrollTop ||
+      el.scrollHeight !== this.#prevScrollHeight ||
+      el.clientHeight !== this.#prevClientHeight ||
+      el.clientWidth !== this.#prevClientWidth
+    ) {
+      return false;
+    }
+    // a row above can move the anchor with scrollHeight held by pin-top's reserved min-height
+    const offset = anchor.element.getBoundingClientRect().top - el.getBoundingClientRect().top;
+    return Math.abs(offset - anchor.offset) <= 0.5;
+  }
+
+  /** Live and indexable — the canvas holds nothing but rows, so no `querySelectorAll` copy of all N.
+   *  @returns {ArrayLike<Element>} */
+  #rowList() {
+    return this.#config.getCanvasElement()?.children ?? [];
+  }
+
   /** @param {number} index @returns {HTMLElement | undefined} */
   #findRow(index) {
+    // every row is rendered in order, so its position is its index
+    const row = /** @type {HTMLElement | undefined} */ (this.#rowList()[index]);
+    if (row && Number(row.dataset.index) === index) return row;
     for (const row of this.#config.rows()) {
       if (Number(row.dataset.index) === index) return row;
     }
@@ -308,23 +429,5 @@ export class PlainListController {
     const endBottom =
       end.getBoundingClientRect().bottom - el.getBoundingClientRect().top + el.scrollTop;
     return Math.min(max, Math.max(0, endBottom + padding - el.clientHeight));
-  }
-
-  /**
-   * From a scroll event. Scrolling down never leaves the bottom: a smooth scroll to it reads as
-   * "far away" on the way, so only arriving or scrolling back up settles it.
-   */
-  #trackAtBottom() {
-    const el = this.#config.getScrollElement();
-    if (!el) return;
-    const up = el.scrollTop < this.#lastScrollTop - 0.5;
-    this.#lastScrollTop = el.scrollTop;
-    const near = distanceToBottom(el) <= this.#config.getBuffer();
-    if (near || up) this.#atBottom = near;
-  }
-
-  #updateAtBottom() {
-    const el = this.#config.getScrollElement();
-    this.#atBottom = (el ? distanceToBottom(el) : 0) <= this.#config.getBuffer();
   }
 }

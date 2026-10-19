@@ -1,8 +1,6 @@
 import { distanceToBottom } from "../../utils/dom.js";
+import { VERY_BOTTOM } from "../../components/infinity-scroll/BottomLatch.js";
 
-/** px from the true bottom that counts as "the very bottom" for resuming the follow. */
-const FOLLOW_THRESHOLD = 8;
-const GESTURES = /** @type {const} */ (["wheel", "touchstart", "keydown", "pointerdown"]);
 const PINNED_CLASS = "infinity-scroll__content_pinned";
 
 /**
@@ -14,6 +12,7 @@ const PINNED_CLASS = "infinity-scroll__content_pinned";
  *   getOffset: (index: number) => number | undefined,
  *   scrollTo: (offset: number) => void,
  *   onFollowChange: (following: boolean) => void,
+ *   isUserScroll: () => boolean,
  * }} PinConfig
  */
 
@@ -35,11 +34,9 @@ export class PinController {
   /** @type {number | undefined} */
   #offset;
   #following = true;
-  /** our own pin scroll must not count as "the user reached the bottom" — cleared by a real gesture */
+  /** our own pin scroll must not count as "the user reached the bottom" — cleared by a user scroll */
   #suppressResume = false;
   #lastScrollTop = 0;
-  /** @type {HTMLElement | undefined} */
-  #attachedTo;
 
   /** @param {PinConfig} config */
   constructor(config) {
@@ -81,7 +78,6 @@ export class PinController {
 
   /** Call from every host update, once the DOM reflects the current data. */
   update() {
-    this.#attach();
     this.refresh();
     if (this.#pendingKey === undefined) return;
     if (!this.#config.getEnabled()) {
@@ -107,17 +103,12 @@ export class PinController {
     this.#lastScrollTop = top;
     if (!this.#config.getEnabled()) return;
 
-    const atVeryBottom = distanceToBottom(el) <= FOLLOW_THRESHOLD;
+    // only a scroll a gesture just started is the user's — a later layout clamp to the bottom isn't
+    if (this.#config.isUserScroll()) this.#suppressResume = false;
+    const atVeryBottom = distanceToBottom(el) <= VERY_BOTTOM;
     // still at the bottom, it's no scroll away: rows above shrinking (a wider column) move scrollTop up
     if (scrolledUp && !atVeryBottom) this.#setFollowing(false);
     else if (atVeryBottom && !this.#suppressResume) this.#setFollowing(true);
-  }
-
-  dispose() {
-    const el = this.#attachedTo;
-    if (!el) return;
-    for (const type of GESTURES) el.removeEventListener(type, this.#onGesture);
-    this.#attachedTo = undefined;
   }
 
   /** @param {number} offset */
@@ -153,18 +144,5 @@ export class PinController {
     const before = this.following;
     this.#following = following;
     if (this.following !== before) this.#config.onFollowChange(this.following);
-  }
-
-  #onGesture = () => {
-    this.#suppressResume = false;
-  };
-
-  #attach() {
-    const el = this.#config.getScrollElement();
-    if (el === this.#attachedTo) return;
-    this.dispose();
-    if (!el) return;
-    this.#attachedTo = el;
-    for (const type of GESTURES) el.addEventListener(type, this.#onGesture, { passive: true });
   }
 }

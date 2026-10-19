@@ -166,13 +166,12 @@ describe("chx-message-list", () => {
       ];
       await el.updateComplete;
 
-      const messageEl = /** @type {ChxMessageEl} */ (
-        infinityScrollOf(el).shadowRoot?.querySelector("chx-message")
+      await infinityScrollOf(el).updateComplete;
+      const row = /** @type {HTMLElement} */ (
+        infinityScrollOf(el).shadowRoot?.querySelector("chx-message-row")
       );
-      await messageEl.updateComplete; // aria-busy is a reflected property — chx-message's own
-      //   reactive update cycle, a third async hop past chx-message-list's own updateComplete
-      expect(messageEl.getAttribute("aria-label")).to.equal("Your message");
-      expect(messageEl.getAttribute("aria-busy")).to.equal("true");
+      expect(row.getAttribute("aria-label")).to.equal("Your message");
+      expect(row.getAttribute("aria-busy")).to.equal("true");
 
       el.messages = [
         makeMessage({
@@ -182,8 +181,8 @@ describe("chx-message-list", () => {
         }),
       ];
       await el.updateComplete;
-      await messageEl.updateComplete;
-      expect(messageEl.getAttribute("aria-busy")).to.equal("false");
+      await infinityScrollOf(el).updateComplete;
+      expect(row.getAttribute("aria-busy")).to.equal("false");
     });
 
     it("chx-infinity-scroll carries role=log/aria-live=polite/aria-label=messagesLabel", async () => {
@@ -256,7 +255,9 @@ describe("chx-message-list", () => {
 
       const shadow = infinityScrollOf(el).shadowRoot;
       const partsOf = (/** @type {string} */ id) =>
-        /** @type {HTMLElement} */ (shadow?.querySelector(`[data-message-id="${id}"]`))
+        /** @type {HTMLElement} */ (
+          shadow?.querySelector(`chx-message-row[data-message-id="${id}"] > chx-message`)
+        )
           .getAttribute("part")
           ?.split(" ");
 
@@ -281,8 +282,8 @@ describe("chx-message-list", () => {
       await el.updateComplete;
 
       const messages = () =>
-        /** @type {ChxMessageEl[]} */ ([
-          ...(infinityScrollOf(el).shadowRoot?.querySelectorAll("chx-message") ?? []),
+        /** @type {HTMLElement[]} */ ([
+          ...(infinityScrollOf(el).shadowRoot?.querySelectorAll("chx-message-row") ?? []),
         ]);
 
       // seeded on first render — the only sensible default, otherwise Tab has nowhere to land
@@ -387,8 +388,8 @@ describe("chx-message-list", () => {
       await el.updateComplete;
 
       const messages = () =>
-        /** @type {ChxMessageEl[]} */ ([
-          ...(infinityScrollOf(el).shadowRoot?.querySelectorAll("chx-message") ?? []),
+        /** @type {HTMLElement[]} */ ([
+          ...(infinityScrollOf(el).shadowRoot?.querySelectorAll("chx-message-row") ?? []),
         ]);
       expect(messages()[0].tabIndex).to.equal(0);
 
@@ -407,8 +408,8 @@ describe("chx-message-list", () => {
       await el.updateComplete;
 
       const messageEl = (/** @type {string} */ id) =>
-        /** @type {ChxMessageEl | null} */ (
-          infinityScrollOf(el).shadowRoot?.querySelector(`chx-message[data-message-id="${id}"]`)
+        /** @type {HTMLElement | null} */ (
+          infinityScrollOf(el).shadowRoot?.querySelector(`chx-message-row[data-message-id="${id}"]`)
         );
       const first = messageEl("m0");
       expect(first).to.exist;
@@ -461,7 +462,7 @@ describe("chx-message-list", () => {
       await el.updateComplete;
 
       const mountedIds = () =>
-        [...(infinityScrollOf(el).shadowRoot?.querySelectorAll("chx-message") ?? [])].map(
+        [...(infinityScrollOf(el).shadowRoot?.querySelectorAll("chx-message-row") ?? [])].map(
           (m) => /** @type {HTMLElement} */ (m).dataset.messageId,
         );
       expect(mountedIds()).to.include("m0");
@@ -523,7 +524,11 @@ describe("chx-message-list", () => {
       const el = /** @type {ChxMessageList} */ (
         await fixture(html`<chx-message-list style="height: 400px;"></chx-message-list>`)
       );
-      expect(el.shadowRoot?.querySelector('slot[name="typing"]')).to.not.exist;
+      expect(
+        /** @type {HTMLSlotElement | null | undefined} */ (
+          el.shadowRoot?.querySelector('slot[name="typing"]')
+        )?.hidden,
+      ).to.be.true;
     });
 
     it("renders nothing when typing is true but nothing is slotted — no default content", async () => {
@@ -578,7 +583,11 @@ describe("chx-message-list", () => {
       const el = /** @type {ChxMessageList} */ (
         await fixture(html`<chx-message-list style="height: 400px;"></chx-message-list>`)
       );
-      expect(el.shadowRoot?.querySelector('slot[name="streaming"]')).to.not.exist;
+      expect(
+        /** @type {HTMLSlotElement | null | undefined} */ (
+          el.shadowRoot?.querySelector('slot[name="streaming"]')
+        )?.hidden,
+      ).to.be.true;
     });
 
     it("renders nothing when streaming is true but nothing is slotted — no default content", async () => {
@@ -638,7 +647,11 @@ describe("chx-message-list", () => {
           </chx-message-list>
         `)
       );
-      expect(el.shadowRoot?.querySelector('slot[name="scroll-to-bottom"]')).to.not.exist;
+      expect(
+        /** @type {HTMLSlotElement | null | undefined} */ (
+          el.shadowRoot?.querySelector('slot[name="scroll-to-bottom"]')
+        )?.hidden,
+      ).to.be.true;
     });
 
     it("renders the slot, as a sibling of chx-infinity-scroll (not forwarded through its footer), once away from bottom", async () => {
@@ -662,7 +675,7 @@ describe("chx-message-list", () => {
         el.shadowRoot?.querySelector('slot[name="scroll-to-bottom"]')
       );
       expect(slot).to.exist;
-      expect(slot?.parentElement).to.equal(el.shadowRoot); // sibling of chx-infinity-scroll, not inside it
+      expect(slot?.parentNode).to.equal(el.shadowRoot); // sibling of chx-infinity-scroll, not inside it
       const assigned = slot?.assignedElements() ?? [];
       expect(assigned).to.have.lengthOf(1);
       expect(assigned[0].tagName.toLowerCase()).to.equal("chx-scroll-to-bottom-affordance");
@@ -674,11 +687,19 @@ describe("chx-message-list", () => {
       );
       infinityScrollOf(el).onAwayFromBottomChange(true);
       await el.updateComplete;
-      expect(el.shadowRoot?.querySelector('slot[name="scroll-to-bottom"]')).to.exist;
+      expect(
+        /** @type {HTMLSlotElement | null | undefined} */ (
+          el.shadowRoot?.querySelector('slot[name="scroll-to-bottom"]')
+        )?.hidden,
+      ).to.be.false;
 
       infinityScrollOf(el).onAwayFromBottomChange(false);
       await el.updateComplete;
-      expect(el.shadowRoot?.querySelector('slot[name="scroll-to-bottom"]')).to.not.exist;
+      expect(
+        /** @type {HTMLSlotElement | null | undefined} */ (
+          el.shadowRoot?.querySelector('slot[name="scroll-to-bottom"]')
+        )?.hidden,
+      ).to.be.true;
     });
 
     it("forwards the affordance's chx-scroll-to-bottom-click behavior override to chx-infinity-scroll", async () => {

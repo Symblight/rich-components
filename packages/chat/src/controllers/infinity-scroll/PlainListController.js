@@ -11,7 +11,6 @@ import { distanceToBottom } from "../../utils/dom.js";
  *   getBuffer: () => number,
  *   onReconciled?: () => void,
  *   getFollowing?: () => boolean,
- *   getHold?: () => boolean,
  *   beforeReconcile?: () => void,
  * }} PlainListConfig
  */
@@ -261,12 +260,6 @@ export class PlainListController {
   /** Hold the bottom or the reading position, then re-baseline. */
   #reconcile() {
     this.#config.beforeReconcile?.();
-    // a smooth pin scroll in flight: restoring a mid-animation anchor would cancel it
-    if (this.#config.getHold?.()) {
-      this.#updateAtBottom();
-      this.#config.onReconciled?.();
-      return;
-    }
     if (this.#atBottom && (this.#config.getFollowing?.() ?? true)) {
       this.scrollToBottom();
     } else {

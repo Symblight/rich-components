@@ -35,7 +35,6 @@ import { distanceToBottom } from "../../utils/dom.js";
  *   getPinEnabled?: () => boolean,
  *   getContentElement?: () => HTMLElement | undefined,
  *   getEndElement?: () => Element | undefined,
- *   getScrollBehavior?: () => "auto" | "smooth" | "instant",
  * }} InfinityScrollConfig
  */
 
@@ -101,8 +100,7 @@ export class InfinityScrollController {
       getEnabled: config.getPinEnabled ?? (() => false),
       indexOfKey: (key) => this.#indexOfKey(key),
       getOffset: (index) => this.#pinOffset(index),
-      scrollTo: (offset, behavior) => this.#scrollToPin(offset, behavior),
-      getScrollBehavior: config.getScrollBehavior ?? (() => "auto"),
+      scrollTo: (offset) => this.#scrollToPin(offset),
       onFollowChange: (following) => this.#list.setFollowing(following),
     });
 
@@ -146,7 +144,6 @@ export class InfinityScrollController {
       // the only maybeLoad() check in this mode — scrollTop is post-correction here, unlike in hostUpdated
       onReconciled: () => this.#loader.maybeLoad(),
       getFollowing: () => this.#pin.following,
-      getHold: () => this.#pin.pinning,
       beforeReconcile: () => this.#pin.refresh(),
     });
 
@@ -331,14 +328,14 @@ export class InfinityScrollController {
     return Math.max(0, Math.round(rowTop - paddingTop));
   }
 
-  /** @param {number} offset @param {"auto" | "smooth" | "instant"} behavior */
-  #scrollToPin(offset, behavior) {
+  /** @param {number} offset */
+  #scrollToPin(offset) {
     if (!this.#noVirtualization) {
       // through virtual-core, so its own offset never lags scrollTop
-      this.#list.virtualizer.scrollToOffset(offset, { behavior });
+      this.#list.virtualizer.scrollToOffset(offset, { behavior: "auto" });
       return;
     }
-    this.#plainList.scrollToOffset(offset, { behavior });
+    this.#plainList.scrollToOffset(offset, { behavior: "auto" });
     // a reconcile must restore onto the pin, not the pre-pin position
     this.#plainList.captureAnchor();
   }

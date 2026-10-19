@@ -37,9 +37,14 @@ function distanceToBottom(scroller) {
 
 /**
  * Rows far taller than the estimate, like agent replies with code blocks.
- * @param {{ count?: number, scrollMode?: "pin-top" | "stick-bottom", footer?: boolean }} [options]
+ * @param {{ count?: number, scrollMode?: "pin-top" | "stick-bottom", footer?: boolean, scrollBehavior?: "auto" | "smooth" }} [options]
  */
-async function tallRows({ count = 60, scrollMode = "stick-bottom", footer = false } = {}) {
+async function tallRows({
+  count = 60,
+  scrollMode = "stick-bottom",
+  footer = false,
+  scrollBehavior = "auto",
+} = {}) {
   /** @type {Map<number, number>} */
   const heights = new Map();
   const el = /** @type {ChxInfinityScroll} */ (
@@ -47,6 +52,7 @@ async function tallRows({ count = 60, scrollMode = "stick-bottom", footer = fals
       <chx-infinity-scroll
         style="height: 400px;"
         scroll-mode=${scrollMode}
+        scroll-behavior=${scrollBehavior}
         .hasMore=${false}
         .data=${Array.from({ length: count }, (_, i) => i)}
         .estimateItemSize=${() => 40}
@@ -102,6 +108,32 @@ async function growWhileScrolling(el, heights, index) {
 }
 
 describe("chx-infinity-scroll", () => {
+  describe("pinToStart()", function () {
+    this.timeout(15000);
+
+    it("scrolls to the pinned row at once, whatever the scroll-behavior", async () => {
+      const { el, scroller } = await tallRows({ scrollMode: "pin-top", scrollBehavior: "smooth" });
+      /** @type {(ScrollToOptions["behavior"])[]} */
+      const behaviors = [];
+      const scrollTo = scroller.scrollTo.bind(scroller);
+      scroller.scrollTo = /** @type {typeof scroller.scrollTo} */ (
+        (/** @type {ScrollToOptions} */ options) => {
+          behaviors.push(options.behavior);
+          return scrollTo(options);
+        }
+      );
+      await userScrollToTop(scroller);
+      behaviors.length = 0;
+
+      el.pinToStart(30);
+      el.requestUpdate();
+      await settled(scroller);
+
+      expect(behaviors).to.not.be.empty;
+      expect(behaviors).to.not.include("smooth");
+    });
+  });
+
   describe("scrollToBottom()", function () {
     this.timeout(15000);
 

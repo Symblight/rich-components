@@ -149,7 +149,6 @@ export class ChxInfinityScroll extends LitElement {
       getPinEnabled: () => this.scrollMode === "pin-top",
       getContentElement: () => this.#contentElement,
       getEndElement: () => this.#endElement,
-      getScrollBehavior: () => motionSafe(this.scrollBehavior),
       getData: () => this.data,
       getItemKey: (item, index) => this.itemKey(item, index),
       getEstimateItemSize: () => this.estimateItemSize,

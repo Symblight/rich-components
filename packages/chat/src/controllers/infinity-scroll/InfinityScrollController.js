@@ -1,12 +1,13 @@
 import { VirtualListController } from "./VirtualListController.js";
 import { RowMeasurer } from "../../components/infinity-scroll/RowMeasurer.js";
 import { StickToBottom } from "../../components/infinity-scroll/StickToBottom.js";
+import { InitialBottomLock } from "../../components/infinity-scroll/InitialBottomLock.js";
 import { LoadMoreController } from "./LoadMoreController.js";
 import { VisibilityController } from "./VisibilityController.js";
 import { PlainListController } from "./PlainListController.js";
 import { PinController } from "./PinController.js";
 import { BottomSentinelController } from "./BottomSentinelController.js";
-import { distanceToBottom } from "../../utils/dom.js";
+import { isScrollGesture, USER_SCROLL_GRACE } from "../../utils/dom.js";
 
 /**
  * @typedef {import("lit").ReactiveController} ReactiveController
@@ -39,19 +40,14 @@ import { distanceToBottom } from "../../utils/dom.js";
  * }} InfinityScrollConfig
  */
 
-/** px of leftover gap under which the view rests at the bottom */
-const PIN_EPSILON = 1;
-/** frames the size must hold steady at the bottom before the initial pin hands off */
-const PIN_SETTLE_FRAMES = 5;
-
 /**
  * Composes a bottom-anchored, lazily-prepending list. Two exclusive strategies:
- *  - virtualized (default): `VirtualListController` + `RowMeasurer` + `StickToBottom` + the
- *    initial-pin latch below;
+ *  - virtualized (default): `VirtualListController` + `RowMeasurer` + `StickToBottom` +
+ *    `InitialBottomLock`;
  *  - `noVirtualization`: `PlainListController` (real DOM, `MutationObserver`-driven).
  * Shared by both: `LoadMoreController`, `VisibilityController`, `BottomSentinelController`,
  * `PinController`. `VirtualListController.sync()` runs in both modes — it's what disables
- * virtual-core under `noVirtualization`.
+ * virtual-core under `noVirtualization`. The only class that branches on the mode.
  * @implements {ReactiveController}
  */
 export class InfinityScrollController {
@@ -66,21 +62,12 @@ export class InfinityScrollController {
   #plainList;
   #pin;
   #bottomSentinel;
+  #initialLock;
   /** @type {number | null} */
   #scrollFrame = null;
-
-  // Initial-pin latch: rows are measured in one batch, so the canvas reaches full height in a single
-  // late jump the virtualizer's reconcile can't catch, leaving the first paint short of the bottom.
-  // Until the first load settles, a rAF loop re-pins each frame; a user gesture ends it early.
-  /** @type {number | null} */
-  #pinFrame = null;
-  #initialPinStarted = false;
-  #initialPinDone = false;
-  #lastTotalSize = -1;
-  #settleFrames = 0;
   #disposed = false;
-  /** @type {Element | null} */
-  #gestureTarget = null;
+  /** Set while follows are held off: a programmatic scroll before a gesture's first scroll event cancels the browser's wheel animation. @type {ReturnType<typeof setTimeout> | null} */
+  #graceTimer = null;
 
   /** @param {ReactiveControllerHost} host @param {InfinityScrollConfig} config */
   constructor(host, config) {
@@ -102,7 +89,7 @@ export class InfinityScrollController {
       indexOfKey: (key) => this.#indexOfKey(key),
       getOffset: (index) => this.#pinOffset(index),
       scrollTo: (offset) => this.#scrollToPin(offset),
-      onFollowChange: (following) => this.#list.setFollowing(following),
+      onFollowChange: () => this.#syncFollowing(),
     });
 
     this.#list = new VirtualListController(host, {
@@ -122,6 +109,12 @@ export class InfinityScrollController {
       getVirtualizer: () => this.#list.virtualizer,
       getBuffer: config.getBuffer,
       getFollowing: () => this.#pin.following,
+      isPaused: () => this.#paused,
+    });
+
+    this.#initialLock = new InitialBottomLock({
+      getScrollElement: config.getScrollElement,
+      getVirtualizer: () => this.#list.virtualizer,
     });
 
     this.#measurer = new RowMeasurer({
@@ -148,6 +141,7 @@ export class InfinityScrollController {
       getFollowBehavior: config.getFollowBehavior,
       getEndElement: config.getEndElement,
       beforeReconcile: () => this.#pin.refresh(),
+      isPaused: () => this.#paused,
     });
 
     this.#loader = new LoadMoreController({
@@ -175,6 +169,15 @@ export class InfinityScrollController {
     return this.#config.getNoVirtualization?.() ?? false;
   }
 
+  get #paused() {
+    return this.#graceTimer !== null;
+  }
+
+  /** virtual-core's own end-following (append, resize at the end) is off while paused too. */
+  #syncFollowing() {
+    this.#list.setFollowing(this.#pin.following && !this.#paused);
+  }
+
   hostConnected() {
     this.#disposed = false;
     this.#loader.revive();
@@ -192,7 +195,7 @@ export class InfinityScrollController {
     // virtualized offsets are known before render, so a prepend's offset lands with the rows
     if (!this.#noVirtualization) this.#pin.refresh();
     // onFollowChange misses a scroll-mode flip
-    this.#list.setFollowing(this.#pin.following);
+    this.#syncFollowing();
   }
 
   hostUpdated() {
@@ -205,109 +208,41 @@ export class InfinityScrollController {
     }
     this.#stick.follow();
     this.#measurer.schedule();
-    if (!this.#initialPinStarted && this.#list.virtualizer.options.count > 0) {
-      this.#startInitialPin();
-    }
-    if (this.#initialPinStarted && !this.#initialPinDone) this.#pinCurrentFrame();
+    if (this.#list.virtualizer.options.count > 0) this.#initialLock.start();
+    this.#initialLock.pinCurrentFrame();
     this.#pin.update();
   }
 
   hostDisconnected() {
     if (this.#scrollFrame !== null) cancelAnimationFrame(this.#scrollFrame);
     this.#scrollFrame = null;
+    if (this.#graceTimer !== null) clearTimeout(this.#graceTimer);
+    this.#graceTimer = null;
     this.#disposed = true;
     this.#loader.dispose();
     this.#visibility.dispose();
     this.#bottomSentinel.dispose();
-    this.#pin.dispose();
+    this.#initialLock.end();
     if (this.#noVirtualization) {
       this.#plainList.dispose();
       return;
     }
-    this.#endInitialPin();
     this.#measurer.dispose();
   }
 
-  #startInitialPin() {
-    if (this.#initialPinStarted || this.#initialPinDone) return;
-    this.#initialPinStarted = true;
-
-    const el = this.#config.getScrollElement();
-    if (el) {
-      this.#gestureTarget = el;
-      el.addEventListener("wheel", this.#onUserGesture, { passive: true });
-      el.addEventListener("touchstart", this.#onUserGesture, { passive: true });
-      el.addEventListener("keydown", this.#onUserGesture);
-    }
-    this.#pinFrame = requestAnimationFrame(this.#pinTick);
-  }
-
-  #endInitialPin() {
-    this.#initialPinDone = true;
-    if (this.#pinFrame !== null) cancelAnimationFrame(this.#pinFrame);
-    this.#pinFrame = null;
-    const el = this.#gestureTarget;
-    if (el) {
-      el.removeEventListener("wheel", this.#onUserGesture);
-      el.removeEventListener("touchstart", this.#onUserGesture);
-      el.removeEventListener("keydown", this.#onUserGesture);
-      this.#gestureTarget = null;
-    }
-  }
-
-  #onUserGesture = () => this.#endInitialPin();
-
-  /** Re-pins against this render's committed canvas, before paint — no short-of-bottom frame. */
-  #pinCurrentFrame() {
-    const el = this.#config.getScrollElement();
-    if (el && distanceToBottom(el) > PIN_EPSILON) {
-      this.#list.virtualizer.scrollToEnd({ behavior: "auto" });
-    }
-  }
-
-  #pinTick = () => {
-    this.#pinFrame = null;
-    if (this.#disposed || this.#initialPinDone) return;
-
-    const el = this.#config.getScrollElement();
-    const virtualizer = this.#list.virtualizer;
-    if (!el) {
-      this.#pinFrame = requestAnimationFrame(this.#pinTick);
-      return;
-    }
-
-    const total = virtualizer.getTotalSize();
-    const distance = distanceToBottom(el);
-    if (distance > PIN_EPSILON) virtualizer.scrollToEnd({ behavior: "auto" });
-
-    if (total === this.#lastTotalSize && distance <= PIN_EPSILON) {
-      if (++this.#settleFrames >= PIN_SETTLE_FRAMES) {
-        this.#endInitialPin();
-        return;
-      }
-    } else {
-      this.#settleFrames = 0;
-      this.#lastTotalSize = total;
-    }
-    this.#pinFrame = requestAnimationFrame(this.#pinTick);
-  };
-
+  /** Only for rendering the virtualized rows — scrolling goes through the methods below. */
   get virtualizer() {
     return this.#list.virtualizer;
-  }
-
-  /** The `noVirtualization` counterpart to `virtualizer`. */
-  get plainList() {
-    return this.#plainList;
   }
 
   get loading() {
     return this.#loader.loading;
   }
 
-  /** Growth at the end is followed — always `true` outside `scroll-mode="pin-top"`. */
+  /** Growth at the end is followed right now: the mode allows it, and the user hasn't scrolled away. */
   get following() {
-    return this.#pin.following;
+    const atBottom = this.#noVirtualization ? this.#plainList.atBottom : this.#stick.atBottom;
+    return this.#pin.following && atBottom && !this.#paused;
   }
 
   /** From the tail — a pin is almost always the last item. @param {string | number} key */
@@ -343,6 +278,52 @@ export class InfinityScrollController {
     this.#plainList.captureAnchor();
   }
 
+  /**
+   * The one gesture handler, bound passive on the scroller for `wheel`/`touchstart`/`pointerdown`
+   * and called for `keydown`. A scroll gesture cancels our in-flight smooth scroll, and one that may
+   * go up holds our follows off for its first scroll event: a programmatic scroll in between
+   * cancels the browser's own wheel animation.
+   */
+  userGesture = {
+    passive: true,
+    /** @param {Event} event */
+    handleEvent: (event) => {
+      // any interaction ends the initial pin, even one that can't scroll
+      if (this.#initialLock.active) this.#initialLock.end();
+      if (!isScrollGesture(event, this.#config.getScrollElement())) return;
+      this.#pin.noteGesture();
+      // keys drive their own scrolls (roving focus), which a cancel or pause would fight
+      if (event.type === "keydown") return;
+      this.#cancelProgrammaticScroll();
+      // a wheel down can't leave the bottom, so following needn't wait for it
+      if (event.type !== "wheel" || /** @type {WheelEvent} */ (event).deltaY < 0) this.#pause();
+    },
+  };
+
+  #cancelProgrammaticScroll() {
+    // without virtualization our smooth scrolls are native, and the browser cancels those itself
+    if (this.#noVirtualization) return;
+    // virtual-core re-aims an in-flight scrollTo* each frame for up to 5s, against the gesture;
+    // `scrollState` is private in its typings, so a rename only loses this cancel
+    /** @type {any} */ (this.#list.virtualizer).scrollState = null;
+    this.#stick.cancelRequest();
+  }
+
+  #pause() {
+    if (this.#graceTimer !== null) clearTimeout(this.#graceTimer);
+    this.#graceTimer = setTimeout(this.#resume, USER_SCROLL_GRACE);
+    this.#syncFollowing();
+  }
+
+  /** The gesture didn't leave the bottom (e.g. a nested scroller took it): catch up on any growth. */
+  #resume = () => {
+    this.#graceTimer = null;
+    if (this.#disposed) return;
+    this.#syncFollowing();
+    if (this.#noVirtualization) this.#plainList.resumeFollow();
+    else this.#stick.follow();
+  };
+
   handleScroll = () => {
     this.#pin.handleScroll();
     // `atBottom` must flip in the same task as the scroll, or the next follow yanks the user down
@@ -361,15 +342,44 @@ export class InfinityScrollController {
 
   /** `scroll-mode="pin-top"` only — call before the data carrying `key` is set. @param {string | number} key */
   pinToStart(key) {
-    if (this.#initialPinStarted && !this.#initialPinDone) this.#endInitialPin();
+    if (this.#initialLock.active) this.#initialLock.end();
     this.#pin.pin(key);
     this.#host.requestUpdate();
   }
 
-  /** An explicit jump to the bottom re-engages following. */
-  noteScrollToBottom() {
+  /** An explicit jump to the bottom — re-engages following. @param {"auto" | "smooth" | "instant"} behavior */
+  scrollToBottom(behavior) {
     this.#pin.noteScrollToBottom();
-    if (!this.#noVirtualization) this.#stick.requestBottom();
+    if (this.#noVirtualization) {
+      // rests the content's end, footer included, at the bottom edge
+      this.#plainList.scrollToBottom(behavior);
+      return;
+    }
+    this.#stick.requestBottom();
+    // aims the last row's end at the real max offset, so it clears the footer too, and its
+    // reconcile re-aims while rows are measured on the way
+    this.#list.virtualizer.scrollToEnd({ behavior });
+  }
+
+  /** @returns {number | undefined} */
+  getScrollOffset() {
+    if (this.#noVirtualization) return this.#plainList.getScrollOffset();
+    return this.#list.virtualizer.scrollOffset ?? undefined;
+  }
+
+  /** @param {number} offset @param {{behavior?: "auto" | "smooth" | "instant"}} [options] */
+  scrollToOffset(offset, options) {
+    if (this.#noVirtualization) {
+      this.#plainList.scrollToOffset(offset, options);
+      return;
+    }
+    this.#list.virtualizer.scrollToOffset(offset, options);
+  }
+
+  /** @param {number} index @param {"start" | "center" | "end"} [align] @returns {number | undefined} */
+  getOffsetForIndex(index, align = "start") {
+    if (this.#noVirtualization) return this.#plainList.getOffsetForIndex(index, align);
+    return this.#list.virtualizer.getOffsetForIndex(index, align)?.[0];
   }
 
   /**
@@ -398,7 +408,7 @@ export class InfinityScrollController {
   remeasure() {
     if (this.#noVirtualization) return;
     this.#measurer.reset();
-    this.virtualizer.measure();
+    this.#list.virtualizer.measure();
     this.#host.requestUpdate();
   }
 
@@ -414,7 +424,7 @@ export class InfinityScrollController {
     }
     if (this.#noVirtualization) return;
 
-    const virtualizer = /** @type {any} */ (this.virtualizer);
+    const virtualizer = /** @type {any} */ (this.#list.virtualizer);
     if (typeof virtualizer.itemSizeCache?.delete !== "function") {
       console.warn(
         "[chx-infinity-scroll] virtual-core no longer exposes itemSizeCache; dropping every measurement instead",

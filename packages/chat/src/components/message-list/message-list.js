@@ -735,8 +735,8 @@ export class ChxMessageList extends LitElement {
             .onAwayFromBottomChange=${this.#bottomAnchor.handleAwayFromBottomChange}
             ${ref((el) => (this.#infinityScrollElement = /** @type {ChxInfinityScroll | undefined} */ (el)))}
           >
-            ${when(this.streaming, () => html`<slot name="streaming" slot="footer"></slot>`)}
-            ${when(this.typing, () => html`<slot name="typing" slot="footer"></slot>`)}
+            <slot name="streaming" slot="footer" ?hidden=${!this.streaming}></slot>
+            <slot name="typing" slot="footer" ?hidden=${!this.typing}></slot>
             ${when(
               this.#stickyController.labelText,
               () =>
@@ -764,8 +764,9 @@ export class ChxMessageList extends LitElement {
           </chx-infinity-scroll>
         `,
       )}
-      ${when(this.#status.loadingHistory, () => html`<slot name="loading-history"></slot>`)}
-      ${when(this.#bottomAnchor.awayFromBottom, () => html`<slot name="scroll-to-bottom"></slot>`)}
+      <!-- hidden, never removed: WebKit aborts a running smooth scroll when a slot is inserted or removed -->
+      <slot name="loading-history" ?hidden=${!this.#status.loadingHistory}></slot>
+      <slot name="scroll-to-bottom" ?hidden=${!this.#bottomAnchor.awayFromBottom}></slot>
       <slot name="divider" hidden @slotchange=${this.#handleDividerSlotchange}></slot>
       <slot name="message" hidden @slotchange=${this.#handleMessagePatternSlotchange}></slot>
     `;

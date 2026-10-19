@@ -523,7 +523,11 @@ describe("chx-message-list", () => {
       const el = /** @type {ChxMessageList} */ (
         await fixture(html`<chx-message-list style="height: 400px;"></chx-message-list>`)
       );
-      expect(el.shadowRoot?.querySelector('slot[name="typing"]')).to.not.exist;
+      expect(
+        /** @type {HTMLSlotElement | null | undefined} */ (
+          el.shadowRoot?.querySelector('slot[name="typing"]')
+        )?.hidden,
+      ).to.be.true;
     });
 
     it("renders nothing when typing is true but nothing is slotted — no default content", async () => {
@@ -578,7 +582,11 @@ describe("chx-message-list", () => {
       const el = /** @type {ChxMessageList} */ (
         await fixture(html`<chx-message-list style="height: 400px;"></chx-message-list>`)
       );
-      expect(el.shadowRoot?.querySelector('slot[name="streaming"]')).to.not.exist;
+      expect(
+        /** @type {HTMLSlotElement | null | undefined} */ (
+          el.shadowRoot?.querySelector('slot[name="streaming"]')
+        )?.hidden,
+      ).to.be.true;
     });
 
     it("renders nothing when streaming is true but nothing is slotted — no default content", async () => {
@@ -638,7 +646,11 @@ describe("chx-message-list", () => {
           </chx-message-list>
         `)
       );
-      expect(el.shadowRoot?.querySelector('slot[name="scroll-to-bottom"]')).to.not.exist;
+      expect(
+        /** @type {HTMLSlotElement | null | undefined} */ (
+          el.shadowRoot?.querySelector('slot[name="scroll-to-bottom"]')
+        )?.hidden,
+      ).to.be.true;
     });
 
     it("renders the slot, as a sibling of chx-infinity-scroll (not forwarded through its footer), once away from bottom", async () => {
@@ -674,11 +686,19 @@ describe("chx-message-list", () => {
       );
       infinityScrollOf(el).onAwayFromBottomChange(true);
       await el.updateComplete;
-      expect(el.shadowRoot?.querySelector('slot[name="scroll-to-bottom"]')).to.exist;
+      expect(
+        /** @type {HTMLSlotElement | null | undefined} */ (
+          el.shadowRoot?.querySelector('slot[name="scroll-to-bottom"]')
+        )?.hidden,
+      ).to.be.false;
 
       infinityScrollOf(el).onAwayFromBottomChange(false);
       await el.updateComplete;
-      expect(el.shadowRoot?.querySelector('slot[name="scroll-to-bottom"]')).to.not.exist;
+      expect(
+        /** @type {HTMLSlotElement | null | undefined} */ (
+          el.shadowRoot?.querySelector('slot[name="scroll-to-bottom"]')
+        )?.hidden,
+      ).to.be.true;
     });
 
     it("forwards the affordance's chx-scroll-to-bottom-click behavior override to chx-infinity-scroll", async () => {

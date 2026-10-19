@@ -6,12 +6,15 @@ import { ref } from "lit/directives/ref.js";
 import { InfinityScrollController } from "../../controllers/infinity-scroll/InfinityScrollController.js";
 import styles from "./infinity-scroll.css?inline";
 
+/** One live query, not one per call — follows read it on every streamed chunk. @type {MediaQueryList | undefined} */
+let reducedMotion;
+
 /** `"smooth"` drops to `"auto"` under prefers-reduced-motion.
  * @param {"auto" | "smooth" | "instant"} behavior @returns {"auto" | "smooth" | "instant"} */
 function motionSafe(behavior) {
-  return behavior === "smooth" && matchMedia("(prefers-reduced-motion: reduce)").matches
-    ? "auto"
-    : behavior;
+  if (behavior !== "smooth") return behavior;
+  reducedMotion ??= matchMedia("(prefers-reduced-motion: reduce)");
+  return reducedMotion.matches ? "auto" : behavior;
 }
 
 /**
@@ -182,6 +185,12 @@ export class ChxInfinityScroll extends LitElement {
     this.loading = this.#controller.loading;
   }
 
+  /** @param {KeyboardEvent} event */
+  #handleKeydown = (event) => {
+    this.#controller.userGesture.handleEvent(event);
+    this.onScrollerKeydown(event);
+  };
+
   /** @param {Element | undefined} el */
   #setScrollElement = (el) => {
     this.#scrollElement = /** @type {HTMLElement | undefined} */ (el);
@@ -202,7 +211,8 @@ export class ChxInfinityScroll extends LitElement {
     this.#contentElement = /** @type {HTMLElement | undefined} */ (el);
   };
 
-  /** Whether growth at the end is currently followed — always `true` unless `scroll-mode="pin-top"`. */
+  /** Whether growth at the end is currently followed — `false` once the user scrolls up, or while
+   *  `scroll-mode="pin-top"` holds a pin. */
   get following() {
     return this.#controller.following;
   }
@@ -232,17 +242,7 @@ export class ChxInfinityScroll extends LitElement {
    * @param {"auto" | "smooth" | "instant"} [behavior]
    */
   scrollToBottom(behavior) {
-    const resolvedBehavior = motionSafe(behavior ?? this.scrollBehavior);
-    this.#controller.noteScrollToBottom();
-    if (this.noVirtualization) {
-      // PlainListController scrolls the real scroll element to its actual scrollHeight, which
-      // already includes the footer — no separate correction needed, unlike the virtualized branch.
-      this.#controller.plainList.scrollToBottom(resolvedBehavior);
-    } else {
-      // virtual-core aims the last row's "end" at the real max scroll offset, so this clears the
-      // `footer` too, and its reconcile re-aims while rows are measured on the way
-      this.#controller.virtualizer.scrollToEnd({ behavior: resolvedBehavior });
-    }
+    this.#controller.scrollToBottom(motionSafe(behavior ?? this.scrollBehavior));
     this.dispatchEvent(new CustomEvent("chx-scroll-to-bottom", { bubbles: true, composed: true }));
   }
 
@@ -253,8 +253,7 @@ export class ChxInfinityScroll extends LitElement {
    * @returns {number | undefined}
    */
   getScrollOffset() {
-    if (this.noVirtualization) return this.#controller.plainList.getScrollOffset();
-    return this.#controller.virtualizer.scrollOffset ?? undefined;
+    return this.#controller.getScrollOffset();
   }
 
   /**
@@ -264,11 +263,7 @@ export class ChxInfinityScroll extends LitElement {
    * @param {{align?: "auto" | "start" | "center" | "end", behavior?: "auto" | "smooth" | "instant"}} [options]
    */
   scrollToOffset(offset, options) {
-    if (this.noVirtualization) {
-      this.#controller.plainList.scrollToOffset(offset, options);
-      return;
-    }
-    this.#controller.virtualizer.scrollToOffset(offset, options);
+    this.#controller.scrollToOffset(offset, options);
   }
 
   /**
@@ -279,9 +274,7 @@ export class ChxInfinityScroll extends LitElement {
    * @returns {number | undefined}
    */
   getOffsetForIndex(index, align = "start") {
-    if (this.noVirtualization) return this.#controller.plainList.getOffsetForIndex(index, align);
-    const result = this.#controller.virtualizer.getOffsetForIndex(index, align);
-    return result ? result[0] : undefined;
+    return this.#controller.getOffsetForIndex(index, align);
   }
 
   /** Drop every cached row measurement. */
@@ -307,7 +300,10 @@ export class ChxInfinityScroll extends LitElement {
         class="infinity-scroll__scroller"
         part="scroller"
         @scroll=${this.#controller.handleScroll}
-        @keydown=${this.onScrollerKeydown}
+        @wheel=${this.#controller.userGesture}
+        @touchstart=${this.#controller.userGesture}
+        @pointerdown=${this.#controller.userGesture}
+        @keydown=${this.#handleKeydown}
         @focusin=${this.onScrollerFocusin}
         ${ref(this.#setScrollElement)}
       >

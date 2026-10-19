@@ -304,8 +304,10 @@ export class InfinityScrollController {
   };
 
   #cancelProgrammaticScroll() {
-    // without virtualization our smooth scrolls are native, and the browser cancels those itself
-    if (this.#noVirtualization) return;
+    if (this.#noVirtualization) {
+      this.#plainList.stopFollow();
+      return;
+    }
     // virtual-core re-aims an in-flight scrollTo* each frame for up to 5s, against the gesture;
     // `scrollState` is private in its typings, so a rename only loses this cancel
     /** @type {any} */ (this.#list.virtualizer).scrollState = null;
@@ -324,7 +326,13 @@ export class InfinityScrollController {
     this.#pin.handleScroll();
     // `atBottom` must flip in the same task as the scroll, or the next follow yanks the user down
     const el = this.#config.getScrollElement();
-    const left = el ? this.#latch.update(el, this.#config.getBuffer()) : false;
+    const contentChanged = this.#plainList.takeContentChanged();
+    const left = el
+      ? this.#latch.update(el, this.#config.getBuffer(), {
+          layoutJumps: this.#noVirtualization && !this.#grace.recent,
+          contentChanged,
+        })
+      : false;
     if (this.#noVirtualization) {
       this.#plainList.handleScroll();
     } else {

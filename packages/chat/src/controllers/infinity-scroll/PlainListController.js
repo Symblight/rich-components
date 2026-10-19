@@ -2,6 +2,9 @@ import { RowMeasurer } from "../../components/infinity-scroll/RowMeasurer.js";
 import { VERY_BOTTOM } from "../../components/infinity-scroll/BottomLatch.js";
 import { distanceToBottom } from "../../utils/dom.js";
 
+/** Share of the remaining distance a smooth follow covers per 60Hz frame — an ease-out that keeps up with growth. */
+const FOLLOW_EASE = 0.25;
+
 /**
  * @typedef {"auto" | "smooth" | "instant"} Behavior
  * @typedef {import("../../components/infinity-scroll/BottomLatch.js").BottomLatch} BottomLatch
@@ -52,6 +55,9 @@ export class PlainListController {
   #scrollFrame = null;
   /** @type {number | null} */
   #followFrame = null;
+  #followTime = 0;
+  /** rows mutated since the last scroll event — see `takeContentChanged()` */
+  #contentChanged = false;
   #disposed = false;
 
   /** @param {PlainListConfig} config */
@@ -112,7 +118,7 @@ export class PlainListController {
     this.#resizeObserver?.disconnect();
     this.#resizeObserver = null;
     this.#cancelScrollFrame();
-    this.#cancelFollowFrame();
+    this.stopFollow();
   }
 
   releaseRows() {
@@ -138,7 +144,25 @@ export class PlainListController {
     if (!el) return;
     // set up front: a smooth scroll is still on its way, and must not read as having left the bottom
     this.#latch.atBottom = true;
+    if (behavior === "smooth") {
+      this.#startFollow();
+      return;
+    }
+    this.stopFollow();
     el.scrollTo({ top: this.#bottomOffset(el), behavior });
+  }
+
+  /** Whether rows mutated since the last call — once per scroll event, for `BottomLatch`. */
+  takeContentChanged() {
+    const changed = this.#contentChanged;
+    this.#contentChanged = false;
+    return changed;
+  }
+
+  /** A user gesture took over: our animated follow is no longer ours to finish. */
+  stopFollow() {
+    if (this.#followFrame !== null) cancelAnimationFrame(this.#followFrame);
+    this.#followFrame = null;
   }
 
   /** After a gesture's grace ran out without leaving the bottom: catch up with what grew meanwhile. */
@@ -266,6 +290,7 @@ export class PlainListController {
   /** Waits for row readiness instead of reconciling inline, against the pre-mutation anchor. */
   #handleMutation = () => {
     if (this.#disposed) return;
+    this.#contentChanged = true;
     // a capture queued by an in-flight scroll would land after the prepend and re-baseline onto the
     // shifted layout, zeroing the restore delta — drop it; #reconcile() re-captures
     this.#cancelScrollFrame();
@@ -309,27 +334,40 @@ export class PlainListController {
   #followToBottom() {
     const el = this.#config.getScrollElement();
     if (!el) return;
-    const behavior = this.#config.getFollowBehavior?.() ?? "auto";
-    if (behavior !== "smooth" || this.#bottomOffset(el) - el.scrollTop > el.clientHeight) {
-      this.#cancelFollowFrame();
-      this.scrollToBottom("auto");
-      return;
-    }
-    this.#latch.atBottom = true;
-    // WebKit drops a smooth scrollTo issued in the frame its content grew; one frame later it runs
-    if (this.#followFrame !== null) return;
-    this.#followFrame = requestAnimationFrame(() => {
-      this.#followFrame = null;
-      if (this.#disposed || !this.#latch.atBottom || this.#config.isPaused?.()) return;
-      this.scrollToBottom("smooth");
-    });
+    const smooth = (this.#config.getFollowBehavior?.() ?? "auto") === "smooth";
+    const near = this.#bottomOffset(el) - el.scrollTop <= el.clientHeight;
+    this.scrollToBottom(smooth && near ? "smooth" : "auto");
   }
 
-  #cancelFollowFrame() {
-    if (this.#followFrame === null) return;
-    cancelAnimationFrame(this.#followFrame);
-    this.#followFrame = null;
+  /**
+   * Smooth scrolling is ours, one `scrollTop` step per frame from wherever the view is toward a target
+   * re-read every frame. A native smooth `scrollTo` doesn't survive a layout jump mid-animation (see
+   * `BottomLatch`), which streaming content causes in WebKit (confirmed live); ours just carries on.
+   */
+  #startFollow() {
+    if (this.#followFrame !== null) return;
+    this.#followTime = performance.now();
+    this.#followFrame = requestAnimationFrame(this.#followStep);
   }
+
+  /** @param {number} now */
+  #followStep = (now) => {
+    this.#followFrame = null;
+    const el = this.#config.getScrollElement();
+    if (!el || this.#disposed || !this.#latch.atBottom || this.#config.isPaused?.()) return;
+    const remaining = this.#bottomOffset(el) - el.scrollTop;
+    if (remaining <= 0.5) {
+      if (remaining < -0.5) el.scrollTop += remaining; // the end moved up past us
+      return;
+    }
+    const ease = 1 - Math.pow(1 - FOLLOW_EASE, (now - this.#followTime) / (1000 / 60));
+    this.#followTime = now;
+    const before = el.scrollTop;
+    el.scrollTop += Math.min(remaining, Math.max(1, remaining * ease));
+    // clamped: the next reconcile restarts it once the content has grown
+    if (el.scrollTop <= before) return;
+    this.#followFrame = requestAnimationFrame(this.#followStep);
+  };
 
   /** px to scroll so `row`'s edge meets the viewport's. @param {Element} el @param {HTMLElement} row @param {"start" | "center" | "end"} align */
   #alignDelta(el, row, align) {

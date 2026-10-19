@@ -141,18 +141,12 @@ describe("chx-infinity-scroll", () => {
   describe("following the bottom without virtualization", function () {
     this.timeout(15000);
 
-    /** @param {HTMLElement} scroller */
-    function recordBehaviors(scroller) {
-      /** @type {(ScrollToOptions["behavior"])[]} */
-      const behaviors = [];
-      const scrollTo = scroller.scrollTo.bind(scroller);
-      scroller.scrollTo = /** @type {typeof scroller.scrollTo} */ (
-        (/** @type {ScrollToOptions} */ options) => {
-          behaviors.push(options.behavior);
-          return scrollTo(options);
-        }
-      );
-      return behaviors;
+    /** Every scrollTop the scroller passes through. @param {HTMLElement} scroller */
+    function recordPositions(scroller) {
+      /** @type {number[]} */
+      const positions = [];
+      scroller.addEventListener("scroll", () => positions.push(scroller.scrollTop));
+      return positions;
     }
 
     /** @param {ChxInfinityScroll} el @param {number} count */
@@ -167,13 +161,13 @@ describe("chx-infinity-scroll", () => {
         scrollBehavior: "smooth",
         noVirtualization: true,
       });
-      const behaviors = recordBehaviors(scroller);
+      const positions = recordPositions(scroller);
 
-      // one 240px row: within a viewport of the bottom, so it animates
+      // one 240px row: within a viewport of the bottom, so it animates — several steps, not a jump
       await grow(el, 11);
       await settled(scroller);
 
-      expect(behaviors).to.include("smooth");
+      expect(new Set(positions.map(Math.round)).size).to.be.at.least(3);
       expect(distanceToBottom(scroller)).to.be.at.most(1);
     });
 

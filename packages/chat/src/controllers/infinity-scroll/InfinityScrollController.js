@@ -319,10 +319,7 @@ export class InfinityScrollController {
   };
 
   #cancelProgrammaticScroll() {
-    if (this.#noVirtualization) {
-      this.#plainList.stopFollow();
-      return;
-    }
+    if (this.#noVirtualization) return; // a native smooth scroll yields to the gesture itself
     // virtual-core re-aims an in-flight scrollTo* each frame for up to 5s, against the gesture;
     // `scrollState` is private in its typings, so a rename only loses this cancel
     /** @type {any} */ (this.#list.virtualizer).scrollState = null;

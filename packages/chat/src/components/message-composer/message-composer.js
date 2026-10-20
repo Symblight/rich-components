@@ -24,6 +24,7 @@ export class ChxMessageComposer extends LitElement {
   static properties = {
     loading: { type: Boolean, reflect: true },
     disabled: { type: Boolean, reflect: true },
+    emptyState: { type: Boolean, attribute: false },
     compact: { type: Boolean, reflect: true },
     layout: { type: String, reflect: true },
     sendButton: { type: String, attribute: "send-button", reflect: true },
@@ -74,8 +75,11 @@ export class ChxMessageComposer extends LitElement {
      *  delivery on its own. Swaps chx-textbox's action button to stop while the draft is empty. */
     this.loading = false;
 
-    /** @type {boolean} Pushed down by chx-chat — true in the empty state (no active conversation). Blocks send + editing. */
+    /** @type {boolean} Set by the consumer, never by chx-chat — blocks send + editing; stop still works. */
     this.disabled = false;
+
+    /** @type {boolean} Pushed down by chx-chat — no active conversation. Disables like `disabled`, kept apart so it never overwrites the consumer's value. */
+    this.emptyState = false;
 
     /** @type {boolean} MD3 density −2 — 48dp field, body-medium text. Pushed down to chx-textbox. */
     this.compact = false;
@@ -360,7 +364,7 @@ export class ChxMessageComposer extends LitElement {
   #handleSend(event) {
     event.preventDefault();
     const textbox = this.#textbox;
-    if (!textbox) return;
+    if (!textbox || this.disabled || this.emptyState) return;
 
     const value = textbox.getValue();
     const attachments = this.#attachments?.getAttachments() ?? [];
@@ -452,7 +456,7 @@ export class ChxMessageComposer extends LitElement {
             .getTriggerFields=${this.#getTriggerFields}
             .getExtensions=${this.#getExtensions}
             ?loading=${this.loading}
-            ?disabled=${this.disabled}
+            ?disabled=${this.disabled || this.emptyState}
             ?dragging=${this.dragging}
             ?compact=${this.compact}
             .layout=${this.layout}

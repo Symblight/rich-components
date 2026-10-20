@@ -133,21 +133,22 @@ The package doesn't ship model, mode or context controls. The app builds them (w
 </chx-message-composer>
 ```
 
-| Attribute     | Values                        | Effect                                                                                                                                                                                                        |
-| ------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `layout`      | `auto` (default) \| `stacked` | `stacked`: text always on top, `leading` (start) and `actions` (end) always on a row below. `auto` stays on one row until the text wraps.                                                                     |
-| `send-button` | `auto` (default) \| `always`  | `always`: an empty draft shows the action button disabled instead of hiding it, so controls next to it don't move on the first keystroke. A draft with attachments only counts as non-empty.                  |
-| `busy-action` | `send` (default) \| `stop`    | `stop`: while `loading`, the button stays Stop even with text in the draft. Enter still fires the cancelable `chx-send-message`, so the app queues the message or calls `preventDefault()` to keep the draft. |
+| Attribute     | Values                        | Effect                                                                                                                                                                                                                                                                                                |
+| ------------- | ----------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `layout`      | `auto` (default) \| `stacked` | `stacked`: text always on top, `leading` (start) and `actions` (end) always on a row below. `auto` stays on one row until the text wraps.                                                                                                                                                             |
+| `send-button` | `auto` (default) \| `always`  | `always`: an empty draft shows the action button disabled instead of hiding it, so controls next to it don't move on the first keystroke. A draft with attachments only counts as non-empty.                                                                                                          |
+| `busy-action` | `send` (default) \| `stop`    | `stop`: while `loading`, the button stays Stop even with text in the draft. Enter still fires the cancelable `chx-send-message`, so the app queues the message or calls `preventDefault()` to keep the draft.                                                                                         |
+| `disabled`    | boolean                       | Blocks sending and editing (e.g. no agent to send to): the draft goes read-only, Enter does nothing and the action button disables (hides under `send-button="auto"`). Stop still works mid-turn. Set by the app; `chx-chat` never touches it — its own empty state disables the composer separately. |
 
 **`footer` slot.** Content slotted here goes under the field. Once the slot has content, the
 composer draws a surface around field and footer:
 
-| Token                                      | Default                                |
-| ------------------------------------------ | -------------------------------------- |
-| `--chx-message-composer-background`        | `transparent`                          |
+| Token                                      | Default                                            |
+| ------------------------------------------ | -------------------------------------------------- |
+| `--chx-message-composer-background`        | `transparent`                                      |
 | `--chx-message-composer-shape`             | `calc(var(--_chx-shape-corner-extra-large) / 1.4)` |
-| `--chx-message-composer-footer-padding`    | `0.125rem 0.75rem`                     |
-| `--chx-message-composer-footer-min-height` | `40px`                                 |
+| `--chx-message-composer-footer-padding`    | `0.125rem 0.75rem`                                 |
+| `--chx-message-composer-footer-min-height` | `40px`                                             |
 
 With nothing slotted, nothing changes: no surface and no footer row.
 

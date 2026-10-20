@@ -153,7 +153,6 @@ export class InfinityScrollController {
       onReconciled: () => this.#loader.maybeLoad(),
       getFollowing: () => this.#pin.following,
       getFollowBehavior: config.getFollowBehavior,
-      getEndElement: config.getEndElement,
       beforeReconcile: () => this.#pin.refresh(),
       latch: this.#latch,
       isPaused: () => this.#paused,
@@ -450,7 +449,6 @@ export class InfinityScrollController {
     this.#pin.noteScrollToBottom();
     this.#releaseSelection(); // asked for the end, selection or not
     if (this.#noVirtualization) {
-      // rests the content's end, footer included, at the bottom edge
       this.#plainList.scrollToBottom(behavior);
       return;
     }

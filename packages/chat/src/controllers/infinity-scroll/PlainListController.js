@@ -14,7 +14,6 @@ import { distanceToBottom } from "../../utils/dom.js";
  *   onReconciled?: () => void,
  *   getFollowing?: () => boolean,
  *   getFollowBehavior?: () => Behavior,
- *   getEndElement?: () => Element | undefined,
  *   beforeReconcile?: () => void,
  *   latch: BottomLatch,
  *   isPaused?: () => boolean,
@@ -128,8 +127,8 @@ export class PlainListController {
   };
 
   /**
-   * Rests the content's end at the bottom edge. Not `scrollHeight`: pin-top's reserved space sits
-   * below the end, and landing there shows a blank screen.
+   * The real end, pin-top's reserved space included — where the latch and the pin read "at the
+   * bottom", and where virtual-core's `scrollToEnd()` lands.
    * @param {Behavior} [behavior]
    */
   scrollToBottom(behavior = "auto") {
@@ -137,7 +136,7 @@ export class PlainListController {
     if (!el) return;
     // set up front: a smooth scroll is still on its way, and must not read as having left the bottom
     this.#latch.atBottom = true;
-    el.scrollTo({ top: this.#bottomOffset(el), behavior });
+    el.scrollTo({ top: el.scrollHeight - el.clientHeight, behavior });
   }
 
   /** Whether rows mutated since the last call — once per scroll event, for `BottomLatch`. */
@@ -151,7 +150,7 @@ export class PlainListController {
   resumeFollow() {
     const el = this.#config.getScrollElement();
     if (!el || !this.#latch.atBottom || !(this.#config.getFollowing?.() ?? true)) return;
-    if (Math.abs(el.scrollTop - this.#bottomOffset(el)) > 1) this.#followToBottom();
+    if (distanceToBottom(el) > 1) this.#followToBottom();
   }
 
   /** @param {number} offset @param {{behavior?: Behavior}} [options] */
@@ -317,7 +316,7 @@ export class PlainListController {
     const el = this.#config.getScrollElement();
     if (!el) return;
     const smooth = (this.#config.getFollowBehavior?.() ?? "auto") === "smooth";
-    const near = this.#bottomOffset(el) - el.scrollTop <= el.clientHeight;
+    const near = distanceToBottom(el) <= el.clientHeight;
     this.scrollToBottom(smooth && near ? "smooth" : "auto");
   }
 
@@ -370,16 +369,5 @@ export class PlainListController {
       if (Number(row.dataset.index) === index) return row;
     }
     return undefined;
-  }
-
-  /** @param {Element} el */
-  #bottomOffset(el) {
-    const max = el.scrollHeight - el.clientHeight;
-    const end = this.#config.getEndElement?.();
-    if (!end) return max;
-    const padding = parseFloat(getComputedStyle(el).paddingBlockEnd) || 0;
-    const endBottom =
-      end.getBoundingClientRect().bottom - el.getBoundingClientRect().top + el.scrollTop;
-    return Math.min(max, Math.max(0, endBottom + padding - el.clientHeight));
   }
 }

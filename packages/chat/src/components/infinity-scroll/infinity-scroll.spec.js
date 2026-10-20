@@ -114,7 +114,7 @@ describe("chx-infinity-scroll", () => {
     this.timeout(15000);
 
     for (const behavior of /** @type {const} */ (["auto", "smooth"])) {
-      it(`rests the content's end at the bottom, not the blank space below it (${behavior})`, async () => {
+      it(`lands on the real bottom, reserved space included, like the virtualized list (${behavior})`, async () => {
         const { el, scroller } = await tallRows({
           count: 10,
           scrollMode: "pin-top",
@@ -127,15 +127,40 @@ describe("chx-infinity-scroll", () => {
         el.scrollToBottom(behavior);
         await settled(scroller);
 
-        const end = /** @type {HTMLElement} */ (
-          el.shadowRoot?.querySelector(".infinity-scroll__end")
-        );
-        const padding = parseFloat(getComputedStyle(scroller).paddingBlockEnd);
-        const gap =
-          scroller.getBoundingClientRect().bottom - padding - end.getBoundingClientRect().bottom;
-        expect(Math.abs(gap)).to.be.at.most(2);
+        expect(distanceToBottom(scroller)).to.be.at.most(1);
       });
     }
+
+    it("a click at the real bottom doesn't move the view", async () => {
+      const { el, scroller } = await tallRows({
+        count: 10,
+        scrollMode: "pin-top",
+        noVirtualization: true,
+      });
+      el.pinToStart(9);
+      await settled(scroller);
+      scroller.dispatchEvent(new WheelEvent("wheel", { deltaY: 100 }));
+      scroller.scrollTop = scroller.scrollHeight;
+      scroller.dispatchEvent(new Event("scroll"));
+      await settled(scroller);
+      const top = scroller.scrollTop;
+
+      const content = /** @type {HTMLElement} */ (
+        el.shadowRoot?.querySelector(".infinity-scroll__content")
+      );
+      content.dispatchEvent(
+        new PointerEvent("pointerdown", {
+          bubbles: true,
+          composed: true,
+          pointerType: "mouse",
+          button: 0,
+        }),
+      );
+      dispatchEvent(new PointerEvent("pointerup", { pointerType: "mouse", button: 0 }));
+      await settled(scroller);
+
+      expect(scroller.scrollTop).to.equal(top);
+    });
   });
 
   describe("following the bottom without virtualization", function () {

@@ -5,9 +5,9 @@
  * Turns one `ChxMessagePart` into the node that represents it, and owns the element cache that makes
  * that cheap. Two different cache contracts live here on purpose:
  *
- * - a consumer's `partElements` renderer gets a **loose** hit (same `part.type`) so it receives its
- *   own previous element back as `previousElement` and can patch it in place — the one rule
- *   `src/docs/agentic.md` asks every renderer to follow;
+ * - a consumer's `partElements` renderer is skipped while its `part` and `message` objects are the
+ *   same (the stream reducer replaces both on every change); otherwise a **loose** hit (same
+ *   `part.type`) hands it its own previous element back as `previousElement` to patch in place;
  * - the built-in text/html path takes a **strict** hit (same type *and* the same `part` object), so
  *   a streamed part whose text just changed rebuilds instead of showing stale content.
  *
@@ -17,7 +17,7 @@
 export class PartRenderer {
   /** @type {() => Record<string, ChxPartRenderer> | undefined} */
   #getPartElements;
-  /** part id → its last render. @type {Map<string, {key: string, part: ChxMessagePart, element: string | HTMLElement}>} */
+  /** part id → its last render. @type {Map<string, {key: string, part: ChxMessagePart, message?: ChxMessage, element: string | HTMLElement}>} */
   #cache = new Map();
   /** part ids seen during the pass now in flight. @type {Set<string>} */
   #rendered = new Set();
@@ -38,6 +38,8 @@ export class PartRenderer {
     const renderer = this.#getPartElements()?.[part.type];
     if (renderer) {
       const cached = this.#cache.get(part.id);
+      if (cached?.key === part.type && cached.part === part && cached.message === message)
+        return cached.element;
       const previous = cached?.key === part.type ? cached.element : undefined;
       const element = renderer(
         part,
@@ -47,12 +49,17 @@ export class PartRenderer {
       );
       if (part.type === "attachment" && element instanceof HTMLElement)
         element.slot = "attachments";
-      this.#cache.set(part.id, { key: part.type, part, element });
+      this.#cache.set(part.id, { key: part.type, part, message, element });
       return element;
     }
     if (part.html) return this.#renderHtml(part);
     if (part.text) return part.text;
     return this.#renderUnknown(part);
+  }
+
+  /** Forgets every cached element, so the next pass runs every factory from scratch. */
+  clear() {
+    this.#cache.clear();
   }
 
   /** Evicts every part that didn't render in the pass that just ended, and arms the next one. */

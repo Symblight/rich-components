@@ -136,7 +136,7 @@ export class ChxChat extends LitElement {
     this.#internalMessages = this.messages;
     this.#lastAnnounced = this.messages;
 
-    /** @type {Record<string, ChxPartRenderer> | undefined} */
+    /** Runs a factory only when its `part` or `message` object changes; assign a new object to re-run all. @type {Record<string, ChxPartRenderer> | undefined} */
     this.partElements = undefined;
 
     /** @type {ChxChatAdapter | undefined} */

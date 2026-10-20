@@ -117,6 +117,26 @@ describe("chx-message-list", () => {
       expect(second?.textContent).to.equal("thought more");
       expect(seenPrevious[1]).to.equal(first);
     });
+
+    it("runs a newly assigned partElements for parts already shown", async () => {
+      const el = /** @type {ChxMessageList} */ (
+        await fixture(html`<chx-message-list style="height: 400px;"></chx-message-list>`)
+      );
+      /** @param {string} className */
+      const factory = (className) => () => {
+        const node = document.createElement("div");
+        node.className = className;
+        return node;
+      };
+      el.partElements = { reasoning: factory("first") };
+      el.messages = [makeMessage({ parts: [{ id: "m1-p1", type: "reasoning", text: "a" }] })];
+      await el.updateComplete;
+      await waitFor(() => !!infinityScrollOf(el).shadowRoot?.querySelector(".first"));
+
+      el.partElements = { reasoning: factory("second") };
+      await el.updateComplete;
+      await waitFor(() => !!infinityScrollOf(el).shadowRoot?.querySelector(".second"));
+    });
   });
 
   describe("cache cleanup", () => {

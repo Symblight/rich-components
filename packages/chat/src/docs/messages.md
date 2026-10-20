@@ -204,8 +204,8 @@ transition, if you'd rather listen than poll.
 ## Custom rendering — `partElements`
 
 Unset, every part falls back to `part.html ?? part.text`. Override per `part.type` with a function,
-`(part, previousElement?) => HTMLElement`, so a real custom element can reuse `previousElement`
-instead of rebuilding on every update:
+`(part, previousElement, message, index) => HTMLElement`, so a real custom element can reuse
+`previousElement` instead of rebuilding on every update:
 
 ```js
 chatEl.partElements = {
@@ -221,6 +221,13 @@ chatEl.partElements = {
   },
 };
 ```
+
+A factory runs only when its `part` object or its `message` object changes — the stream reducer
+replaces both on every chunk, so an unchanged row costs nothing while the list re-renders (scrolling,
+resizing). When it runs again it gets its previous element. It must therefore depend on nothing but
+`part`, `message` and `index`: state read from elsewhere won't re-render it. To re-run every factory,
+assign a new `partElements` object. If you update messages yourself, replace the changed part and
+message objects instead of mutating them.
 
 There is no equivalent hook for the whole message: the `<chx-message>` wrapper is always the
 library's, so every row reliably carries its part names, roving-focus wiring and `aria-busy`.
@@ -303,15 +310,15 @@ messageListEl.addEventListener("chx-scroll-to-bottom", () => hideJumpToLatestBut
 
 ### `chx-chat` — properties
 
-| Property               | Type                                                                   | Notes                                                                                                                                 |
-| ---------------------- | ---------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
-| `userId`               | `string`                                                               | Identifies the local user — required for `own`/`adapter.subscribe`/`store.add` to classify correctly.                                 |
-| `messages`             | `ChxMessage[]`                                                         | Optional controlled override — see Quick start. Default `[]`.                                                                         |
-| `partElements`         | `Record<string, (part, previousElement?) => HTMLElement> \| undefined` | Per-`part.type` render overrides — see Custom rendering.                                                                              |
-| `adapter`              | `ChxChatAdapter \| undefined`                                          | `{ getMessages?, subscribe?, sendMessage?, regenerate? }` — see Streaming/Live updates.                                               |
-| `connectionState`      | `"connecting" \| "connected" \| "error" \| undefined`                  | Reflected attribute `connection-state`. Read-only in practice.                                                                        |
-| `chunkBatchIntervalMs` | `number`                                                               | Default `16`. Read once at construction — set before first connecting the element.                                                    |
-| `loading`              | `boolean`                                                              | Reflected. An override, not a state — the composer is pushed `loading \|\| busy`, so an in-flight turn already shows its stop button. |
+| Property               | Type                                                                                  | Notes                                                                                                                                 |
+| ---------------------- | ------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| `userId`               | `string`                                                                              | Identifies the local user — required for `own`/`adapter.subscribe`/`store.add` to classify correctly.                                 |
+| `messages`             | `ChxMessage[]`                                                                        | Optional controlled override — see Quick start. Default `[]`.                                                                         |
+| `partElements`         | `Record<string, (part, previousElement, message, index) => HTMLElement> \| undefined` | Per-`part.type` render overrides — see Custom rendering.                                                                              |
+| `adapter`              | `ChxChatAdapter \| undefined`                                                         | `{ getMessages?, subscribe?, sendMessage?, regenerate? }` — see Streaming/Live updates.                                               |
+| `connectionState`      | `"connecting" \| "connected" \| "error" \| undefined`                                 | Reflected attribute `connection-state`. Read-only in practice.                                                                        |
+| `chunkBatchIntervalMs` | `number`                                                                              | Default `16`. Read once at construction — set before first connecting the element.                                                    |
+| `loading`              | `boolean`                                                                             | Reflected. An override, not a state — the composer is pushed `loading \|\| busy`, so an in-flight turn already shows its stop button. |
 
 ### `chx-chat` — methods
 

@@ -154,7 +154,7 @@ export class ChxMessageList extends LitElement {
     /** @type {ChxMessage[]} */
     this.messages = [];
 
-    /** @type {Record<string, ChxPartRenderer> | undefined} */
+    /** Runs a factory only when its `part` or `message` object changes; assign a new object to re-run all. @type {Record<string, ChxPartRenderer> | undefined} */
     this.partElements = undefined;
 
     /** @type {string} */
@@ -508,11 +508,13 @@ export class ChxMessageList extends LitElement {
       this.#readTracking.syncReadStates();
       this.#pinSentMessage(changedProperties.get("messages"));
     }
+    if (changedProperties.has("partElements")) this.#partRenderer.clear();
     // rows only re-render when infinity-scroll does, which a plain host update doesn't trigger
     if (
       changedProperties.has("compact") ||
       changedProperties.has("selectedId") ||
-      changedProperties.has("authorDisplay")
+      changedProperties.has("authorDisplay") ||
+      changedProperties.has("partElements")
     ) {
       this.#infinityScrollElement?.requestUpdate();
     }

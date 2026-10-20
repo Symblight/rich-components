@@ -814,6 +814,7 @@ const composerFooterStyles = html`
  * `--chx-message-composer-background` — and the field gets an outline through the `textbox` part.
  * `layout="stacked"` keeps the controls on their own row, `send-button="always"` keeps the send button
  * in place (disabled while empty), and `busy-action="stop"` keeps it on stop for the whole reply.
+ * `disabled` blocks sending and editing (e.g. no agent configured yet); stop still works.
  */
 /** @type {Story} */
 export const ComposerFooter = {
@@ -822,6 +823,7 @@ export const ComposerFooter = {
     layout: "stacked",
     sendButton: "always",
     busyAction: "stop",
+    disabled: false,
     footer: true,
   },
   argTypes: {
@@ -829,6 +831,7 @@ export const ComposerFooter = {
     layout: { control: "inline-radio", options: ["auto", "stacked"] },
     sendButton: { name: "send-button", control: "inline-radio", options: ["auto", "always"] },
     busyAction: { name: "busy-action", control: "inline-radio", options: ["send", "stop"] },
+    disabled: { control: "boolean" },
     footer: { name: "Footer content", control: "boolean" },
   },
   render: (args) => html`
@@ -844,6 +847,7 @@ export const ComposerFooter = {
         layout=${args.layout}
         send-button=${args.sendButton}
         busy-action=${args.busyAction}
+        ?disabled=${args.disabled}
       >
         <md-icon-button slot="leading" aria-label="Attach">
           <md-icon>${unsafeSVG(plus)}</md-icon>

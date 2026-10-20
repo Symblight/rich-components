@@ -671,7 +671,7 @@ export class ChxChat extends LitElement {
     composer.dragging = this.#dropTarget.dragging;
     composer.compact = this.compact;
     composer.messagesEmpty = this.#internalMessages.length === 0;
-    composer.disabled = this.#conversationMode.isEmptyState; // no active conversation → can't compose/send
+    composer.emptyState = this.#conversationMode.isEmptyState; // no active conversation → can't compose/send
   }
 
   /**

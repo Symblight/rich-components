@@ -11,7 +11,10 @@
   --cdx-content-border-radius: var(--_cdx-shape-corner-medium);
   --cdx-line-padding-inline: 0.75rem;
   --cdx-caret-color: var(--_cdx-color-primary);
-  --cdx-selection-background-color: color-mix(in srgb, var(--_cdx-color-primary) 20%, transparent);
+  --cdx-selection-background-color: light-dark(
+    color-mix(in srgb, var(--_cdx-color-primary) 20%, transparent),
+    color-mix(in srgb, var(--_cdx-color-primary) 28%, transparent)
+  );
   --cdx-selection-inactive-background-color: color-mix(
     in srgb,
     var(--_cdx-color-on-surface) 10%,
@@ -25,11 +28,13 @@
     transparent
   );
   --cdx-line-number-active-color: var(--_cdx-color-on-surface);
-  --cdx-active-line-background-color: color-mix(in srgb, var(--_cdx-color-primary) 7%, transparent);
-  --cdx-active-line-inactive-background-color: color-mix(
-    in srgb,
-    var(--_cdx-color-on-surface) 3%,
-    transparent
+  --cdx-active-line-background-color: light-dark(
+    color-mix(in srgb, var(--_cdx-color-primary) 7%, transparent),
+    color-mix(in srgb, var(--_cdx-color-primary) 10%, transparent)
+  );
+  --cdx-active-line-inactive-background-color: light-dark(
+    color-mix(in srgb, var(--_cdx-color-on-surface) 3%, transparent),
+    color-mix(in srgb, var(--_cdx-color-on-surface) 4%, transparent)
   );
   --cdx-fold-marker-color: var(--_cdx-color-on-surface-variant);
   --cdx-fold-marker-hover-background-color: color-mix(
@@ -40,7 +45,10 @@
   --cdx-fold-placeholder-background-color: var(--_cdx-color-surface-container-high);
   --cdx-fold-placeholder-hover-background-color: var(--_cdx-color-surface-container-highest);
   --cdx-fold-placeholder-color: var(--_cdx-color-on-surface-variant);
-  --cdx-indent-guide-color: color-mix(in srgb, var(--_cdx-color-outline-variant) 70%, transparent);
+  --cdx-indent-guide-color: light-dark(
+    color-mix(in srgb, var(--_cdx-color-outline-variant) 70%, transparent),
+    color-mix(in srgb, var(--_cdx-color-outline-variant) 80%, transparent)
+  );
   --cdx-indent-guide-active-color: color-mix(
     in srgb,
     var(--_cdx-color-on-surface-variant) 55%,
@@ -75,7 +83,7 @@
   --cdx-problems-error-background-color: var(--_cdx-color-error-container);
   --cdx-problems-error-color: var(--_cdx-color-on-error-container);
   /* No MD3 "success" role — same extended green as the diff palette in chx-code-block. */
-  --cdx-problems-clean-color: #1b7a3d;
+  --cdx-problems-clean-color: light-dark(#1b7a3d, #81c995);
 
   --cdx-menu-selected-background-color: color-mix(
     in srgb,
@@ -102,7 +110,8 @@
 
   --cdx-tooltip-background-color: var(--_cdx-color-surface-container);
   --cdx-tooltip-color: var(--_cdx-color-on-surface);
-  --cdx-tooltip-shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 2px 6px 2px rgb(0 0 0 / 15%);
+  --cdx-tooltip-shadow:
+    0 1px 2px rgb(0 0 0 / 30%), 0 2px 6px 2px light-dark(rgb(0 0 0 / 15%), rgb(0 0 0 / 30%));
   --cdx-panel-background-color: var(--_cdx-color-surface-container-low);
   --cdx-panel-selected-background-color: color-mix(
     in srgb,
@@ -111,57 +120,21 @@
   );
 
   /* Extended palette, same hues as chx-code-block: MD3 roles encode importance, syntax tokens just
-     need to differ from each other (≥ 4.5:1 on surface-container-lowest). */
-  --cdx-syntax-keyword-color: #8b1a8b;
-  --cdx-syntax-string-color: #0a6b2f;
-  --cdx-syntax-number-color: #8a4b00;
-  --cdx-syntax-comment-color: #5f6368;
-  --cdx-syntax-function-color: #0b57d0;
-  --cdx-syntax-type-color: #0f6b73;
-  --cdx-syntax-punctuation-color: #5f6368;
+     need to differ from each other (≥ 4.5:1 on surface-container-lowest). light-dark() follows the
+     host's color-scheme (inherited from the page), not the OS, so an app's own theme switch applies. */
+  --cdx-syntax-keyword-color: light-dark(#8b1a8b, #f0a8e8);
+  --cdx-syntax-string-color: light-dark(#0a6b2f, #81c995);
+  --cdx-syntax-number-color: light-dark(#8a4b00, #f3bd77);
+  --cdx-syntax-comment-color: light-dark(#5f6368, #9aa0a6);
+  --cdx-syntax-function-color: light-dark(#0b57d0, #a8c7fa);
+  --cdx-syntax-type-color: light-dark(#0f6b73, #78d5dd);
+  --cdx-syntax-punctuation-color: light-dark(#5f6368, #9aa0a6);
   --cdx-syntax-property-color: var(--cdx-content-color);
-  --cdx-syntax-tag-color: #a8321f;
+  --cdx-syntax-tag-color: light-dark(#a8321f, #f2b8b5);
   --cdx-syntax-invalid-color: var(--_cdx-color-error);
 
   display: flex;
   flex-direction: column;
-}
-
-@media (prefers-color-scheme: dark) {
-  :host {
-    --cdx-selection-background-color: color-mix(
-      in srgb,
-      var(--_cdx-color-primary) 28%,
-      transparent
-    );
-
-    --cdx-active-line-background-color: color-mix(
-      in srgb,
-      var(--_cdx-color-primary) 10%,
-      transparent
-    );
-    --cdx-active-line-inactive-background-color: color-mix(
-      in srgb,
-      var(--_cdx-color-on-surface) 4%,
-      transparent
-    );
-    --cdx-indent-guide-color: color-mix(
-      in srgb,
-      var(--_cdx-color-outline-variant) 80%,
-      transparent
-    );
-    --cdx-problems-clean-color: #81c995;
-    --cdx-tooltip-shadow: 0 1px 2px rgb(0 0 0 / 30%), 0 2px 6px 2px rgb(0 0 0 / 30%);
-
-    --cdx-syntax-keyword-color: #f0a8e8;
-    --cdx-syntax-string-color: #81c995;
-    --cdx-syntax-number-color: #f3bd77;
-    --cdx-syntax-comment-color: #9aa0a6;
-    --cdx-syntax-function-color: #a8c7fa;
-    --cdx-syntax-type-color: #78d5dd;
-    --cdx-syntax-punctuation-color: #9aa0a6;
-    --cdx-syntax-tag-color: #f2b8b5;
-  }
 }
 
 /* 13/20 → 12/18, text inset 12 → 10. */

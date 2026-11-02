@@ -124,9 +124,10 @@
     var(--md-sys-color-outline-variant)
   );
   --_chx-color-shadow: var(--chx-chat-color-shadow, var(--md-sys-color-shadow, #000));
-  /* MD3 has no success role — hand-picked diff hues (≥ 4.5:1 on surface), dark variants below */
-  --_chx-color-diff-added: var(--chx-chat-color-diff-added, #0a5c2c);
-  --_chx-color-diff-removed: var(--chx-chat-color-diff-removed, #93211a);
+  /* MD3 has no success role — hand-picked diff hues (≥ 4.5:1 on surface); light-dark() follows the
+     page's color-scheme, not the OS */
+  --_chx-color-diff-added: var(--chx-chat-color-diff-added, light-dark(#0a5c2c, #a8dab5));
+  --_chx-color-diff-removed: var(--chx-chat-color-diff-removed, light-dark(#93211a, #f2b8b5));
 
   /* shape */
   --_chx-shape-corner-extra-small: var(
@@ -178,9 +179,3 @@
   font-family: var(--_chx-font-family);
 }
 
-@media (prefers-color-scheme: dark) {
-  :host {
-    --_chx-color-diff-added: var(--chx-chat-color-diff-added, #a8dab5);
-    --_chx-color-diff-removed: var(--chx-chat-color-diff-removed, #f2b8b5);
-  }
-}

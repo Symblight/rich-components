@@ -3,13 +3,19 @@
    host, so they're overridable on cdx-code-editor and reach cdx-review-bar by inheritance. */
 :host {
   /* Same extended green as chx-code-block's diff palette — MD3 has no "added" role. */
-  --cdx-vcs-added-color: #1b7a3d;
+  --cdx-vcs-added-color: light-dark(#1b7a3d, #81c995);
   --cdx-vcs-modified-color: var(--_cdx-color-primary);
   --cdx-vcs-deleted-color: var(--_cdx-color-error);
-  --cdx-diff-added-background-color: color-mix(in srgb, #1b7a3d 11%, transparent);
-  --cdx-diff-removed-background-color: color-mix(in srgb, #b3261e 9%, transparent);
-  --cdx-diff-added-sign-color: #0a5c2c;
-  --cdx-diff-removed-sign-color: #93211a;
+  --cdx-diff-added-background-color: light-dark(
+    color-mix(in srgb, #1b7a3d 11%, transparent),
+    color-mix(in srgb, #81c995 14%, transparent)
+  );
+  --cdx-diff-removed-background-color: light-dark(
+    color-mix(in srgb, #b3261e 9%, transparent),
+    color-mix(in srgb, #f2b8b5 13%, transparent)
+  );
+  --cdx-diff-added-sign-color: light-dark(#0a5c2c, #a8dab5);
+  --cdx-diff-removed-sign-color: light-dark(#93211a, #f2b8b5);
   --cdx-diff-removed-opacity: 0.8;
   --cdx-diff-flash-color: color-mix(in srgb, var(--cdx-vcs-added-color) 28%, transparent);
   /* "N hidden lines" row of <cdx-diff collapse-unchanged>: a 1dp wavy rule with a pill cut out
@@ -75,16 +81,6 @@
   );
   --cdx-diff-tone-error-container: var(--_cdx-color-error-container);
   --cdx-diff-tone-error-on-container: var(--_cdx-color-on-error-container);
-}
-
-@media (prefers-color-scheme: dark) {
-  :host {
-    --cdx-vcs-added-color: #81c995;
-    --cdx-diff-added-background-color: color-mix(in srgb, #81c995 14%, transparent);
-    --cdx-diff-removed-background-color: color-mix(in srgb, #f2b8b5 13%, transparent);
-    --cdx-diff-added-sign-color: #a8dab5;
-    --cdx-diff-removed-sign-color: #f2b8b5;
-  }
 }
 
 /* Tone → private palette; public per-tone tokens stay overridable. */

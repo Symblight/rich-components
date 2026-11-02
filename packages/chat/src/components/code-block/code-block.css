@@ -16,16 +16,14 @@
   --chx-code-block-padding-inline: 0.875rem;
 
   --chx-code-block-highlight-color: var(--_chx-color-primary);
-  --chx-code-block-highlight-background-color: color-mix(
-    in srgb,
-    var(--_chx-color-primary) 10%,
-    transparent
+  --chx-code-block-highlight-background-color: light-dark(
+    color-mix(in srgb, var(--_chx-color-primary) 10%, transparent),
+    color-mix(in srgb, var(--_chx-color-primary) 16%, transparent)
   );
   --chx-code-block-error-line-color: var(--_chx-color-error);
-  --chx-code-block-error-line-background-color: color-mix(
-    in srgb,
-    var(--_chx-color-error) 10%,
-    transparent
+  --chx-code-block-error-line-background-color: light-dark(
+    color-mix(in srgb, var(--_chx-color-error) 10%, transparent),
+    color-mix(in srgb, var(--_chx-color-error) 16%, transparent)
   );
   --chx-code-block-caret-color: var(--_chx-color-primary);
   --chx-code-block-focus-ring-color: var(--_chx-color-primary);
@@ -34,52 +32,32 @@
   --chx-code-block-toggle-color: var(--_chx-color-primary);
 
   /* Extended palette: MD3 roles encode importance, syntax tokens just need to differ from each
-     other — so these are hand-picked hues (≥ 4.5:1 on surface-container-low), not primary/tertiary. */
-  --chx-code-block-keyword-color: #8b1a8b;
-  --chx-code-block-string-color: #0a6b2f;
-  --chx-code-block-number-color: #8a4b00;
-  --chx-code-block-comment-color: #5f6368;
-  --chx-code-block-function-color: #0b57d0;
-  --chx-code-block-type-color: #0f6b73;
-  --chx-code-block-punctuation-color: #5f6368;
+     other — so these are hand-picked hues (≥ 4.5:1 on surface-container-low), not primary/tertiary.
+     light-dark() follows the page's color-scheme, not the OS. */
+  --chx-code-block-keyword-color: light-dark(#8b1a8b, #f0a8e8);
+  --chx-code-block-string-color: light-dark(#0a6b2f, #81c995);
+  --chx-code-block-number-color: light-dark(#8a4b00, #f3bd77);
+  --chx-code-block-comment-color: light-dark(#5f6368, #9aa0a6);
+  --chx-code-block-function-color: light-dark(#0b57d0, #a8c7fa);
+  --chx-code-block-type-color: light-dark(#0f6b73, #78d5dd);
+  --chx-code-block-punctuation-color: light-dark(#5f6368, #9aa0a6);
   --chx-code-block-property-color: var(--chx-code-block-body-color);
-  --chx-code-block-tag-color: #a8321f;
+  --chx-code-block-tag-color: light-dark(#a8321f, #f2b8b5);
   --chx-code-block-invalid-color: var(--_chx-color-error);
 
   --chx-code-block-diff-added-color: var(--_chx-color-diff-added);
   --chx-code-block-diff-removed-color: var(--_chx-color-diff-removed);
-  --chx-code-block-diff-added-background-color: color-mix(in srgb, #1b7a3d 12%, transparent);
-  --chx-code-block-diff-removed-background-color: color-mix(in srgb, #b3261e 10%, transparent);
+  --chx-code-block-diff-added-background-color: light-dark(
+    color-mix(in srgb, #1b7a3d 12%, transparent),
+    color-mix(in srgb, #81c995 14%, transparent)
+  );
+  --chx-code-block-diff-removed-background-color: light-dark(
+    color-mix(in srgb, #b3261e 10%, transparent),
+    color-mix(in srgb, #f2b8b5 14%, transparent)
+  );
 
   display: flex;
   flex-direction: column;
-}
-
-@media (prefers-color-scheme: dark) {
-  :host {
-    --chx-code-block-highlight-background-color: color-mix(
-      in srgb,
-      var(--_chx-color-primary) 16%,
-      transparent
-    );
-    --chx-code-block-error-line-background-color: color-mix(
-      in srgb,
-      var(--_chx-color-error) 16%,
-      transparent
-    );
-
-    --chx-code-block-keyword-color: #f0a8e8;
-    --chx-code-block-string-color: #81c995;
-    --chx-code-block-number-color: #f3bd77;
-    --chx-code-block-comment-color: #9aa0a6;
-    --chx-code-block-function-color: #a8c7fa;
-    --chx-code-block-type-color: #78d5dd;
-    --chx-code-block-punctuation-color: #9aa0a6;
-    --chx-code-block-tag-color: #f2b8b5;
-
-    --chx-code-block-diff-added-background-color: color-mix(in srgb, #81c995 14%, transparent);
-    --chx-code-block-diff-removed-background-color: color-mix(in srgb, #f2b8b5 14%, transparent);
-  }
 }
 
 .code-block {

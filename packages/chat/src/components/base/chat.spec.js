@@ -67,6 +67,57 @@ describe("chx-chat", () => {
       expect(list.messages).to.equal(externalMessages);
     });
 
+    it("reports bad outside data where it enters, and a stream flush never reports it again", async () => {
+      // Arrange
+      const bad = (/** @type {string} */ id) =>
+        /** @type {any} */ ({ id, own: false, createdAt: 0, parts: [{ type: "text", text: "x" }] });
+      /** @type {(chunk: any) => void} */
+      let onChunk = () => {};
+      const adapter = /** @type {any} */ ({
+        listMessages: async () => ({ messages: [bad("loaded")], hasMore: false }),
+        subscribe: (/** @type {any} */ handlers) => {
+          onChunk = handlers.onChunk;
+          return () => {};
+        },
+      });
+      /** @type {string[]} */
+      const errors = [];
+      const originalError = console.error;
+      console.error = (message, ...rest) => {
+        errors.push(`${message} ${rest.map((r) => r.id ?? r.messageId ?? "").join()}`);
+      };
+      try {
+        // Act: every way in from outside
+        const el = /** @type {ChxChat} */ (
+          await fixture(html`<chx-chat .adapter=${adapter}></chx-chat>`)
+        );
+        await new Promise((resolve) => setTimeout(resolve));
+        el.store.add(bad("added"));
+        el.messages = [bad("assigned")];
+        await el.updateComplete;
+        onChunk({ messageId: "chunked", delta: { text: "x" } });
+        const reported = errors.length;
+        onChunk({ messageId: "clean", partId: "p1", delta: { text: "x" } });
+        await new Promise((resolve) => setTimeout(resolve, 40));
+
+        // Assert
+        for (const [text, source] of [
+          ['part missing required "id"', "loaded"],
+          ['part missing required "id"', "added"],
+          ['part missing required "id"', "assigned"],
+          ['chunk missing required "partId"', "chunked"],
+        ]) {
+          expect(
+            errors.some((e) => e.includes(text)),
+            source,
+          ).to.be.true;
+        }
+        expect(errors, "flushed over bad data already in the store").to.have.lengthOf(reported);
+      } finally {
+        console.error = originalError;
+      }
+    });
+
     it("reassigning the same messages reference never re-enters the external-sync/validate branch", async () => {
       // Mutating an array in place and reassigning the *same* reference means #internalMessages
       // (which holds that exact reference) trivially reflects the mutation too — arrays are

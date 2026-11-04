@@ -444,6 +444,7 @@ export class ChxChat extends LitElement {
       conversationId: this.activeConversationId,
       ...message,
     });
+    validateMessages([resolved]);
     this.#applyMessages(
       reconcileMessages(this.#internalMessages, resolved, this.userId),
       resolved.conversationId,
@@ -581,7 +582,8 @@ export class ChxChat extends LitElement {
   }
 
   /**
-   * The one choke point every local mutation of the internal store goes through. `nextMessages` is
+   * The one choke point every local mutation of the internal store goes through; runs on every
+   * stream flush, so outside data is validated where it enters, not here. `nextMessages` is
    * always the *full*, multi-conversation array — `conversationId` says which conversation this
    * particular write is *for* (a background delivery/pagination fetch can write here for a
    * conversation that isn't currently active, see `DeliveryController.deliver`/`PaginationController`); only a write
@@ -591,7 +593,6 @@ export class ChxChat extends LitElement {
    * @param {string} [conversationId]
    */
   #applyMessages(nextMessages, conversationId = this.activeConversationId) {
-    validateMessages(nextMessages);
     this.#internalMessages = nextMessages;
     if (conversationId !== this.activeConversationId) return;
     const visible = this.#visibleMessages;

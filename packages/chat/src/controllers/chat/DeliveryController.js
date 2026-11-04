@@ -226,7 +226,10 @@ export class DeliveryController {
   #finalizeReply(messages, replyToId, status) {
     const orphan = messages.find((m) => m.replyToId === replyToId && m.status === "sending");
     if (!orphan) return undefined;
-    return messages.map((m) => (m === orphan ? finalizeStreamingParts({ ...m, status }) : m));
+    const cancelled = status === "cancelled";
+    return messages.map((m) =>
+      m === orphan ? finalizeStreamingParts({ ...m, status }, { cancelled }) : m,
+    );
   }
 
   /** @param {string} messageId @param {string} [conversationId] */

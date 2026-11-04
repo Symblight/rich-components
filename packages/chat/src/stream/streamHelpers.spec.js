@@ -147,14 +147,19 @@ describe("finalizeStreamingParts", () => {
     expect(finalizeStreamingParts(message)).to.equal(message);
   });
 
-  it("leaves a tool call's status alone on an ordinary finish", () => {
+  it("settles a tool call on an ordinary finish, unless it's detached or was denied", () => {
     const message = /** @type {any} */ ({
       id: "r1",
-      parts: [{ id: "t1", type: "tool_call", state: "streaming", status: "in_progress" }],
+      parts: [
+        { id: "t1", type: "tool_call", state: "streaming", status: "in_progress" },
+        { id: "t2", type: "tool_call", state: "streaming", status: "in_progress", detached: true },
+        { id: "t3", type: "tool_call", state: "done", status: "rejected" },
+      ],
     });
     const next = finalizeStreamingParts(message);
-    expect(next.parts[0].state).to.equal("done");
-    expect(next.parts[0].status).to.equal("in_progress"); // a background tool may still report back
+    expect(next.parts[0]).to.include({ state: "done", status: "cancelled" });
+    expect(next.parts[1]).to.include({ state: "done", status: "in_progress" }); // reports back later
+    expect(next.parts[2].status).to.equal("rejected");
   });
 
   it("settles an unsettled tool call under {cancelled}", () => {

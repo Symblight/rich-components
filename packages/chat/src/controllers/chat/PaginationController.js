@@ -1,3 +1,4 @@
+import { validateMessages } from "../../utils/validate-messages.js";
 /** @import { ChxMessage } from "../../types/message.js" */
 /** @import { ChxChatAdapter } from "../../types/adapter.js" */
 
@@ -130,6 +131,7 @@ export class PaginationController {
       });
       entry.cursor = result.cursor;
       this.#setState(conversationId, { hasMore: result.hasMore ?? false });
+      validateMessages(result.messages);
       const incoming = result.messages.map((message) =>
         message.conversationId === conversationId ? message : { ...message, conversationId },
       );

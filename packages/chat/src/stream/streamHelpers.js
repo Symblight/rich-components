@@ -16,7 +16,8 @@
  * @returns {{ messages: ChxMessage[], index: number }}
  */
 export function getOrCreateMessage(messages, chunk, userId, replyToId, conversationId) {
-  const index = messages.findIndex((m) => m.id === chunk.messageId);
+  // from the end: a message being streamed into was almost always just appended
+  const index = messages.findLastIndex((m) => m.id === chunk.messageId);
   if (index !== -1) return { messages, index };
   /** @type {ChxMessage} */
   const shell = {
@@ -49,7 +50,7 @@ function isUnsettled(part) {
  * @returns {ChxMessagePart[]}
  */
 export function applyChunkToParts(parts, chunk) {
-  const index = parts.findIndex((p) => p.id === chunk.partId);
+  const index = parts.findLastIndex((p) => p.id === chunk.partId);
   if (index === -1) {
     return [
       ...parts,
@@ -89,9 +90,10 @@ export function applyChunkToParts(parts, chunk) {
 }
 
 /**
- * Called once a stream ends — flips every still-"streaming" part to "done". Under `cancelled` (an
- * `abort`) it also settles any mid-flight tool call, since after a cancel the agent's own final
- * update may never come; a real one arriving later still overwrites it.
+ * Called once a stream ends — flips every still-"streaming" part to "done" and settles any mid-flight
+ * tool call as `cancelled`, since the agent's own final update may never come; a real one arriving
+ * later still overwrites it. A `detached` part or a denied (`rejected`) one is left as it is, except
+ * under `cancelled` (an `abort`), which settles those too.
  * @param {ChxMessage} message
  * @param {{cancelled?: boolean}} [options]
  * @returns {ChxMessage}
@@ -101,7 +103,7 @@ export function finalizeStreamingParts(message, { cancelled = false } = {}) {
   // be checked against its result directly — tracked explicitly instead
   let changed = false;
   const parts = message.parts.map((p) => {
-    const settle = cancelled && isUnsettled(p);
+    const settle = isUnsettled(p) && (cancelled || (!p.detached && p.status !== "rejected"));
     if (p.state !== "streaming" && !settle) return p;
     changed = true;
     return /** @type {ChxMessagePart} */ ({

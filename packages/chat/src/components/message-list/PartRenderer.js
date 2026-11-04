@@ -57,6 +57,11 @@ export class PartRenderer {
     return this.#renderUnknown(part);
   }
 
+  /** Counts a skipped row's parts as rendered in this pass. @param {ChxMessage} message */
+  keep(message) {
+    for (const part of message.parts) this.#rendered.add(part.id);
+  }
+
   /** Forgets every cached element, so the next pass runs every factory from scratch. */
   clear() {
     this.#cache.clear();

@@ -118,6 +118,54 @@ describe("chx-message-list", () => {
       expect(seenPrevious[1]).to.equal(first);
     });
 
+    it("skips rows nothing changed for, without losing their neighbours' changes or cached elements", async () => {
+      // Arrange
+      const el = /** @type {ChxMessageList} */ (
+        await fixture(html`<chx-message-list style="height: 400px;"></chx-message-list>`)
+      );
+      /** @type {(HTMLElement | undefined)[]} */
+      const previousElements = [];
+      el.noVirtualization = true;
+      el.partElements = {
+        card: (_part, previous) => {
+          previousElements.push(previous);
+          return previous ?? document.createElement("div");
+        },
+      };
+      const message = (/** @type {string} */ id) =>
+        makeMessage({ id, authorId: "a", parts: [{ id: `${id}-p`, type: "card" }] });
+      const [m1, m2] = [message("m1"), message("m2")];
+      el.messages = [m1, m2];
+      await el.updateComplete;
+      await infinityScrollOf(el).updateComplete;
+      const rowOf = (/** @type {string} */ id) =>
+        /** @type {import("../message-row/message-row.js").ChxMessageRow} */ (
+          infinityScrollOf(el).shadowRoot?.querySelector(`[data-message-id="${id}"]`)
+        );
+      const [m1State, m2State] = [rowOf("m1").row, rowOf("m2").row];
+
+      // Act: a same-author message joins m2's run
+      el.messages = [m1, m2, message("m3")];
+      await el.updateComplete;
+      await infinityScrollOf(el).updateComplete;
+      await Promise.resolve(); // the pass's sweep
+
+      // Assert
+      expect(rowOf("m1").row, "m1 is untouched").to.equal(m1State);
+      expect(rowOf("m2").row, "m2's neighbour changed").to.not.equal(m2State);
+      expect(rowOf("m2").row?.groupEnd).to.be.false;
+
+      // Act: the skipped row changes at last
+      const element = rowOf("m1").querySelector("div");
+      previousElements.length = 0;
+      el.messages = [{ ...m1 }, m2, el.messages[2]];
+      await el.updateComplete;
+      await infinityScrollOf(el).updateComplete;
+
+      // Assert: its part cache survived the passes it skipped
+      expect(previousElements).to.deep.equal([element]);
+    });
+
     it("runs a newly assigned partElements for parts already shown", async () => {
       const el = /** @type {ChxMessageList} */ (
         await fixture(html`<chx-message-list style="height: 400px;"></chx-message-list>`)
@@ -398,6 +446,25 @@ describe("chx-message-list", () => {
       expect(message.hasAttribute("data-actionable")).to.be.false;
       expect(button.getAttribute("tabindex")).to.equal("-1"); // suppressed again
       expect(infinityScrollOf(el).shadowRoot?.activeElement).to.equal(message);
+    });
+
+    it("drops a row's interior controls from the Tab order with no further render pass", async () => {
+      // Arrange
+      const el = /** @type {ChxMessageList} */ (
+        await fixture(html`<chx-message-list style="height: 400px;"></chx-message-list>`)
+      );
+      el.partElements = { action: () => document.createElement("button") };
+
+      // Act
+      el.messages = [makeMessage({ parts: [{ id: "m1-p1", type: "action" }] })];
+      await el.updateComplete;
+
+      // Assert
+      await waitFor(
+        () =>
+          infinityScrollOf(el).shadowRoot?.querySelector("button")?.getAttribute("tabindex") ===
+          "-1",
+      );
     });
 
     it("clicking (focusing) a message claims the roving tab stop", async () => {

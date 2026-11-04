@@ -3,9 +3,9 @@ import { directive, Directive, PartType } from "lit/directive.js";
 /** @import { FocusBehaviorController } from "../../controllers/message-list/FocusBehaviorController.js" */
 
 /**
- * Element directive that re-runs `FocusBehaviorController.syncInteriorTabbing` on every render pass.
- * `ref()` can't stand in for it — that only fires when the element itself changes, and the tab order
- * has to be re-applied whenever a message's children change too.
+ * Element directive that re-runs `FocusBehaviorController.syncInteriorTabbing` whenever its row
+ * renders. `ref()` can't stand in for it — that only fires when the element itself changes, and the
+ * tab order has to be re-applied whenever a message's children change too.
  */
 class InteriorTabbingDirective extends Directive {
   /** @param {import("lit/directive.js").PartInfo} partInfo */
@@ -24,7 +24,12 @@ class InteriorTabbingDirective extends Directive {
    * @param {[FocusBehaviorController, string]} args
    */
   update(part, [focusBehavior, id]) {
-    focusBehavior.syncInteriorTabbing(id, /** @type {HTMLElement} */ (part.element));
+    const element = /** @type {HTMLElement} */ (part.element);
+    focusBehavior.syncInteriorTabbing(id, element);
+    // runs before this row's children commit and render, and an unchanged row gets no later pass
+    requestAnimationFrame(() => {
+      if (element.isConnected) focusBehavior.syncInteriorTabbing(id, element);
+    });
   }
 }
 

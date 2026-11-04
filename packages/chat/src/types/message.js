@@ -16,9 +16,11 @@
  *   tracks whether this package is still receiving stream deltas for the part, not what the tool
  *   itself is doing). `awaiting-permission`/`rejected`/`cancelled` are this package's own, not
  *   ACP statuses — `rejected` when the user denies a permission request, `cancelled` set locally
- *   when a turn is aborted with a tool call still mid-flight. Note
+ *   when a reply ends (finish, failure or abort) with a tool call still mid-flight. Note
  *   `chx-tool-call` renders no permission UI for `awaiting-permission` (it only accents the row):
  *   answering a request is `chx-input-mode-banner`'s job, above the composer
+ * @property {boolean} [detached] - `type: "tool_call"` — the work outlives the message: not settled
+ *   when its reply finishes or fails (an abort still settles it); later chunks still update it
  * @property {string} [kind] - `type: "tool_call"` — ACP's tool kind (`read`/`edit`/`execute`/…),
  *   drives chx-tool-call's row icon; anything unknown renders as `other`
  * @property {Array<{path: string, line?: number}>} [locations] - `type: "tool_call"` — files the

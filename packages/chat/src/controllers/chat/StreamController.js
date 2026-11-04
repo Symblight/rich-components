@@ -39,7 +39,17 @@ export class StreamController {
       if (this.#seenEventIds.has(envelope.eventId)) return null;
       this.#seenEventIds.add(envelope.eventId);
     }
-    return envelope.chunk;
+    const { chunk } = envelope;
+    if (!chunk.messageId) {
+      console.error('[chx-chat] chunk missing required "messageId"', chunk);
+    } else if (
+      chunk.kind !== "finish" &&
+      chunk.kind !== "abort" &&
+      !("partId" in chunk && chunk.partId)
+    ) {
+      console.error('[chx-chat] chunk missing required "partId"', chunk);
+    }
+    return chunk;
   }
 
   /** `adapter.subscribe`'s `onChunk`. @param {ChxMessageChunk | ChxMessageEnvelope} item */

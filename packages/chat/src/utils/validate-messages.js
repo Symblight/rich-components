@@ -11,7 +11,7 @@ export function validateMessages(messages) {
     }
     if (seenIds.has(message.id)) {
       console.warn(
-        `[chx-chat] duplicate message id "${message.id}" — only the first is reconcilable`,
+        `[chx-chat] duplicate message id "${message.id}" — only the last is reconcilable`,
         message,
       );
     }

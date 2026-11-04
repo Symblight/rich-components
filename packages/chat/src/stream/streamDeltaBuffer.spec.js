@@ -27,22 +27,27 @@ describe("createChunkBuffer", () => {
     expect(flushes[0][0].parts[0].text).to.equal("Hello");
   });
 
-  it("keys batches per messageId so concurrent streams don't share a window", async () => {
-    /** @type {any[][]} */
+  it("runs one timer across messages and reports each touched conversation once, all chunks committed", async () => {
+    /** @type {{messages: any[], conversationId: string | undefined}[]} */
     const flushes = [];
     const buffer = createChunkBuffer({
       flushInterval: 10,
       getMessages: () => [],
       getUserId: () => "me",
-      onFlush: (m) => flushes.push(m),
+      onFlush: (messages, conversationId) => flushes.push({ messages, conversationId }),
     });
 
-    buffer.push({ messageId: "r1", partId: "p1", delta: { text: "a" } });
-    buffer.push({ messageId: "r2", partId: "p1", delta: { text: "b" } });
+    const chunk = (/** @type {string} */ messageId) => ({ messageId, partId: "p1", delta: {} });
+    buffer.push(chunk("r1"), { conversationId: "c1" });
+    buffer.push(chunk("r2"), { conversationId: "c2" });
+    buffer.push(chunk("r3"), { conversationId: "c1" });
 
     await wait(30);
 
-    expect(flushes).to.have.lengthOf(2);
+    expect(flushes.map((f) => f.conversationId)).to.have.members(["c1", "c2"]);
+    for (const { messages } of flushes) {
+      expect(messages.map((m) => m.id)).to.deep.equal(["r1", "r2", "r3"]);
+    }
   });
 
   it("flush() flushes immediately and clears the pending timer", async () => {
@@ -63,7 +68,7 @@ describe("createChunkBuffer", () => {
     expect(flushes).to.have.lengthOf(1);
   });
 
-  it("flushAll() flushes every pending batch", () => {
+  it("flushAll() commits every pending message in one flush", () => {
     /** @type {any[][]} */
     const flushes = [];
     const buffer = createChunkBuffer({
@@ -77,7 +82,8 @@ describe("createChunkBuffer", () => {
 
     buffer.flushAll();
 
-    expect(flushes).to.have.lengthOf(2);
+    expect(flushes).to.have.lengthOf(1);
+    expect(flushes[0].map((m) => m.id)).to.deep.equal(["r1", "r2"]);
   });
 
   it("flush() on an unknown/already-flushed messageId is a no-op", () => {

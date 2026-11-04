@@ -4,6 +4,7 @@ import { when } from "lit/directives/when.js";
 import { choose } from "lit/directives/choose.js";
 import { ref } from "lit/directives/ref.js";
 import { classMap } from "lit/directives/class-map.js";
+import { guard } from "lit/directives/guard.js";
 
 import "@symblight/wc-material/progress-circular";
 import "../message/message.js";
@@ -89,6 +90,8 @@ export class ChxMessageList extends LitElement {
 
   /** @type {Set<string> | undefined} */
   #pendingRenderedMessageIds;
+  /** Part of every row's guard — bumped when all rows must rebuild (a new pattern or divider carrier). */
+  #rowsVersion = 0;
   /** An own message appended before chx-infinity-scroll existed, pinned once it does. @type {string | undefined} */
   #pendingPinId;
   /** @type {PartRenderer} */
@@ -122,15 +125,20 @@ export class ChxMessageList extends LitElement {
     );
     if (!consumerChange) return;
     this.#messageClones.clear();
-    this.#requestRerender();
+    this.#invalidateRows();
   });
   /** Re-renders this host *and* chx-infinity-scroll. The second call is not redundant: none of the
    *  properties passed down change by reference on a plain host re-render, so Lit's `PropertyPart`
    *  skips re-setting them and the rows never re-run `#renderItem`. Anything that changes what a row
-   *  should look like without changing `messages` has to go through here. */
+   *  should look like without changing `messages` has to go through here, and be in `#renderItem`'s
+   *  guard (or go through `#invalidateRows`), or the row skips it. */
   #requestRerender = () => {
     this.requestUpdate();
     this.#infinityScrollElement?.requestUpdate();
+  };
+  #invalidateRows = () => {
+    this.#rowsVersion++;
+    this.#requestRerender();
   };
   #itemKey = (/** @type {ChxMessage} */ message, /** @type {number} */ index) =>
     message?.id ?? index;
@@ -371,7 +379,7 @@ export class ChxMessageList extends LitElement {
     }
     this.#observePattern();
     this.#messageClones.clear();
-    this.#requestRerender();
+    this.#invalidateRows();
   };
 
   #observePattern() {
@@ -408,7 +416,7 @@ export class ChxMessageList extends LitElement {
     this.#dividerController.setElement(
       /** @type {import("../divider/divider.js").ChxDivider | undefined} */ (element),
     );
-    this.#requestRerender(); // a divider appearing/disappearing changes every row
+    this.#invalidateRows(); // a divider appearing/disappearing changes every row
   };
 
   /** @param {ChxMessage} message @param {number} index */
@@ -442,17 +450,38 @@ export class ChxMessageList extends LitElement {
         this.#pendingRenderedMessageIds = undefined;
       });
     }
-    return this.#renderMessage(message, index);
+    // a skipped row still counts as rendered, or the sweep above drops its caches
+    const rendered = /** @type {Set<string>} */ (this.#pendingRenderedMessageIds);
+    rendered.add(message.id);
+    this.#partRenderer.keep(message);
+    // before the guard: the tab stop has to be seeded for `isFocused` to read it
+    this.#focusBehavior.ensureSeeded(message.id);
+    const { groupStart, groupEnd } = this.#groupAt(index);
+    // per row part, so a row (re)entering the DOM always renders; everything a row reads that isn't
+    // derived from its message object has to be here
+    return guard(
+      [
+        message,
+        index,
+        this.#authorFor(message),
+        message.id === this.selectedId,
+        this.compact,
+        this.#focusBehavior.isFocused(message.id),
+        this.#focusBehavior.isActionable(message.id),
+        groupStart,
+        groupEnd,
+        this.#dividerController.shouldShow(message, index),
+        this.partElements,
+        this.#rowsVersion,
+      ],
+      () => this.#renderMessage(message, index),
+    );
   };
 
   /** @param {ChxMessage} message @param {number} index */
   #renderMessage(message, index) {
-    /** @type {Set<string>} */ (this.#pendingRenderedMessageIds).add(message.id);
     const streaming = message.parts.some((part) => part.state === "streaming");
     const selected = this.selectedId !== undefined && message.id === this.selectedId;
-    // before the html below — every ${} evaluates eagerly, at tag-call time, so the tabindex binding
-    // would otherwise read an unseeded focus state on the very first row
-    this.#focusBehavior.ensureSeeded(message.id);
 
     /** @type {import("../../types/message.js").ChxRowState} */
     const row = {

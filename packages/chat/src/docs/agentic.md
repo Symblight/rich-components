@@ -406,8 +406,10 @@ self-documenting, so:
    message shell. `toolCallId` becomes the `partId`, and part-element caching is keyed by part id
    across the whole list, so those ids must be session-unique (ACP's are).
 6. **A tool-call part outlives the turn's `done`.** Carrying a `status` is what exempts a part from
-   the finish/abort lock, so a trailing `tool_call_update` after a cancel still lands. An `abort`
-   settles anything still mid-flight as `cancelled`; a real later update overrides that.
+   the finish/abort lock, so a trailing `tool_call_update` after a cancel still lands. Every ending
+   (finish, failure, abort) settles anything still mid-flight as `cancelled`; a real later update
+   overrides that. Work that keeps running after its turn (a subagent) sets `detached: true` on the
+   part: a finish or a failure then leaves its status alone, an abort still settles it.
 7. **Answer outstanding permission requests on cancel.** ACP requires it, and nothing in this
    package does it for you — `sendMessage`/`regenerate`'s `AbortSignal` aborts the stream only, and
    the banner is yours to clear.

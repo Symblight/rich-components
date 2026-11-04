@@ -40,6 +40,9 @@ export class VirtualizationController {
       getItemKey: (index) => /** @type {any} */ (getRows()[index]?.key ?? index),
       estimateSize: () => ESTIMATED_ROW_SIZE,
       overscan: OVERSCAN,
+      // Measuring inside the observer's callback re-renders the rows there, which resizes what it
+      // observes: the browser reports "ResizeObserver loop completed". A frame later it doesn't.
+      useAnimationFrameWithResizeObserver: true,
       rangeExtractor: (range) => withPinned(range, -1),
     });
   }

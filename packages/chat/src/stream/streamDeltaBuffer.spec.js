@@ -27,14 +27,14 @@ describe("createChunkBuffer", () => {
     expect(flushes[0][0].parts[0].text).to.equal("Hello");
   });
 
-  it("runs one timer across messages and reports each touched conversation once, all chunks committed", async () => {
-    /** @type {{messages: any[], conversationId: string | undefined}[]} */
+  it("runs one timer across messages and one flush naming each touched conversation, all chunks committed", async () => {
+    /** @type {{messages: any[], conversationIds: (string | undefined)[]}[]} */
     const flushes = [];
     const buffer = createChunkBuffer({
       flushInterval: 10,
       getMessages: () => [],
       getUserId: () => "me",
-      onFlush: (messages, conversationId) => flushes.push({ messages, conversationId }),
+      onFlush: (messages, conversationIds) => flushes.push({ messages, conversationIds }),
     });
 
     const chunk = (/** @type {string} */ messageId) => ({ messageId, partId: "p1", delta: {} });
@@ -44,10 +44,9 @@ describe("createChunkBuffer", () => {
 
     await wait(30);
 
-    expect(flushes.map((f) => f.conversationId)).to.have.members(["c1", "c2"]);
-    for (const { messages } of flushes) {
-      expect(messages.map((m) => m.id)).to.deep.equal(["r1", "r2", "r3"]);
-    }
+    expect(flushes).to.have.lengthOf(1);
+    expect(flushes[0].conversationIds).to.have.members(["c1", "c2"]);
+    expect(flushes[0].messages.map((m) => m.id)).to.deep.equal(["r1", "r2", "r3"]);
   });
 
   it("flush() flushes immediately and clears the pending timer", async () => {
@@ -117,9 +116,9 @@ function createHost({ flushInterval = 10, messages = [] } = {}) {
     flushInterval,
     getMessages: () => host.messages,
     getUserId: () => "me",
-    onFlush: (next, conversationId) => {
+    onFlush: (next, conversationIds) => {
       host.messages = next;
-      targets.push(conversationId);
+      targets.push(...conversationIds);
     },
   });
   return host;

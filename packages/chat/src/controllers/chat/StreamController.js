@@ -17,7 +17,7 @@ export class StreamController {
    * @param {{
    *   getMessages: () => ChxMessage[],
    *   getUserId: () => string | undefined,
-   *   onMessagesChange: (messages: ChxMessage[], conversationId?: string) => void,
+   *   onMessagesChange: (messages: ChxMessage[], conversationIds: (string | undefined)[]) => void,
    *   chunkBatchIntervalMs?: number,
    * }} options
    */

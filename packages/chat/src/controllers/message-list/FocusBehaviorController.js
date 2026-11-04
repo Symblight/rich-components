@@ -42,6 +42,19 @@ export class FocusBehaviorController {
     }
   }
 
+  /**
+   * The open shadow roots `syncInteriorTabbing` reaches inside `root`.
+   * @param {Element | ShadowRoot} root @returns {Generator<ShadowRoot>}
+   */
+  static *openShadowRoots(root) {
+    for (const el of root.querySelectorAll("*")) {
+      if (el.shadowRoot && el.localName !== "chx-message") {
+        yield el.shadowRoot;
+        yield* FocusBehaviorController.openShadowRoots(el.shadowRoot);
+      }
+    }
+  }
+
   /** @type {FocusBehaviorConfig} */
   #config;
   /** the single roving tab stop @type {string | null} */
@@ -116,7 +129,8 @@ export class FocusBehaviorController {
 
   /**
    * The light-DOM children a `partElements` renderer produced aren't Lit's, so no binding can drop
-   * them from the Tab order. Runs every render (`interiorTabbing()`); both halves are idempotent.
+   * them from the Tab order. Runs when the row renders or its content changes (`interiorTabbing()`);
+   * both halves are idempotent.
    * @param {string} id @param {HTMLElement} el
    */
   syncInteriorTabbing(id, el) {

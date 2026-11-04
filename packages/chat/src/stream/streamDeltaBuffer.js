@@ -12,15 +12,15 @@ import { reconcileChunk } from "./streamHelpers.js";
  * opened — an open-time snapshot let two in-flight messages clobber each other's commit. `onFlush`
  * must apply its array synchronously, or the next flush re-seeds from stale state.
  *
- * `onFlush` runs once per conversation touched, with the same array holding every chunk. A flush
- * reports the conversation the reconciled message actually belongs to, not the caller's — `onChunk`
- * can carry any conversation, and an adapter that never attributes a new message falls back to the
- * active conversation.
+ * `onFlush` runs once per flush, with the array holding every chunk and each conversation touched
+ * (several calls could overwrite what a listener wrote during the first). It reports the conversation
+ * a reconciled message actually belongs to, not the caller's — `onChunk` can carry any conversation,
+ * and `undefined` is an adapter that never attributed a new message, which means the active one.
  * @param {{
  *   flushInterval?: number,
  *   getMessages: () => ChxMessage[],
  *   getUserId?: () => string | undefined,
- *   onFlush: (messages: ChxMessage[], conversationId?: string) => void,
+ *   onFlush: (messages: ChxMessage[], conversationIds: (string | undefined)[]) => void,
  * }} options
  */
 export function createChunkBuffer({ flushInterval = 16, getMessages, getUserId, onFlush }) {
@@ -66,7 +66,7 @@ export function createChunkBuffer({ flushInterval = 16, getMessages, getUserId, 
       conversations.add(conversationId ?? touched.get(id));
       touched.delete(id);
     }
-    for (const conversationId of conversations) onFlush(messages, conversationId);
+    onFlush(messages, [...conversations]);
   }
 
   /** Commits one message's chunks now; the others stay pending. @param {string} messageId */

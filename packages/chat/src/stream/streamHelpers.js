@@ -34,7 +34,7 @@ export function getOrCreateMessage(messages, chunk, userId, replyToId, conversat
 }
 
 /** Tool-call statuses that mean nothing further is expected for that part. */
-const SETTLED_STATUSES = new Set(["completed", "failed", "cancelled"]);
+const SETTLED_STATUSES = new Set(["completed", "failed", "rejected", "cancelled"]);
 
 /** A tool call still mid-flight — only `tool_call` parts carry a `status` at all.
  * @param {ChxMessagePart} part */
@@ -92,8 +92,8 @@ export function applyChunkToParts(parts, chunk) {
 /**
  * Called once a stream ends — flips every still-"streaming" part to "done" and settles any mid-flight
  * tool call as `cancelled`, since the agent's own final update may never come; a real one arriving
- * later still overwrites it. A `detached` part or a denied (`rejected`) one is left as it is, except
- * under `cancelled` (an `abort`), which settles those too.
+ * later still overwrites it. A `detached` part is left as it is, except under `cancelled` (an
+ * `abort`), which settles it too.
  * @param {ChxMessage} message
  * @param {{cancelled?: boolean}} [options]
  * @returns {ChxMessage}
@@ -103,7 +103,7 @@ export function finalizeStreamingParts(message, { cancelled = false } = {}) {
   // be checked against its result directly — tracked explicitly instead
   let changed = false;
   const parts = message.parts.map((p) => {
-    const settle = isUnsettled(p) && (cancelled || (!p.detached && p.status !== "rejected"));
+    const settle = isUnsettled(p) && (cancelled || !p.detached);
     if (p.state !== "streaming" && !settle) return p;
     changed = true;
     return /** @type {ChxMessagePart} */ ({

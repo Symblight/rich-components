@@ -174,7 +174,12 @@ export class ChxChat extends LitElement {
     this.#stream = new StreamController(this, {
       getMessages: () => this.#internalMessages,
       getUserId: () => this.userId,
-      onMessagesChange: (messages, conversationId) => this.#applyMessages(messages, conversationId),
+      onMessagesChange: (messages, conversationIds) => {
+        const active = this.activeConversationId;
+        // an unattributed message lands in the active conversation
+        const touchesActive = conversationIds.some((id) => id === undefined || id === active);
+        this.#applyMessages(messages, touchesActive ? active : conversationIds[0]);
+      },
       chunkBatchIntervalMs: this.chunkBatchIntervalMs,
     });
 

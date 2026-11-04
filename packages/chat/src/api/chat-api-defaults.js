@@ -34,6 +34,8 @@ export const CHAT_API_DEFAULTS = freezeApi(
       isAwayFromBottom: () => false,
       getScrollOffset: () => undefined,
       scrollToOffset: async () => {},
+      positionToSave: () => null,
+      showPosition: async () => {},
     },
     input: {
       getValue: () => ({ value: "", html: "" }),

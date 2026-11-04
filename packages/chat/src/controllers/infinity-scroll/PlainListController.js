@@ -2,6 +2,9 @@ import { RowMeasurer } from "../../components/infinity-scroll/RowMeasurer.js";
 import { VERY_BOTTOM } from "../../components/infinity-scroll/BottomLatch.js";
 import { distanceToBottom } from "../../utils/dom.js";
 
+/** ms with no layout change before a `show()` counts as settled. */
+const SETTLE_QUIET = 150;
+
 /**
  * @typedef {"auto" | "smooth" | "instant"} Behavior
  * @typedef {import("../../components/infinity-scroll/BottomLatch.js").BottomLatch} BottomLatch
@@ -52,6 +55,12 @@ export class PlainListController {
   /** rows mutated since the last scroll event — see `takeContentChanged()` */
   #contentChanged = false;
   #disposed = false;
+  /** From `show()` until the new rows' layout goes quiet or a gesture takes over. */
+  #settling = false;
+  /** The offset a settling `show()` holds; `undefined` holds the bottom through the latch. @type {number | undefined} */
+  #target;
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  #settleTimer;
 
   /** @param {PlainListConfig} config */
   constructor(config) {
@@ -111,6 +120,32 @@ export class PlainListController {
     this.#resizeObserver?.disconnect();
     this.#resizeObserver = null;
     this.#cancelScrollFrame();
+    this.endSettling();
+  }
+
+  /**
+   * Unrelated rows are about to land (a conversation switch). Their heights arrive over several
+   * frames, so `offset`, or the bottom, is re-applied on every reconcile until layout goes quiet:
+   * WebKit has no scroll anchoring, and the old rows' anchor means nothing here.
+   * @param {number | undefined} offset
+   */
+  show(offset) {
+    this.#anchor = null;
+    this.#target = offset;
+    this.#settling = true;
+    clearTimeout(this.#settleTimer);
+    this.#latch.atBottom = offset === undefined;
+    this.#measurer.schedule();
+  }
+
+  get settling() {
+    return this.#settling;
+  }
+
+  endSettling() {
+    clearTimeout(this.#settleTimer);
+    this.#settling = false;
+    this.#target = undefined;
   }
 
   releaseRows() {
@@ -292,7 +327,13 @@ export class PlainListController {
     // nothing moved since the last baseline: a streamed chunk that didn't wrap a line, or the
     // resize half of a change its mutation already reconciled
     if (el && this.#unchangedSinceCapture(el)) return;
-    if (this.#latch.atBottom && (this.#config.getFollowing?.() ?? true)) {
+    if (this.#settling) {
+      clearTimeout(this.#settleTimer);
+      this.#settleTimer = setTimeout(() => this.endSettling(), SETTLE_QUIET);
+    }
+    if (this.#target !== undefined) {
+      if (el) el.scrollTop = this.#target;
+    } else if (this.#latch.atBottom && (this.#config.getFollowing?.() ?? true)) {
       // a programmatic scroll cancels the browser's wheel animation — the gesture's scroll decides
       if (!this.#config.isPaused?.()) this.#followToBottom();
     } else {
@@ -317,7 +358,7 @@ export class PlainListController {
     if (!el) return;
     const smooth = (this.#config.getFollowBehavior?.() ?? "auto") === "smooth";
     const near = distanceToBottom(el) <= el.clientHeight;
-    this.scrollToBottom(smooth && near ? "smooth" : "auto");
+    this.scrollToBottom(smooth && near && !this.#settling ? "smooth" : "auto");
   }
 
   /** px to scroll so `row`'s edge meets the viewport's. @param {Element} el @param {HTMLElement} row @param {"start" | "center" | "end"} align */

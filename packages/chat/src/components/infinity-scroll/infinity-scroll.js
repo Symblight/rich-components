@@ -275,6 +275,25 @@ export class ChxInfinityScroll extends LitElement {
   }
 
   /**
+   * Where to bring this list's content back to: an offset, `undefined` for the bottom, or `null`
+   * while a `showPosition()` is still settling, when the scroll position means nothing yet.
+   * @returns {number | undefined | null}
+   */
+  positionToSave() {
+    return this.#controller.positionToSave();
+  }
+
+  /**
+   * `data` is being swapped for unrelated content (a conversation switch): forgets the bottom latch,
+   * the pin and the anchor, then holds `offset`, or the bottom without one, while the new rows lay
+   * out. No-op when virtualized.
+   * @param {number | undefined} offset
+   */
+  showPosition(offset) {
+    this.#controller.showPosition(offset);
+  }
+
+  /**
    * The scroll offset (px) that would align item `index` to the given edge — the estimate the
    * virtualizer would use for `scrollToIndex`, exposed so a caller can pre-compute a target and
    * `scrollToOffset()` to it in one pass (no measurement-driven re-scroll). `undefined` when the item

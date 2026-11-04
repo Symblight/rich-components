@@ -81,6 +81,11 @@ background: a reply still streaming in when you switch away keeps streaming, a `
 for a different conversation lands in its cache silently. None of this needs your adapter to know or
 care which conversation is currently visible.
 
+A conversation left at the bottom, or never visited, shows at the bottom and keeps following,
+including when it grew while hidden or gets its history after being shown. One left scrolled up
+comes back at that offset, not following. With `restoreScrollPosition` off, every switch lands at the
+bottom. (With virtualization on, a saved offset is restored whether or not it was the bottom.)
+
 ```js
 chatEl.store.refresh(); // re-fetch the active conversation from scratch
 chatEl.store.refresh("c2"); // ...or a specific one, active or not

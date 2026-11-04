@@ -2,7 +2,7 @@ import { VirtualListController } from "./VirtualListController.js";
 import { RowMeasurer } from "../../components/infinity-scroll/RowMeasurer.js";
 import { StickToBottom } from "../../components/infinity-scroll/StickToBottom.js";
 import { InitialBottomLock } from "../../components/infinity-scroll/InitialBottomLock.js";
-import { BottomLatch } from "../../components/infinity-scroll/BottomLatch.js";
+import { BottomLatch, VERY_BOTTOM } from "../../components/infinity-scroll/BottomLatch.js";
 import { GestureGrace } from "../../components/infinity-scroll/GestureGrace.js";
 import { LoadMoreController } from "./LoadMoreController.js";
 import { VisibilityController } from "./VisibilityController.js";
@@ -305,6 +305,7 @@ export class InfinityScrollController {
       if (this.#initialLock.active) this.#initialLock.end();
       this.#holdForPointer(event);
       if (!isScrollGesture(event, this.#config.getScrollElement())) return;
+      this.#plainList.endSettling(); // the user decides from here
       this.#grace.note();
       // keys drive their own scrolls (roving focus), which a cancel or pause would fight
       if (event.type === "keydown") return;
@@ -413,17 +414,24 @@ export class InfinityScrollController {
   }
 
   handleScroll = () => {
-    this.#pin.handleScroll();
-    // `atBottom` must flip in the same task as the scroll, or the next follow yanks the user down
     const el = this.#config.getScrollElement();
     const contentChanged = this.#plainList.takeContentChanged();
-    const left = el
-      ? this.#latch.update(el, this.#config.getBuffer(), {
-          layoutJumps: this.#noVirtualization && !this.#grace.recent,
-          contentChanged,
-          held: this.#pointerHeld,
-        })
-      : false;
+    let left = false;
+    if (this.#plainList.settling) {
+      // rows laying out and our own re-aims: no gesture ended the settling, so nobody scrolled
+      this.#pin.rebase();
+      if (el) this.#latch.baseline(el);
+    } else {
+      this.#pin.handleScroll();
+      // `atBottom` must flip in the same task as the scroll, or the next follow yanks the user down
+      left = el
+        ? this.#latch.update(el, this.#config.getBuffer(), {
+            layoutJumps: this.#noVirtualization && !this.#grace.recent,
+            contentChanged,
+            held: this.#pointerHeld,
+          })
+        : false;
+    }
     if (this.#noVirtualization) {
       this.#plainList.handleScroll();
     } else {
@@ -456,6 +464,28 @@ export class InfinityScrollController {
     // aims the last row's end at the real max offset, so it clears the footer too, and its
     // reconcile re-aims while rows are measured on the way
     this.#list.virtualizer.scrollToEnd({ behavior });
+  }
+
+  /** Offset to come back to; `undefined` for the bottom, `null` while settling. Virtualized: always the offset.
+   *  @returns {number | undefined | null} */
+  positionToSave() {
+    if (!this.#noVirtualization) return this.getScrollOffset();
+    const el = this.#config.getScrollElement();
+    if (!el || this.#plainList.settling) return null;
+    const atBottom =
+      distanceToBottom(el) <= VERY_BOTTOM || (this.#pin.following && this.#latch.atBottom);
+    return atBottom ? undefined : el.scrollTop;
+  }
+
+  /** Nothing carries over to the content about to land; virtualized keeps its own handling.
+   *  @param {number | undefined} offset */
+  showPosition(offset) {
+    if (!this.#noVirtualization) return;
+    this.#releasePointer();
+    this.#releaseSelection();
+    this.#pin.reset(offset === undefined);
+    this.#plainList.show(offset);
+    this.#syncFollowing();
   }
 
   /** @returns {number | undefined} */

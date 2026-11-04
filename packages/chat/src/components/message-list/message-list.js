@@ -90,6 +90,10 @@ export class ChxMessageList extends LitElement {
 
   /** @type {Set<string> | undefined} */
   #pendingRenderedMessageIds;
+  /** The next `messages` are another conversation's, so an append seen there is no send. */
+  #switching = false;
+  /** A saved offset whose chx-infinity-scroll doesn't exist yet. @type {number | undefined} */
+  #pendingOffset;
   /** Part of every row's guard — bumped when all rows must rebuild (a new pattern or divider carrier). */
   #rowsVersion = 0;
   /** An own message appended before chx-infinity-scroll existed, pinned once it does. @type {string | undefined} */
@@ -325,9 +329,26 @@ export class ChxMessageList extends LitElement {
           await this.updateComplete;
           this.#infinityScrollElement?.scrollToOffset(offset);
         },
+        positionToSave: () =>
+          this.#infinityScrollElement ? this.#infinityScrollElement.positionToSave() : null,
+        showPosition: (offset) => this.#showPosition(offset),
       },
       () => [this.#awayFromBottom],
     );
+  }
+
+  /** @param {number | undefined} offset */
+  async #showPosition(offset) {
+    if (!this.noVirtualization) {
+      if (offset === undefined) return;
+      await this.updateComplete;
+      this.#infinityScrollElement?.scrollToOffset(offset);
+      return;
+    }
+    this.#switching = true;
+    this.requestUpdate();
+    this.#pendingOffset = this.#infinityScrollElement ? undefined : offset;
+    this.#infinityScrollElement?.showPosition(offset);
   }
 
   /** @param {ScrollBehavior} [behavior] */
@@ -535,8 +556,9 @@ export class ChxMessageList extends LitElement {
   willUpdate(changedProperties) {
     if (changedProperties.has("messages")) {
       this.#readTracking.syncReadStates();
-      this.#pinSentMessage(changedProperties.get("messages"));
+      if (!this.#switching) this.#pinSentMessage(changedProperties.get("messages"));
     }
+    this.#switching = false;
     if (changedProperties.has("partElements")) this.#partRenderer.clear();
     // rows only re-render when infinity-scroll does, which a plain host update doesn't trigger
     if (
@@ -575,6 +597,10 @@ export class ChxMessageList extends LitElement {
     if (this.#pendingPinId !== undefined && this.#infinityScrollElement) {
       this.#infinityScrollElement.pinToStart(this.#pendingPinId);
       this.#pendingPinId = undefined;
+    }
+    if (this.#pendingOffset !== undefined && this.#infinityScrollElement) {
+      this.#infinityScrollElement.showPosition(this.#pendingOffset);
+      this.#pendingOffset = undefined;
     }
     this.#stickyController.sync();
     if (changedProperties.has("messages")) this.#stickyController.notifyMessagesChanged();

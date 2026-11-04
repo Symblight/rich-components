@@ -25,23 +25,21 @@ export class ScrollMemoryController {
 
   /** Captures the conversation being left and arms the restore. Call from `willUpdate`. @param {string | undefined} previousConversationId */
   handleConversationChange(previousConversationId) {
-    if (!this.#config.getEnabled()) {
-      this.#pendingRestore = false;
-      return;
-    }
-    if (previousConversationId !== undefined) {
-      this.#offsets.set(previousConversationId, this.#config.getViewport().getScrollOffset());
-    }
     this.#pendingRestore = true;
+    if (!this.#config.getEnabled() || previousConversationId === undefined) return;
+    const position = this.#config.getViewport().positionToSave();
+    // `null`: left mid-switch, what's on screen says nothing about this conversation
+    if (position !== null) this.#offsets.set(previousConversationId, position);
   }
 
-  /** Restores the armed offset; a first visit keeps the bottom-anchored default. Call from `updated`, unawaited. @param {string | undefined} conversationId */
+  /** Shows the armed conversation at its saved offset, or the bottom without one. Call from `updated`, after the list got its messages, unawaited. @param {string | undefined} conversationId */
   async restoreIfPending(conversationId) {
     if (!this.#pendingRestore) return;
     this.#pendingRestore = false;
-    const offset = conversationId === undefined ? undefined : this.#offsets.get(conversationId);
-    if (offset === undefined) return;
-    await this.#config.getViewport().scrollToOffset(offset);
+    const saved = this.#config.getEnabled() && conversationId !== undefined;
+    await this.#config
+      .getViewport()
+      .showPosition(saved ? this.#offsets.get(conversationId) : undefined);
   }
 
   /** @param {string} conversationId */

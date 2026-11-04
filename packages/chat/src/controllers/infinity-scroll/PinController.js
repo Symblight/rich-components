@@ -63,6 +63,18 @@ export class PinController {
     this.#setFollowing(true);
   }
 
+  /** Unrelated content is about to land: drops the pin and sets following outright. @param {boolean} following */
+  reset(following) {
+    this.#clear();
+    this.#setFollowing(following);
+    this.rebase();
+  }
+
+  /** The scroll position moved with nobody scrolling: nothing to read from it. */
+  rebase() {
+    this.#lastScrollTop = this.#config.getScrollElement()?.scrollTop ?? 0;
+  }
+
   /** Re-reads the pinned row's offset (it moves when older rows are prepended), or drops the pin
    *  once its item is gone or the mode is off. */
   refresh() {

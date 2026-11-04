@@ -35,6 +35,10 @@
  * @property {() => boolean} isAwayFromBottom - not tracked in `render()`; use `ChatController.awayFromBottom`
  * @property {() => number | undefined} getScrollOffset
  * @property {(offset: number) => Promise<void>} scrollToOffset
+ * @property {() => number | undefined | null} positionToSave - internal, for conversation switches:
+ *   the offset to come back to, `undefined` for the bottom, `null` when mid-switch (keep what's saved)
+ * @property {(offset: number | undefined) => Promise<void>} showPosition - internal: call right after
+ *   `messages` swapped to another conversation; `undefined` is the bottom
  */
 
 /**

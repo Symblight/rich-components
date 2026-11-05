@@ -181,8 +181,10 @@ export class Editor {
   }
 
   focusEnd() {
-    const { doc } = this.view.state;
-    this.view.dispatch(this.view.state.tr.setSelection(Selection.atEnd(doc)));
+    const { doc, selection } = this.view.state;
+    const end = Selection.atEnd(doc);
+    // Already there: a transaction would open the picker on text ending in `@foo`.
+    if (!selection.eq(end)) this.view.dispatch(this.view.state.tr.setSelection(end));
     this.view.focus();
   }
 

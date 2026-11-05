@@ -314,8 +314,8 @@ export class ChxMessageComposer extends LitElement {
     const { doc, browse } = /** @type {import("../../types/api.js").ChxComposerState} */ (state);
     this.#stopBrowsing();
     this.#browse = browse;
-    if (this.#textbox) this.#textbox.setState(doc);
-    else this.updateComplete.then(() => this.#textbox?.setState(doc));
+    if (this.#textbox) this.#textbox.setState(doc, { caret: "end" });
+    else this.updateComplete.then(() => this.#textbox?.setState(doc, { caret: "end" }));
   }
 
   /** Queued until the first render if the textbox doesn't exist yet. @param {string} text */

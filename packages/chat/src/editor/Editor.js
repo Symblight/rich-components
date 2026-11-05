@@ -36,6 +36,10 @@ function fixMacDoubleSpacePeriod(tr, oldState, view) {
   return oldState.tr.insertText(inserted.replace(".", " "), step.from, step.to);
 }
 
+/** @param {string} text @returns {import("prosemirror-model").Node[]} One `line` node per line of `text`. */
+const linesOf = (text) =>
+  text.split("\n").map((line) => schema.nodes.line.create(null, line ? schema.text(line) : null));
+
 /** Facade over the composer's editing engine — constructed by chx-textbox (textbox.js) against its own mount div; chx-message-composer never touches ProseMirror directly. */
 export class Editor {
   // real private fields must be declared here, in the class body — a bare `this.#foo = ...`
@@ -128,10 +132,11 @@ export class Editor {
     this.view.updateState(EditorState.create({ schema, plugins: this.view.state.plugins }));
   }
 
-  /** Replaces the whole document with a single line of plain text. @param {string} text */
+  /** Replaces the whole document with plain text, a `line` per line, the caret at its end. @param {string} text */
   setText(text) {
     const state = EditorState.create({ schema, plugins: this.view.state.plugins });
-    this.view.updateState(state.apply(state.tr.insertText(text)));
+    const tr = state.tr.replaceWith(0, state.doc.content.size, linesOf(text));
+    this.view.updateState(state.apply(tr.setSelection(Selection.atEnd(tr.doc))));
   }
 
   /** The document, chips and pastes included, for `setDoc()`. @returns {unknown} */

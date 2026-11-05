@@ -69,6 +69,31 @@ describe("chx-message-composer", () => {
     expect(before.html).to.include('data-template-id="t"');
   });
 
+  it("input.setText() turns line breaks into lines, with the caret at the end", async () => {
+    // Arrange
+    const chat = /** @type {import("../base/chat.js").ChxChat} */ (
+      await fixture(
+        html`<chx-chat
+          ><chx-message-composer slot="message-composer"></chx-message-composer
+        ></chx-chat>`,
+      )
+    );
+    const composer = /** @type {ChxMessageComposer} */ (chat.querySelector("chx-message-composer"));
+    await composer.updateComplete;
+    const textbox = textboxOf(composer);
+    await textbox.updateComplete;
+
+    // Act
+    chat.input.setText("one\n\nthree");
+
+    // Assert
+    const { doc, selection } = /** @type {NonNullable<typeof textbox.editor>} */ (textbox.editor)
+      .view.state;
+    expect(doc.childCount, "one line node per line").to.equal(3);
+    expect(chat.input.getValue().value).to.equal("one\n\nthree");
+    expect(selection.from, "caret at the end").to.equal(doc.content.size - 1);
+  });
+
   describe("disabled", () => {
     it('disables the send button with a draft (send-button="always")', async () => {
       const el = /** @type {ChxMessageComposer} */ (

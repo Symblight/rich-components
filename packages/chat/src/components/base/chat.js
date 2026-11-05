@@ -541,10 +541,10 @@ export class ChxChat extends LitElement {
     );
   }
 
-  /** @param {CustomEvent<{value: string, html: string, attachments: File[]}>} event */
+  /** @param {CustomEvent<{value: string, html: string, attachments: File[], state?: import("../../types/api.js").ChxComposerState}>} event */
   #handleSend(event) {
     if (this.#conversationMode.isEmptyState) return; // nowhere to route a message when no conversation is active
-    const { value, html, attachments = [] } = event.detail;
+    const { value, html, attachments = [], state } = event.detail;
     const conversationId = this.activeConversationId;
     const id = crypto.randomUUID();
     /** @type {ChxMessage} */
@@ -555,6 +555,7 @@ export class ChxChat extends LitElement {
       own: true,
       createdAt: Date.now(),
       status: "sending",
+      composerState: state,
       parts: [
         { id: `${id}-t1`, type: "text", text: value, html },
         ...attachments.map((attachment, index) => ({

@@ -45,6 +45,8 @@
  * @property {"read" | "unread"} [readState]
  * @property {ChxMessageAuthor} [author] - shown by chx-message-list's `author-display`
  * @property {ChxMessagePart[]} parts
+ * @property {import("./api.js").ChxComposerState} [composerState] - what the composer held when it
+ *   was sent, for `input.setState()`; absent on a message that didn't come from this composer
  */
 
 /**

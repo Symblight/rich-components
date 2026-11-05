@@ -3,6 +3,7 @@ import { expect, fixture, html } from "@open-wc/testing";
 import "./message-composer.js";
 import "../base/chat.js";
 import { schema } from "../../editor/schema.js";
+import { chipPartRule, createSplitOnSendHandler } from "../../utils/split-message-parts.js";
 /** @import { ChxMessageComposer } from "./message-composer.js" */
 /** @import { ChxTextbox } from "../textbox/textbox.js" */
 
@@ -92,6 +93,45 @@ describe("chx-message-composer", () => {
     expect(doc.childCount, "one line node per line").to.equal(3);
     expect(chat.input.getValue().value).to.equal("one\n\nthree");
     expect(selection.from, "caret at the end").to.equal(doc.content.size - 1);
+  });
+
+  it("a sent message keeps its composer state, through splitting on send", async () => {
+    // Arrange
+    const chat = /** @type {import("../base/chat.js").ChxChat} */ (
+      await fixture(
+        html`<chx-chat
+          ><chx-message-composer slot="message-composer"></chx-message-composer
+        ></chx-chat>`,
+      )
+    );
+    chat.addEventListener(
+      "chx-messages-change",
+      /** @type {EventListener} */ (createSplitOnSendHandler([chipPartRule])),
+    );
+    const composer = /** @type {ChxMessageComposer} */ (chat.querySelector("chx-message-composer"));
+    await composer.updateComplete;
+    const textbox = textboxOf(composer);
+    await textbox.updateComplete;
+    const view = /** @type {NonNullable<typeof textbox.editor>} */ (textbox.editor).view;
+    view.dispatch(
+      view.state.tr.replaceWith(0, view.state.doc.content.size, [
+        schema.nodes.line.create(null, [
+          schema.text("see "),
+          schema.nodes.chip.create({ templateId: "t", label: "a.js", icon: null, data: {} }),
+        ]),
+      ]),
+    );
+    const before = chat.input.getValue();
+
+    // Act
+    textbox.closest("form")?.requestSubmit();
+    await chat.updateComplete;
+    const [message] = chat.store.getMessages();
+    chat.input.setState(message.composerState);
+
+    // Assert
+    expect(message.parts.some((part) => part.type === "chip"), "was split").to.equal(true);
+    expect(chat.input.getValue()).to.deep.equal(before);
   });
 
   describe("disabled", () => {

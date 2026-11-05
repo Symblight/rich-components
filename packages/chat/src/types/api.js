@@ -42,6 +42,13 @@
  */
 
 /**
+ * What the composer held, chips and pastes included: `input.getState()`, a sent message's
+ * `composerState`. Opaque outside the composer, for `input.setState()`.
+ * @typedef {Object} ChxComposerState
+ * @property {unknown} doc
+ */
+
+/**
  * @typedef {Object} ChxInputApi
  * @property {() => {value: string, html: string}} getValue
  * @property {(text: string) => void} setText

@@ -8,6 +8,7 @@ import "@symblight/wc-material/icon";
 import stop from "@material-design-icons/svg/outlined/stop.svg?raw";
 
 import tokens from "../../styles/tokens.css?inline";
+import visuallyHidden from "../../styles/visually-hidden.css?inline";
 import styles from "./message-composer.css?inline";
 
 import "../textbox/textbox.js";
@@ -39,6 +40,7 @@ export class ChxMessageComposer extends LitElement {
     dropHint: { type: String, attribute: "drop-hint" },
     dragging: { type: Boolean, reflect: true },
     messagesEmpty: { type: Boolean },
+    historyStatus: { state: true },
     hasFooter: { state: true },
     hasAttachments: { state: true },
   };
@@ -106,6 +108,9 @@ export class ChxMessageComposer extends LitElement {
     /** @type {((message: import("../../types/message.js").ChxMessage) => unknown) | undefined} How an app reads a message with no `composerState` (a replayed one) as a document; `null` for its plain text. */
     this.promptDoc = undefined;
 
+    /** @type {string} Where browsing is, for screen readers: "Prompt 3 of 12". */
+    this.historyStatus = "";
+
     /** @type {boolean} Something is slotted into `footer` — draws the surface around field and footer. */
     this.hasFooter = false;
 
@@ -115,7 +120,7 @@ export class ChxMessageComposer extends LitElement {
 
   /** @returns {import("lit").CSSResultGroup} */
   static get styles() {
-    return [tokens, styles];
+    return [tokens, visuallyHidden, styles];
   }
 
   connectedCallback() {
@@ -171,13 +176,13 @@ export class ChxMessageComposer extends LitElement {
         html: this.#textbox?.getHTML() ?? "",
       }),
       setText: (text) => {
-        this.#browse = null;
+        this.#stopBrowsing();
         this.#setText(text);
       },
       getState: () => this.#getState(),
       setState: (state) => this.#setState(state),
       clear: () => {
-        this.#browse = null;
+        this.#stopBrowsing();
         this.#textbox?.clear();
       },
       isBrowsing: () => this.#browse !== null,
@@ -307,6 +312,7 @@ export class ChxMessageComposer extends LitElement {
   /** Queued until the first render if the textbox doesn't exist yet. @param {unknown} state */
   #setState(state) {
     const { doc, browse } = /** @type {import("../../types/api.js").ChxComposerState} */ (state);
+    this.#stopBrowsing();
     this.#browse = browse;
     if (this.#textbox) this.#textbox.setState(doc);
     else this.updateComplete.then(() => this.#textbox?.setState(doc));
@@ -423,7 +429,7 @@ export class ChxMessageComposer extends LitElement {
     if (!allowed) return;
 
     const browse = this.#browse;
-    this.#browse = null;
+    this.#stopBrowsing();
     textbox.focus();
     this.#clearValue();
     if (browse) textbox.setState(browse.draft, { caret: "end" });
@@ -466,16 +472,23 @@ export class ChxMessageComposer extends LitElement {
     if (!message) {
       textbox.setState(browse?.draft, { caret: "end" });
       this.#browse = null;
+      this.historyStatus = "Draft";
       return true;
     }
     const edits = new Map(browse?.edits);
     if (at !== null) edits.set(at, shown);
     this.#browse = { at: message.id, draft: browse ? browse.draft : shown, edits };
+    this.historyStatus = `Prompt ${prompts.indexOf(message) + 1} of ${prompts.length}`;
     textbox.setState(edits.get(message.id) ?? this.#recall(message), {
       caret: direction === "up" ? "start" : "end",
     });
     return true;
   };
+
+  #stopBrowsing() {
+    this.#browse = null;
+    this.historyStatus = "";
+  }
 
   /**
    * What a recalled message brings back.
@@ -518,6 +531,7 @@ export class ChxMessageComposer extends LitElement {
         @chx-suggestion-select=${this.#handleSuggestionSelect}
       ></slot>
       <slot name="command-field" @slotchange=${this.#handleCommandFieldSlotchange}></slot>
+      <div class="visually-hidden" role="status">${this.historyStatus}</div>
       <div
         class=${classMap({
           "message-composer__surface": true,

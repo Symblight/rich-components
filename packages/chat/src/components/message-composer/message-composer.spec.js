@@ -375,6 +375,32 @@ describe("chx-message-composer", () => {
       expect(browsingAfterSent).to.equal(false);
     });
 
+    it("says where you are in a status region", async () => {
+      // Arrange
+      const { chat, composer, press } = await setup({ prompts: ["one", "two", "three"] });
+      const status = async () => {
+        await composer.updateComplete;
+        return composer.shadowRoot?.querySelector('[role="status"]')?.textContent?.trim();
+      };
+
+      // Act
+      press("ArrowUp");
+      const newest = await status();
+      press("ArrowUp");
+      const older = await status();
+      press("ArrowDown");
+      press("ArrowDown");
+      const draft = await status();
+      chat.input.setText("");
+      const notBrowsing = await status();
+
+      // Assert
+      expect(newest).to.equal("Prompt 3 of 3");
+      expect(older).to.equal("Prompt 2 of 3");
+      expect(draft).to.equal("Draft");
+      expect(notBrowsing).to.equal("");
+    });
+
     it("an open picker keeps the arrows", async () => {
       // Arrange
       const { chat, field, press, text } = await setup();

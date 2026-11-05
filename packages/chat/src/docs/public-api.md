@@ -81,11 +81,12 @@ Rules shared by every namespace:
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | `getValue()`                | `{value, html}`.                                                                                                                  |
 | `setText(text)`             | Replaces the document with plain text.                                                                                            |
-| `getState()`                | The draft with its chips and pastes, opaque, for `setState()`. `undefined` before the editor is up.                               |
+| `getState()`                | The draft with its chips and pastes and the place in `prompt-history`, opaque, for `setState()`. `undefined` before the editor is up. |
 | `setState(state)`           | Puts back what `getState()` returned: a draft saved across a conversation switch.                                                 |
 | `clear()`                   | Text only — files are `attachments.clear()`.                                                                                      |
 | `focus()` / `focusEnd()`    | `composerEl.focus()` and `textboxEl.focus()` work too.                                                                            |
 | `isEmpty()`                 |                                                                                                                                   |
+| `isBrowsing()`              | A recalled prompt is shown (`prompt-history`): `getState()` holds a draft even when the composer is empty.                        |
 | `insertChip(node, target?)` | With a `target` from `chx-command-query`, replaces that range — see [commands](./commands.md). Without one, inserts at the caret. |
 
 ### `attachments`

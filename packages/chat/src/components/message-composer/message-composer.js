@@ -413,7 +413,9 @@ export class ChxMessageComposer extends LitElement {
     if (!textbox || this.disabled || this.emptyState) return;
 
     const value = textbox.getValue();
-    const attachments = this.#attachments?.getAttachments() ?? [];
+    const browse = this.#browse;
+    // Files stay with the draft: a recalled prompt never had them.
+    const attachments = browse ? [] : (this.#attachments?.getAttachments() ?? []);
     if (!value.trim() && attachments.length === 0) return;
 
     const html = textbox.getHTML();
@@ -428,11 +430,10 @@ export class ChxMessageComposer extends LitElement {
     );
     if (!allowed) return;
 
-    const browse = this.#browse;
     this.#stopBrowsing();
     textbox.focus();
-    this.#clearValue();
     if (browse) textbox.setState(browse.draft, { caret: "end" });
+    else this.#clearValue();
   }
 
   /** @param {Event} event */

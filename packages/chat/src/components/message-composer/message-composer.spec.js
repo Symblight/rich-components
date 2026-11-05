@@ -299,6 +299,42 @@ describe("chx-message-composer", () => {
       expect(view.state.doc.toJSON()).to.deep.equal(sent);
     });
 
+    it("reads a message by its composer state, then promptDoc, then its text", async () => {
+      // Arrange
+      /** @param {string} text */
+      const docOf = (text) => ({
+        type: "doc",
+        content: [{ type: "line", content: [{ type: "text", text }] }],
+      });
+      const { chat, composer, press, text } = await setup({ prompts: ["plain", "asked"] });
+      chat.store.add({
+        id: "sent",
+        own: true,
+        composerState: { doc: docOf("from state") },
+        parts: [{ id: "s", type: "text", text: "sent" }],
+      });
+      /** @type {string[]} */
+      const asked = [];
+      composer.promptDoc = (message) => {
+        asked.push(message.id);
+        return message.id === "m1" ? docOf("from promptDoc") : null;
+      };
+
+      // Act
+      press("ArrowUp");
+      const fromState = text();
+      press("ArrowUp");
+      const fromPromptDoc = text();
+      press("ArrowUp");
+      const fromText = text();
+
+      // Assert
+      expect(fromState).to.equal("from state");
+      expect(fromPromptDoc).to.equal("from promptDoc");
+      expect(fromText).to.equal("plain");
+      expect(asked, "not asked about a message with a state").to.deep.equal(["m1", "m0"]);
+    });
+
     it("an open picker keeps the arrows", async () => {
       // Arrange
       const { chat, field, press, text } = await setup();

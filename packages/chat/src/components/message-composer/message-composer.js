@@ -32,6 +32,7 @@ export class ChxMessageComposer extends LitElement {
     sendButton: { type: String, attribute: "send-button", reflect: true },
     busyAction: { type: String, attribute: "busy-action", reflect: true },
     promptHistory: { type: Boolean, attribute: "prompt-history" },
+    promptDoc: { attribute: false },
     placeholder: { type: String },
     sendLabel: { type: String, attribute: "send-label" },
     stopLabel: { type: String, attribute: "stop-label" },
@@ -101,6 +102,9 @@ export class ChxMessageComposer extends LitElement {
 
     /** @type {boolean} Up on the first row and Down on the last recall the chat's sent prompts. */
     this.promptHistory = false;
+
+    /** @type {((message: import("../../types/message.js").ChxMessage) => unknown) | undefined} How an app reads a message with no `composerState` (a replayed one) as a document; `null` for its plain text. */
+    this.promptDoc = undefined;
 
     /** @type {boolean} Something is slotted into `footer` — draws the surface around field and footer. */
     this.hasFooter = false;
@@ -476,7 +480,7 @@ export class ChxMessageComposer extends LitElement {
    * @returns {unknown} A document.
    */
   #recall(message) {
-    return message.composerState?.doc ?? docOfText(promptText(message));
+    return message.composerState?.doc ?? this.promptDoc?.(message) ?? docOfText(promptText(message));
   }
 
   /**

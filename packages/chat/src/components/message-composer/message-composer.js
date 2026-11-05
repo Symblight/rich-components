@@ -12,7 +12,9 @@ import styles from "./message-composer.css?inline";
 
 import "../textbox/textbox.js";
 import { CONNECT_REGISTRY } from "../../api/keys.js";
+import { docOfText } from "../../editor/Editor.js";
 import { EDITOR_EXTENSION } from "../../editor/extension.js";
+import { promptText, recallable, step } from "../../utils/prompt-history.js";
 
 /**
  * @tag chx-message-composer
@@ -29,6 +31,7 @@ export class ChxMessageComposer extends LitElement {
     layout: { type: String, reflect: true },
     sendButton: { type: String, attribute: "send-button", reflect: true },
     busyAction: { type: String, attribute: "busy-action", reflect: true },
+    promptHistory: { type: Boolean, attribute: "prompt-history" },
     placeholder: { type: String },
     sendLabel: { type: String, attribute: "send-label" },
     stopLabel: { type: String, attribute: "stop-label" },
@@ -96,6 +99,9 @@ export class ChxMessageComposer extends LitElement {
     /** @type {"send" | "stop"} `stop`: while `loading` the button is always stop; Enter still sends. */
     this.busyAction = "send";
 
+    /** @type {boolean} Up on the first row and Down on the last recall the chat's sent prompts. */
+    this.promptHistory = false;
+
     /** @type {boolean} Something is slotted into `footer` — draws the surface around field and footer. */
     this.hasFooter = false;
 
@@ -129,6 +135,12 @@ export class ChxMessageComposer extends LitElement {
   #registry; // pushed by chx-chat, see [CONNECT_REGISTRY]
   /** @type {(() => void) | undefined} */
   #unregisterInput;
+  /**
+   * The prompt shown (a message's id, so a message arriving doesn't shift it), the text you had, and
+   * the recalled prompts you've been to, edits included, by id. `null` while not browsing.
+   * @type {{at: string, draft: unknown, edits: Map<string, unknown>} | null}
+   */
+  #browse = null;
   /** @type {{element: import("../attachments/attachments.js").ChxAttachments, unregister: () => void} | undefined} */
   #attachmentsOwner;
 
@@ -155,10 +167,16 @@ export class ChxMessageComposer extends LitElement {
         value: this.#textbox?.getValue() ?? "",
         html: this.#textbox?.getHTML() ?? "",
       }),
-      setText: (text) => this.#setText(text),
+      setText: (text) => {
+        this.#browse = null;
+        this.#setText(text);
+      },
       getState: () => this.#getState(),
       setState: (state) => this.#setState(state),
-      clear: () => this.#textbox?.clear(),
+      clear: () => {
+        this.#browse = null;
+        this.#textbox?.clear();
+      },
       focus: () => this.focus(),
       focusEnd: () => this.#textbox?.focusEnd(),
       isEmpty: () => this.#textbox?.editor?.isEmpty() ?? true,
@@ -397,8 +415,11 @@ export class ChxMessageComposer extends LitElement {
     );
     if (!allowed) return;
 
+    const browse = this.#browse;
+    this.#browse = null;
     textbox.focus();
     this.#clearValue();
+    if (browse) textbox.setState(browse.draft, { caret: "end" });
   }
 
   /** @param {Event} event */
@@ -417,6 +438,45 @@ export class ChxMessageComposer extends LitElement {
   #clearValue() {
     this.#textbox?.clear();
     this.#attachments?.clearAttachments();
+  }
+
+  /**
+   * Up on the first row, Down on the last: the next prompt, or back to the draft.
+   * Read at the keypress, so typing costs nothing.
+   * @param {"up" | "down"} direction
+   * @returns {boolean} Whether the key was taken.
+   */
+  #onHistory = (direction) => {
+    const textbox = this.#textbox;
+    if (!this.promptHistory || !this.#registry || !textbox) return false;
+    const browse = this.#browse;
+    const at = browse?.at ?? null;
+    const prompts = recallable(this.#registry.facades.store.getMessages());
+    const next = step(prompts, at, direction);
+    if (next === at) return at !== null; // the oldest takes the key; no prompts, or Down, doesn't
+    const shown = textbox.getState();
+    const message = prompts.find((prompt) => prompt.id === next);
+    if (!message) {
+      textbox.setState(browse?.draft, { caret: "end" });
+      this.#browse = null;
+      return true;
+    }
+    const edits = new Map(browse?.edits);
+    if (at !== null) edits.set(at, shown);
+    this.#browse = { at: message.id, draft: browse ? browse.draft : shown, edits };
+    textbox.setState(edits.get(message.id) ?? this.#recall(message), {
+      caret: direction === "up" ? "start" : "end",
+    });
+    return true;
+  };
+
+  /**
+   * What a recalled message brings back.
+   * @param {import("../../types/message.js").ChxMessage} message
+   * @returns {unknown} A document.
+   */
+  #recall(message) {
+    return message.composerState?.doc ?? docOfText(promptText(message));
   }
 
   /**
@@ -470,6 +530,7 @@ export class ChxMessageComposer extends LitElement {
             .dropHint=${this.dropHint}
             .getTriggerFields=${this.#getTriggerFields}
             .getExtensions=${this.#getExtensions}
+            .onHistory=${this.#onHistory}
             ?loading=${this.loading}
             ?disabled=${this.disabled || this.emptyState}
             ?dragging=${this.dragging}

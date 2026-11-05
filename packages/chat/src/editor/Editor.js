@@ -40,6 +40,9 @@ function fixMacDoubleSpacePeriod(tr, oldState, view) {
 const linesOf = (text) =>
   text.split("\n").map((line) => schema.nodes.line.create(null, line ? schema.text(line) : null));
 
+/** @param {string} text @returns {unknown} A document for `setDoc()`, a `line` per line of `text`. */
+export const docOfText = (text) => schema.nodes.doc.create(null, linesOf(text)).toJSON();
+
 /** Facade over the composer's editing engine — constructed by chx-textbox (textbox.js) against its own mount div; chx-message-composer never touches ProseMirror directly. */
 export class Editor {
   // real private fields must be declared here, in the class body — a bare `this.#foo = ...`
@@ -53,6 +56,7 @@ export class Editor {
    * @param {{
    *   onChange: (detail: {value: string, html: string}) => void,
    *   onSubmit: () => void,
+   *   onHistory?: (direction: "up" | "down") => boolean,
    *   getCommandFields?: () => Map<string, Element>,
    *   onCommandSelected?: (detail: {target: string | null, id: string | undefined}) => void,
    *   getExtensions?: () => import("./extension.js").EditorExtension[],
@@ -65,6 +69,7 @@ export class Editor {
     {
       onChange,
       onSubmit,
+      onHistory = () => false,
       getCommandFields,
       onCommandSelected,
       getExtensions = () => [],
@@ -80,7 +85,7 @@ export class Editor {
       plugins: [
         createCommandPlugin({ getCommandFields: getCommandFields ?? (() => new Map()) }),
         history(),
-        createKeymap({ onSubmit }),
+        createKeymap({ onSubmit, onHistory }),
         createPastePlugin({ getExtensions }),
         createPlaceholderPlugin(placeholder ?? ""),
       ],
@@ -144,10 +149,24 @@ export class Editor {
     return this.view.state.doc.toJSON();
   }
 
-  /** Replaces the document with one from `getDoc()`; undo history starts over. @param {unknown} json */
-  setDoc(json) {
+  /**
+   * Replaces the document with one from `getDoc()`; undo history starts over.
+   * @param {unknown} json
+   * @param {{caret?: "start" | "end"}} [options] Places the caret and scrolls to it. The picker stays
+   *   closed, or a prompt ending in `@foo` would open it and take the next arrow key.
+   */
+  setDoc(json, { caret } = {}) {
     const doc = schema.nodeFromJSON(json);
-    this.view.updateState(EditorState.create({ schema, doc, plugins: this.view.state.plugins }));
+    const { plugins } = this.view.state;
+    if (!caret) {
+      this.view.updateState(EditorState.create({ schema, doc, plugins }));
+      return;
+    }
+    const selection = caret === "start" ? Selection.atStart(doc) : Selection.atEnd(doc);
+    const state = EditorState.create({ schema, doc, plugins, selection });
+    this.view.updateState(
+      state.apply(state.tr.setMeta(commandPluginKey, { forceClose: true }).scrollIntoView()),
+    );
   }
 
   /** @param {boolean} editable Toggles the ProseMirror view's editable state (contenteditable + input handling). */

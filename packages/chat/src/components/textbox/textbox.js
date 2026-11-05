@@ -35,6 +35,7 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     dragging: { type: Boolean, reflect: true, attribute: true },
     getTriggerFields: { attribute: false },
     getExtensions: { attribute: false },
+    onHistory: { attribute: false },
     loading: { type: Boolean, reflect: true, attribute: true },
     disabled: { type: Boolean, reflect: true, attribute: true },
     compact: { type: Boolean, reflect: true, attribute: true },
@@ -75,6 +76,8 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     this.getTriggerFields = () => new Map();
     /** @type {() => import("../../editor/extension.js").EditorExtension[]} */
     this.getExtensions = () => [];
+    /** @type {(direction: "up" | "down") => boolean} Up on the first row, Down on the last; `true` takes the key. */
+    this.onHistory = () => false;
 
     /** @type {Editor | undefined} */
     this.editor = undefined;
@@ -162,6 +165,7 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
         if (this.disabled) return; // empty state — no active conversation to send into
         this.closest("form")?.requestSubmit();
       },
+      onHistory: (direction) => this.onHistory(direction),
       getCommandFields: () => this.getTriggerFields(),
       getExtensions: () => this.getExtensions(),
       onCommandSelected: this.handleCommandSelected,
@@ -252,10 +256,14 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     return this.editor?.getDoc();
   }
 
-  /** Replaces the document with one from `getState()`. @param {unknown} state */
-  setState(state) {
+  /**
+   * Replaces the document with one from `getState()`.
+   * @param {unknown} state
+   * @param {{caret?: "start" | "end"}} [options]
+   */
+  setState(state, options) {
     if (!this.editor) return;
-    this.editor.setDoc(state);
+    this.editor.setDoc(state, options);
     const text = this.editor.getValue();
     this.setValue(text);
     this.value = text;

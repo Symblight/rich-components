@@ -44,15 +44,31 @@ function arrowHandler(dir, side) {
 }
 
 /**
+ * Up on the document's first visual row, Down on its last, is the prompt history's. `endOfTextblock`
+ * knows a wrapped line's rows.
+ * @param {"up" | "down"} direction
+ * @param {(direction: "up" | "down") => boolean} onHistory `false` leaves the key to the browser.
+ * @returns {import("prosemirror-state").Command}
+ */
+function historyHandler(direction, onHistory) {
+  return (state, _dispatch, view) => {
+    if (!view || !state.selection.empty) return false;
+    const edge = direction === "up" ? 0 : state.doc.childCount - 1;
+    if (state.selection.$head.index(0) !== edge || !view.endOfTextblock(direction)) return false;
+    return onHistory(direction);
+  };
+}
+
+/**
  * Not `baseKeymap` from prosemirror-commands — its Enter binding chains
  * paragraph-splitting commands that don't fit this composer's semantics
  * (submit, not split). `splitBlock` is reused as-is for Shift-Enter (splits
  * the current `line` into two — schema-agnostic, works for any single
  * uniform block type).
- * @param {{ onSubmit: () => void }} options
+ * @param {{ onSubmit: () => void, onHistory: (direction: "up" | "down") => boolean }} options
  * @returns {import("prosemirror-state").Plugin}
  */
-export function createKeymap({ onSubmit }) {
+export function createKeymap({ onSubmit, onHistory }) {
   return keymap({
     Enter: () => {
       onSubmit();
@@ -67,7 +83,7 @@ export function createKeymap({ onSubmit }) {
     "Mod-y": redo,
     ArrowLeft: arrowHandler("left", -1),
     ArrowRight: arrowHandler("right", 1),
-    ArrowUp: arrowHandler("up", -1),
-    ArrowDown: arrowHandler("down", 1),
+    ArrowUp: chainCommands(arrowHandler("up", -1), historyHandler("up", onHistory)),
+    ArrowDown: chainCommands(arrowHandler("down", 1), historyHandler("down", onHistory)),
   });
 }

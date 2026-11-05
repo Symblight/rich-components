@@ -163,9 +163,11 @@ export class Editor {
       return;
     }
     const selection = caret === "start" ? Selection.atStart(doc) : Selection.atEnd(doc);
-    const state = EditorState.create({ schema, doc, plugins, selection });
-    this.view.updateState(
-      state.apply(state.tr.setMeta(commandPluginKey, { forceClose: true }).scrollIntoView()),
+    this.view.updateState(EditorState.create({ schema, doc, plugins, selection }));
+    // A transaction of its own: the view scrolls only when the state's scroll counter passes the
+    // previous state's, and a fresh state's would rarely pass it.
+    this.view.dispatch(
+      this.view.state.tr.setMeta(commandPluginKey, { forceClose: true }).scrollIntoView(),
     );
   }
 

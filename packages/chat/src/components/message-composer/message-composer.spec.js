@@ -310,7 +310,7 @@ describe("chx-message-composer", () => {
       chat.store.add({
         id: "sent",
         own: true,
-        composerState: { doc: docOf("from state") },
+        composerState: { doc: docOf("from state"), browse: null },
         parts: [{ id: "s", type: "text", text: "sent" }],
       });
       /** @type {string[]} */
@@ -333,6 +333,46 @@ describe("chx-message-composer", () => {
       expect(fromPromptDoc).to.equal("from promptDoc");
       expect(fromText).to.equal("plain");
       expect(asked, "not asked about a message with a state").to.deep.equal(["m1", "m0"]);
+    });
+
+    it("a saved state continues browsing, draft kept; a sent message's doesn't", async () => {
+      // Arrange
+      const { chat, composer, press, text } = await setup({ prompts: ["one", "two"] });
+      /** @type {unknown} */
+      let sentState;
+      composer.addEventListener("chx-send-message", (event) => {
+        sentState = /** @type {CustomEvent} */ (event).detail.state;
+      });
+      chat.input.setText("sent");
+      textboxOf(composer).closest("form")?.requestSubmit();
+      chat.input.setText("my draft");
+      press("ArrowUp");
+      press("ArrowUp");
+      press("ArrowUp");
+      const saved = chat.input.getState();
+
+      // Act
+      chat.input.setText("");
+      const browsingAfterSwitch = chat.input.isBrowsing();
+      const downAfterSwitch = press("ArrowDown");
+      chat.input.setState(saved);
+      const shown = text();
+      const browsingBack = chat.input.isBrowsing();
+      press("ArrowDown");
+      press("ArrowDown");
+      press("ArrowDown");
+      const draft = text();
+      press("ArrowUp");
+      chat.input.setState(sentState);
+      const browsingAfterSent = chat.input.isBrowsing();
+
+      // Assert
+      expect(browsingAfterSwitch).to.equal(false);
+      expect(downAfterSwitch.defaultPrevented).to.equal(false);
+      expect(shown).to.equal("one");
+      expect(browsingBack).to.equal(true);
+      expect(draft).to.equal("my draft");
+      expect(browsingAfterSent).to.equal(false);
     });
 
     it("an open picker keeps the arrows", async () => {

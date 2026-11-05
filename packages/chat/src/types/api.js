@@ -43,9 +43,13 @@
 
 /**
  * What the composer held, chips and pastes included: `input.getState()`, a sent message's
- * `composerState`. Opaque outside the composer, for `input.setState()`.
+ * `composerState`. Opaque outside the composer, for `input.setState()`; holds a `Map`, so kept in
+ * memory, not as JSON.
  * @typedef {Object} ChxComposerState
  * @property {unknown} doc
+ * @property {{at: string, draft: unknown, edits: Map<string, unknown>} | null} browse - the prompt
+ *   shown (a message's id, so a message arriving doesn't shift it), the text you had, and the recalled
+ *   prompts you've been to, edits included, by id; `null` while not browsing
  */
 
 /**
@@ -59,6 +63,8 @@
  * @property {() => void} focus
  * @property {() => void} focusEnd
  * @property {() => boolean} isEmpty
+ * @property {() => boolean} isBrowsing - a recalled prompt is shown (`prompt-history`): the composer
+ *   holds a draft even when empty
  * @property {(node: Node, target?: string | null) => void} insertChip - replaces the command range
  *   `target` (from `chx-command-query`) with `node`, or inserts at the caret without one
  */

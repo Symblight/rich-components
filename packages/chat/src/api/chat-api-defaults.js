@@ -46,6 +46,7 @@ export const CHAT_API_DEFAULTS = freezeApi(
       focus: noop,
       focusEnd: noop,
       isEmpty: () => true,
+      isBrowsing: () => false,
       insertChip: noop,
     },
     attachments: {

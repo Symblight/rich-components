@@ -140,9 +140,8 @@ export class ChxMessageComposer extends LitElement {
   /** @type {(() => void) | undefined} */
   #unregisterInput;
   /**
-   * The prompt shown (a message's id, so a message arriving doesn't shift it), the text you had, and
-   * the recalled prompts you've been to, edits included, by id. `null` while not browsing.
-   * @type {{at: string, draft: unknown, edits: Map<string, unknown>} | null}
+   * `null` while not browsing.
+   * @type {import("../../types/api.js").ChxComposerState["browse"]}
    */
   #browse = null;
   /** @type {{element: import("../attachments/attachments.js").ChxAttachments, unregister: () => void} | undefined} */
@@ -181,6 +180,7 @@ export class ChxMessageComposer extends LitElement {
         this.#browse = null;
         this.#textbox?.clear();
       },
+      isBrowsing: () => this.#browse !== null,
       focus: () => this.focus(),
       focusEnd: () => this.#textbox?.focusEnd(),
       isEmpty: () => this.#textbox?.editor?.isEmpty() ?? true,
@@ -299,12 +299,15 @@ export class ChxMessageComposer extends LitElement {
   /** @returns {import("../../types/api.js").ChxComposerState | undefined} */
   #getState() {
     const doc = this.#textbox?.getState();
-    return doc ? { doc } : undefined;
+    if (!doc) return undefined;
+    const browse = this.#browse && { ...this.#browse, edits: new Map(this.#browse.edits) };
+    return { doc, browse };
   }
 
   /** Queued until the first render if the textbox doesn't exist yet. @param {unknown} state */
   #setState(state) {
-    const { doc } = /** @type {import("../../types/api.js").ChxComposerState} */ (state);
+    const { doc, browse } = /** @type {import("../../types/api.js").ChxComposerState} */ (state);
+    this.#browse = browse;
     if (this.#textbox) this.#textbox.setState(doc);
     else this.updateComplete.then(() => this.#textbox?.setState(doc));
   }
@@ -411,7 +414,7 @@ export class ChxMessageComposer extends LitElement {
 
     const allowed = this.dispatchEvent(
       new CustomEvent("chx-send-message", {
-        detail: { value, html, attachments, state: this.#getState() },
+        detail: { value, html, attachments, state: { doc: textbox.getState(), browse: null } },
         bubbles: true,
         composed: true,
         cancelable: true,

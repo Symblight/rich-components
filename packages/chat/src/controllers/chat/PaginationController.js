@@ -48,6 +48,7 @@ export class PaginationController {
 
   /** @param {string | undefined} conversationId */
   hasMoreFor(conversationId) {
+    if (!this.#config.getAdapter()?.listMessages) return false;
     return this.#state.get(conversationId)?.hasMore ?? true;
   }
 
@@ -62,17 +63,37 @@ export class PaginationController {
   }
 
   /**
-   * First page for one conversation, replacing its cached slice. Never retried on its own after a
-   * failure — `forget()` + a new call (chx-chat's `store.refresh()`) does that.
+   * First page for one conversation, replacing its cached slice but for what's newer than the
+   * request: messages that arrived during the fetch, and any still being sent. Rejects on failure;
+   * the conversation then counts as unvisited, so showing it again retries.
    * @param {string | undefined} [conversationId]
    */
   async loadInitial(conversationId = this.#activeId()) {
     if (!this.#config.getAdapter()?.listMessages || this.#stateFor(conversationId).loading) return;
     this.#visited.add(conversationId);
-    await this.#fetchPage(conversationId, {}, (messages, incoming) => [
-      ...messages.filter((message) => message.conversationId !== conversationId),
-      ...incoming,
-    ]);
+    /** @param {ChxMessage} message */
+    const inConversation = (message) => message.conversationId === conversationId;
+    const before = new Set(
+      this.#config
+        .getMessages()
+        .filter(inConversation)
+        .map((m) => m.id),
+    );
+    try {
+      await this.#fetchPage(conversationId, {}, (messages, incoming) => {
+        const fetched = new Set(incoming.map((message) => message.id));
+        const newer = messages.filter(
+          (m) =>
+            inConversation(m) &&
+            !fetched.has(m.id) &&
+            (!before.has(m.id) || m.status === "sending"),
+        );
+        return [...messages.filter((m) => !inConversation(m)), ...incoming, ...newer];
+      });
+    } catch (error) {
+      this.#visited.delete(conversationId);
+      throw error;
+    }
   }
 
   /** One older page for the active conversation, prepended to its slice. */
@@ -94,13 +115,15 @@ export class PaginationController {
     );
   }
 
-  /** Drops a conversation's page state; its cached messages are the caller's to clear. @param {string | undefined} conversationId */
+  /** Drops a conversation's page state and its fetch; its cached messages are the caller's to clear. @param {string | undefined} conversationId */
   forget(conversationId) {
+    this.#state.get(conversationId)?.loadAbort?.abort();
     this.#visited.delete(conversationId);
     this.#state.delete(conversationId);
   }
 
   forgetAll() {
+    for (const entry of this.#state.values()) entry.loadAbort?.abort();
     this.#visited.clear();
     this.#state.clear();
   }
@@ -129,6 +152,7 @@ export class PaginationController {
         ...request,
         signal: controller.signal,
       });
+      if (controller.signal.aborted) return; // an adapter is free to ignore the signal
       entry.cursor = result.cursor;
       this.#setState(conversationId, { hasMore: result.hasMore ?? false });
       validateMessages(result.messages);
@@ -139,7 +163,10 @@ export class PaginationController {
     } catch (error) {
       if (!controller.signal.aborted) throw error;
     } finally {
-      this.#setState(conversationId, { loading: false });
+      // forgotten meanwhile: a newer fetch may own this conversation's state now
+      if (this.#state.get(conversationId) === entry) {
+        this.#setState(conversationId, { loading: false });
+      }
     }
   }
 

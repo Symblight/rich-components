@@ -381,7 +381,17 @@ export class ChxChat extends LitElement {
 
     // Shares PaginationController's per-conversation `loading` flag with LoadMoreController's own
     // accidental empty-list trigger, so this can't double-fetch — see PaginationController.loadInitial.
-    this.#pagination.loadInitial();
+    this.#loadInitial();
+  }
+
+  /** Not awaited by its callers, so a failed first page is reported here. @param {string} [conversationId] */
+  #loadInitial(conversationId = this.activeConversationId) {
+    this.#pagination.loadInitial(conversationId).catch((error) => {
+      console.error("[chx-chat] loading messages failed", error);
+      this.dispatchEvent(
+        new CustomEvent("chx-load-more-error", { detail: error, bubbles: true, composed: true }),
+      );
+    });
   }
 
   /**
@@ -459,7 +469,7 @@ export class ChxChat extends LitElement {
   /** @param {string | undefined} conversationId */
   #refresh(conversationId) {
     this.#clearCache(conversationId);
-    this.#pagination.loadInitial(conversationId);
+    this.#loadInitial(conversationId);
   }
 
   /**
@@ -628,6 +638,10 @@ export class ChxChat extends LitElement {
     this.conversations = nextConversations;
   }
 
+  /** One function for the chat's life: a new one each update would re-render the whole list. */
+  #handleLoadMore = () =>
+    this.#conversationMode.isEmptyState ? Promise.resolve() : this.#pagination.loadMore();
+
   /** Composer/textbox stop button → `delivery.stop()`. Intercept by listening lower and calling `stopPropagation()`. */
   #handleStop = () => {
     this.#delivery.stop();
@@ -676,7 +690,7 @@ export class ChxChat extends LitElement {
     composer.loading = this.loading || this.#delivery.busy;
     composer.dragging = this.#dropTarget.dragging;
     composer.compact = this.compact;
-    composer.messagesEmpty = this.#internalMessages.length === 0;
+    composer.messagesEmpty = this.#visibleMessages.length === 0;
     composer.emptyState = this.#conversationMode.isEmptyState; // no active conversation → can't compose/send
   }
 
@@ -703,8 +717,7 @@ export class ChxChat extends LitElement {
     list.compact = this.compact;
     // chx-message-list forwards this to chx-infinity-scroll, whose LoadMoreController awaits it near
     // the top of the scroll — the sole load-more path now.
-    list.onLoadMore = () =>
-      this.#conversationMode.isEmptyState ? Promise.resolve() : this.#pagination.loadMore();
+    list.onLoadMore = this.#handleLoadMore;
   }
 
   /**
@@ -735,7 +748,7 @@ export class ChxChat extends LitElement {
         !this.#conversationMode.isEmptyState &&
         !this.#pagination.hasVisited(this.activeConversationId)
       ) {
-        this.#pagination.loadInitial();
+        this.#loadInitial();
       }
     }
 

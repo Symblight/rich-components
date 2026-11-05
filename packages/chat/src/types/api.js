@@ -45,6 +45,9 @@
  * @typedef {Object} ChxInputApi
  * @property {() => {value: string, html: string}} getValue
  * @property {(text: string) => void} setText
+ * @property {() => unknown} getState - the draft with its chips and pastes, opaque, for `setState()`;
+ *   `undefined` before the editor is up
+ * @property {(state: unknown) => void} setState - puts back what `getState()` returned
  * @property {() => void} clear - text only; files are `attachments.clear()`
  * @property {() => void} focus
  * @property {() => void} focusEnd

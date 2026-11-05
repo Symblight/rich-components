@@ -339,6 +339,7 @@ export class ChxMessageList extends LitElement {
 
   /** @param {number | undefined} offset */
   async #showPosition(offset) {
+    this.#infinityScrollElement?.resetLoad();
     if (!this.noVirtualization) {
       if (offset === undefined) return;
       await this.updateComplete;

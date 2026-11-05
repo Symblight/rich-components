@@ -293,6 +293,11 @@ export class ChxInfinityScroll extends LitElement {
     this.#controller.showPosition(offset);
   }
 
+  /** `data` was swapped for unrelated content: its load-more state starts over. */
+  resetLoad() {
+    this.#controller.resetLoad();
+  }
+
   /**
    * The scroll offset (px) that would align item `index` to the given edge — the estimate the
    * virtualizer would use for `scrollToIndex`, exposed so a caller can pre-compute a target and

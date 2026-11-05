@@ -488,6 +488,11 @@ export class InfinityScrollController {
     this.#syncFollowing();
   }
 
+  /** `data` now holds other content: forgets the load-more state of the last. */
+  resetLoad() {
+    this.#loader.reset();
+  }
+
   /** @returns {number | undefined} */
   getScrollOffset() {
     if (this.#noVirtualization) return this.#plainList.getScrollOffset();

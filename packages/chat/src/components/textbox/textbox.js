@@ -247,6 +247,22 @@ export class ChxTextbox extends FormControlMixin(LitElement) {
     else this.#scheduleLayout();
   }
 
+  /** The document, chips and pastes included, for `setState()`. @returns {unknown} */
+  getState() {
+    return this.editor?.getDoc();
+  }
+
+  /** Replaces the document with one from `getState()`. @param {unknown} state */
+  setState(state) {
+    if (!this.editor) return;
+    this.editor.setDoc(state);
+    const text = this.editor.getValue();
+    this.setValue(text);
+    this.value = text;
+    if (this.editor.isEmpty()) this.simplified = true;
+    else this.#scheduleLayout();
+  }
+
   /** Inserts a chip at the caret — see Editor.insertChip. @param {Node} node */
   insertChip(node) {
     this.editor?.insertChip(node);

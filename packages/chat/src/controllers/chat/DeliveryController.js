@@ -33,9 +33,8 @@ export class DeliveryController {
   /** delivery id (a send's id, or a regenerated reply's) → its abort controller and conversation.
    *  @type {Map<string, {controller: AbortController, conversationId: string | undefined}>} */
   #active = new Map();
-  /** Drives `status: "error"` until that conversation starts a new delivery.
-   *  @type {{conversationId: string | undefined} | null} */
-  #lastError = null;
+  /** Drive `status: "error"` until each starts a new delivery. @type {Set<string | undefined>} */
+  #failed = new Set();
 
   /** @param {Host} host @param {DeliveryConfig} config */
   constructor(host, config) {
@@ -62,8 +61,7 @@ export class DeliveryController {
     if (this.#hasActive(conversationId)) {
       return this.#isWaitingForReply(conversationId) ? "submitted" : "streaming";
     }
-    // explicit null check: `undefined` is a real conversationId (the single-conversation case)
-    if (this.#lastError && this.#lastError.conversationId === conversationId) return "error";
+    if (this.#failed.has(conversationId)) return "error";
     return "ready";
   }
 
@@ -246,9 +244,7 @@ export class DeliveryController {
   /** @param {string} deliveryId @param {AbortController} controller @param {string} [conversationId] */
   #track(deliveryId, controller, conversationId) {
     this.#active.set(deliveryId, { controller, conversationId });
-    if (this.#lastError && this.#lastError.conversationId === conversationId) {
-      this.#lastError = null;
-    }
+    this.#failed.delete(conversationId);
     this.#host.requestUpdate();
     this.#emit("chx-delivery-start", { messageId: deliveryId, conversationId });
   }
@@ -257,7 +253,7 @@ export class DeliveryController {
    *  @param {string} deliveryId @param {Outcome} outcome @param {string} [conversationId] */
   #untrack(deliveryId, outcome, conversationId) {
     if (!this.#active.delete(deliveryId)) return;
-    if (outcome === "failed") this.#lastError = { conversationId };
+    if (outcome === "failed") this.#failed.add(conversationId);
     this.#host.requestUpdate();
     this.#emit("chx-delivery-end", { messageId: deliveryId, conversationId, outcome });
   }

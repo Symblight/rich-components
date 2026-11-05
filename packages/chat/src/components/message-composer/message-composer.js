@@ -156,6 +156,8 @@ export class ChxMessageComposer extends LitElement {
         html: this.#textbox?.getHTML() ?? "",
       }),
       setText: (text) => this.#setText(text),
+      getState: () => this.#textbox?.getState(),
+      setState: (state) => this.#setState(state),
       clear: () => this.#textbox?.clear(),
       focus: () => this.focus(),
       focusEnd: () => this.#textbox?.focusEnd(),
@@ -270,6 +272,12 @@ export class ChxMessageComposer extends LitElement {
     this.#triggerFields = new Map(
       slot.assignedElements({ flatten: true }).map((element) => [element.id, element]),
     );
+  }
+
+  /** Queued until the first render if the textbox doesn't exist yet. @param {unknown} state */
+  #setState(state) {
+    if (this.#textbox) this.#textbox.setState(state);
+    else this.updateComplete.then(() => this.#textbox?.setState(state));
   }
 
   /** Queued until the first render if the textbox doesn't exist yet. @param {string} text */

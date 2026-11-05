@@ -40,6 +40,8 @@ export const CHAT_API_DEFAULTS = freezeApi(
     input: {
       getValue: () => ({ value: "", html: "" }),
       setText: noop,
+      getState: () => undefined,
+      setState: noop,
       clear: noop,
       focus: noop,
       focusEnd: noop,

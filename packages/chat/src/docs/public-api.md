@@ -81,6 +81,8 @@ Rules shared by every namespace:
 | --------------------------- | --------------------------------------------------------------------------------------------------------------------------------- |
 | `getValue()`                | `{value, html}`.                                                                                                                  |
 | `setText(text)`             | Replaces the document with plain text.                                                                                            |
+| `getState()`                | The draft with its chips and pastes, opaque, for `setState()`. `undefined` before the editor is up.                               |
+| `setState(state)`           | Puts back what `getState()` returned: a draft saved across a conversation switch.                                                 |
 | `clear()`                   | Text only — files are `attachments.clear()`.                                                                                      |
 | `focus()` / `focusEnd()`    | `composerEl.focus()` and `textboxEl.focus()` work too.                                                                            |
 | `isEmpty()`                 |                                                                                                                                   |

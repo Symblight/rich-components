@@ -134,6 +134,17 @@ export class Editor {
     this.view.updateState(state.apply(state.tr.insertText(text)));
   }
 
+  /** The document, chips and pastes included, for `setDoc()`. @returns {unknown} */
+  getDoc() {
+    return this.view.state.doc.toJSON();
+  }
+
+  /** Replaces the document with one from `getDoc()`; undo history starts over. @param {unknown} json */
+  setDoc(json) {
+    const doc = schema.nodeFromJSON(json);
+    this.view.updateState(EditorState.create({ schema, doc, plugins: this.view.state.plugins }));
+  }
+
   /** @param {boolean} editable Toggles the ProseMirror view's editable state (contenteditable + input handling). */
   setEditable(editable) {
     this.view.setProps({ editable: () => editable });

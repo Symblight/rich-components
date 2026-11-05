@@ -30,6 +30,8 @@ export class LoadMoreController {
   #failures = 0;
   /** @type {ReturnType<typeof setTimeout> | null} */
   #retryTimer = null;
+  /** Bumped by `reset()`: a load started before it no longer speaks for what the list shows. */
+  #generation = 0;
 
   /** A page fetch is in flight — mirrored by the host for rendering. */
   loading = false;
@@ -52,6 +54,7 @@ export class LoadMoreController {
 
     this.#blockedAtCount = null;
     this.loading = true;
+    const generation = this.#generation;
     config.emit("chx-load-more-start");
 
     let failed = false;
@@ -64,9 +67,9 @@ export class LoadMoreController {
         config.emit("chx-load-more-error", error);
       }
     } finally {
-      this.loading = false;
+      if (generation === this.#generation) this.loading = false;
       if (!this.#disposed) await config.settled();
-      if (!this.#disposed) {
+      if (!this.#disposed && generation === this.#generation) {
         config.emit("chx-load-more-end");
         const length = config.getData().length;
         // a failure isn't "nothing older" — backoff instead of blocking until the list changes
@@ -85,6 +88,16 @@ export class LoadMoreController {
       this.#retryTimer = null;
       this.maybeLoad();
     }, delay);
+  }
+
+  /** The list now shows other content (a conversation switch): nothing learned so far applies. */
+  reset() {
+    this.#generation++;
+    this.loading = false;
+    this.#blockedAtCount = null;
+    this.#failures = 0;
+    if (this.#retryTimer !== null) clearTimeout(this.#retryTimer);
+    this.#retryTimer = null;
   }
 
   /** Re-arms after the host is re-attached. */

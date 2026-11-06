@@ -253,3 +253,40 @@ export const CollapseUnchanged = {
     </cdx-code-editor>
   `,
 };
+
+/** Split: `diff-layout="split"` shows the compared text read-only on the left, lines level, and the
+ *  editor on the right with everything it has in unified: headers, comments, undo, events. It works
+ *  over either layer (`reviewBase` wins when both are set), and switching keeps the editor's state.
+ *  @type {Story} */
+export const Split = {
+  args: { layout: "split", layer: "review", wrap: false, collapse: true, fixedHeight: true },
+  argTypes: {
+    layout: { control: "inline-radio", options: ["split", "unified"] },
+    layer: { control: "inline-radio", options: ["review", "baseline"] },
+  },
+  render: ({ layout, layer, wrap, collapse, fixedHeight }) => html`
+    <cdx-code-editor
+      style=${fixedHeight ? "block-size: 24rem" : ""}
+      label="eslint.config.js"
+      .plugins=${webPreset}
+      filename="eslint.config.js"
+      diff-layout=${layout}
+      ?wrap=${wrap}
+      .value=${layer === "review" ? PROPOSED : WORKING}
+      .reviewBase=${layer === "review" ? WORKING : null}
+      .baseline=${layer === "baseline" ? HEAD : null}
+      @cdx-review-base-change=${(/** @type {CustomEvent} */ event) => {
+        /** @type {CdxCodeEditor} */ (event.currentTarget).reviewBase = event.detail.reviewBase;
+      }}
+    >
+      <cdx-diff
+        slot="diff"
+        kind=${layer}
+        expanded
+        .collapseUnchanged=${collapse ? { margin: 2, minSize: 4 } : undefined}
+      ></cdx-diff>
+      <cdx-comments slot="comments" mode="single"></cdx-comments>
+      <cdx-footer slot="footer" encoding="UTF-8"></cdx-footer>
+    </cdx-code-editor>
+  `,
+};

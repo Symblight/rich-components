@@ -34,6 +34,12 @@ export function reviewChunks(state) {
   return state.facet(reviewInput) ? (getChunks(state)?.chunks ?? []) : [];
 }
 
+/** The text the proposals are measured against; null when no review is active.
+ * @param {import("@codemirror/state").EditorState} state */
+export function reviewOriginal(state) {
+  return state.facet(reviewInput) ? getOriginalDoc(state) : null;
+}
+
 /** @param {import("@codemirror/state").EditorState} state @param {Chunk} chunk
  *  @param {number} index @param {number} total @returns {CdxChunkModel} */
 export function reviewModel(state, chunk, index, total) {

@@ -93,6 +93,7 @@ export class CdxCodeEditor extends LitElement {
     diagnostics: { attribute: false },
     baseline: { attribute: false },
     reviewBase: { attribute: false },
+    diffLayout: { type: String, attribute: "diff-layout", reflect: true },
   };
 
   static styles = [tokens, styles, diffStyles, footerStyles, commentsStyles];
@@ -116,7 +117,11 @@ export class CdxCodeEditor extends LitElement {
   /** @type {DiagnosticsController} */
   #diagnostics = new DiagnosticsController(this, this.#editor);
   /** @type {DiffController} */
-  #diff = new DiffController(this, this.#editor);
+  #diff = new DiffController(this, this.#editor, {
+    getParent: () =>
+      /** @type {HTMLElement} */ (this.renderRoot.querySelector(".code-editor__view")),
+    pluginExtensions: () => this.#language.pluginExtensions,
+  });
   /** @type {CommentsController} */
   #comments = new CommentsController(this, this.#editor);
   /** @type {SymbolsController} */
@@ -296,6 +301,10 @@ export class CdxCodeEditor extends LitElement {
      *  difference to the current text is shown inline, chunk by chunk, with Accept / Reject.
      *  Styled by `<cdx-diff kind="review">`. */
     this.reviewBase = null;
+
+    /** @type {import("../../features/diff/split.js").CdxDiffLayout} `split` shows the text behind
+     *  `reviewBase`, or else `baseline`, read-only beside the editor, lines level. */
+    this.diffLayout = "unified";
   }
 
   /** Setting it makes the editor controlled — see ValueController. */
@@ -330,6 +339,7 @@ export class CdxCodeEditor extends LitElement {
       ...this.#config.effects(ALL),
       ...this.#language.pluginEffects(),
       ...this.#comments.effectsFor(),
+      this.#diff.layoutEffect(),
     ];
     this.#editor.replaceState(next.update({ effects }).state);
   }
@@ -352,6 +362,7 @@ export class CdxCodeEditor extends LitElement {
       ...this.#comments.effectsFor(),
       await this.#language.effectFor({ language, filename }),
       ...this.#diff.effectsFor({ baseline, reviewBase }),
+      this.#diff.layoutEffect(),
       this.#documentExtensions.reconfigure(extensions),
     ];
     return state.update({ effects }).state;

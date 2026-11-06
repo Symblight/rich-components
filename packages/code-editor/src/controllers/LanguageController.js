@@ -22,6 +22,10 @@ export class LanguageController {
   #plugins = new Compartment();
   #language = new Compartment();
   #request = 0;
+  /** @type {import("../core/plugin.js").CdxPlugin[] | undefined} */
+  #extensionsOf;
+  /** @type {import("@codemirror/state").Extension[]} */
+  #extensions = [];
 
   /**
    * @param {CdxCodeEditor} host
@@ -51,8 +55,16 @@ export class LanguageController {
 
   /** The plugins' always-on extensions — editor-level, so re-applied to every tab's state. */
   pluginEffects() {
-    const extensions = uniquePlugins(this.#host.plugins).map((plugin) => plugin.extensions ?? []);
-    return [this.#plugins.reconfigure(extensions)];
+    return [this.#plugins.reconfigure(this.pluginExtensions)];
+  }
+
+  /** One array per `plugins` value, so a comparison tells when they really changed. */
+  get pluginExtensions() {
+    if (this.#extensionsOf !== this.#host.plugins) {
+      this.#extensionsOf = this.#host.plugins;
+      this.#extensions = uniquePlugins(this.#host.plugins).map((plugin) => plugin.extensions ?? []);
+    }
+    return this.#extensions;
   }
 
   /** @param {import("lit").PropertyValues} changed */

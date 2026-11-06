@@ -244,6 +244,40 @@ export const cdxTheme = EditorView.theme({
     paddingInline: "var(--cdx-line-padding-inline)",
     backgroundColor: "var(--cdx-diff-removed-background-color)",
   },
+  // Side by side the removed lines are on the left, so the inline block goes.
+  // Not display: none: CodeMirror would keep the block's estimated height, unable to measure it.
+  "&.cdx-split-current .cm-deletedChunk": {
+    blockSize: "0",
+    overflow: "hidden",
+    visibility: "hidden",
+  },
+  "&.cdx-split-original": {
+    borderInlineEnd: "1px solid var(--cdx-content-border-color)",
+  },
+  ".cdx-line-removed": {
+    position: "relative",
+    backgroundColor: "var(--cdx-diff-removed-background-color)",
+  },
+  // on ::after, since the indent guides draw on the line's ::before
+  ".cdx-line-removed::after": {
+    content: '"−"',
+    position: "absolute",
+    insetInlineStart: "2px",
+    font: "500 0.75rem/inherit var(--cdx-content-font-family)",
+    color: "var(--cdx-diff-removed-sign-color)",
+    userSelect: "none",
+    pointerEvents: "none",
+  },
+  ".cdx-text-removed": {
+    backgroundColor: "var(--cdx-diff-removed-text-background-color)",
+  },
+  ".cdx-text-added": {
+    backgroundColor: "var(--cdx-diff-added-text-background-color)",
+  },
+  ".cdx-split-spacer": {
+    backgroundImage:
+      "repeating-linear-gradient(135deg, transparent 0 6px, var(--cdx-diff-spacer-color) 6px 7px)",
+  },
   ".cm-deletedLine": {
     position: "relative",
     opacity: "var(--cdx-diff-removed-opacity)",

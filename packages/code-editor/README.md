@@ -88,6 +88,13 @@ optional `<cdx-diff>` per layer — without one, the data alone turns the layer 
   `no-review-bar`, `expanded`, and `.getAuthor` / `.getAvatarUrl` — called per chunk, and with no
   argument for the review bar; a URL renders as `md-avatar`. Call `refresh()` when their data changes.
 - `diffStats` and `cdx-diff-change` carry the numbers for a status bar (`+4 −2 vs HEAD`).
+- `diff-layout="split"` on the editor (default `unified`) shows the compared text read-only on the
+  left, lines level, and the editor on the right, for either layer (`reviewBase` wins over
+  `baseline`). Without either it's the plain editor. Switching keeps the view, undo and caret. The
+  left pane takes line numbers, indent guides, wrap, tab size, the language and `plugins`' always-on
+  extensions from the editor; `extensions` stay on the editor alone. Choosing a layout for the
+  available width is the app's call. Tokens: `--cdx-diff-{added,removed}-text-background-color`,
+  `--cdx-diff-spacer-color`; part `original-content`.
 - Keys: F7 / Shift-F7 next/previous change (`diff.next()` / `diff.previous()`), Mod-Alt-Enter / Mod-Alt-Backspace accept / reject the
   chunk under the caret.
 - Theming: `--cdx-diff-tone-<tone>-{accent,on-accent,surface,container,on-container}`,

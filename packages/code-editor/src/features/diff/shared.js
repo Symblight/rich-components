@@ -276,7 +276,7 @@ export const isDeletedBlock = (widget) =>
   widget instanceof GhostLinesWidget || "buildDOM" in /** @type {object} */ (widget);
 
 const headerGutterClasses = /** @type {Record<string, ClassMarker>} */ ({});
-const deletedGutterClass = new ClassMarker("cdx-gutter-deleted");
+export const deletedGutterClass = new ClassMarker("cdx-gutter-deleted");
 /** Tints every gutter beside a header or a deleted block, so the fills run edge to edge. */
 const gutterBackdrop = gutterWidgetClass.of((_view, widget) => {
   if (widget instanceof ChunkHeaderWidget) {

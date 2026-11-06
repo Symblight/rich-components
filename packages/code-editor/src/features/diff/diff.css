@@ -17,6 +17,9 @@
   --cdx-diff-added-sign-color: light-dark(#0a5c2c, #a8dab5);
   --cdx-diff-removed-sign-color: light-dark(#93211a, #f2b8b5);
   --cdx-diff-removed-opacity: 0.8;
+  --cdx-diff-added-text-background-color: color-mix(in srgb, var(--cdx-vcs-added-color) 28%, transparent);
+  --cdx-diff-removed-text-background-color: color-mix(in srgb, var(--cdx-vcs-deleted-color) 28%, transparent);
+  --cdx-diff-spacer-color: color-mix(in srgb, var(--_cdx-color-on-surface) 8%, transparent);
   --cdx-diff-flash-color: color-mix(in srgb, var(--cdx-vcs-added-color) 28%, transparent);
   /* "N hidden lines" row of <cdx-diff collapse-unchanged>: a 1dp wavy rule with a pill cut out
      of it; on hover the rule takes primary and the pill secondary-container. */

@@ -14,6 +14,7 @@ export { symbolProvider, syntaxTreeSymbols } from "./core/symbols.js";
 /** @typedef {import("./components/code-editor/code-editor.js").CdxDiffStats} CdxDiffStats */
 /** @typedef {import("./components/code-editor/code-editor.js").CdxChunkModel} CdxChunkModel */
 /** @typedef {import("./features/diff/shared.js").CdxCollapseUnchanged} CdxCollapseUnchanged */
+/** @typedef {import("./features/diff/split.js").CdxDiffLayout} CdxDiffLayout */
 /** @typedef {import("./components/code-editor/code-editor.js").CdxSymbolsChangeDetail} CdxSymbolsChangeDetail */
 /** @typedef {import("./components/code-editor/code-editor.js").CdxBeforeChangeDetail} CdxBeforeChangeDetail */
 /** @typedef {import("./components/code-editor/code-editor.js").CdxStateOptions} CdxStateOptions */

@@ -14,6 +14,7 @@ import { collapsedLines } from "./collapse.js";
 import { changesGutter } from "./gutter.js";
 import { acceptAll, rejectAll, reviewChunks, reviewFeature } from "./review.js";
 import { diffBase } from "./shared.js";
+import { splitDiff } from "./split.js";
 
 /**
  * @typedef {import("../../components/code-editor/code-editor.js").CdxCodeEditor} CdxCodeEditor
@@ -72,6 +73,9 @@ export class DiffController {
   #shared = new Compartment();
   #baseline = new Compartment();
   #review = new Compartment();
+  #layout = new Compartment();
+  /** One extension, so re-applying it to a swapped-in tab isn't a change. */
+  #split;
   /** @type {Record<CdxDiffKind, CdxDiff | null>} */
   #elements = { review: null, baseline: null };
   /** "Diff vs HEAD" when no `<cdx-diff kind="baseline">` carries `expanded`. */
@@ -96,10 +100,21 @@ export class DiffController {
   /**
    * @param {CdxCodeEditor} host
    * @param {import("../../controllers/EditorViewController.js").EditorViewController} editor
+   * @param {{ getParent: () => HTMLElement, pluginExtensions: () => import("@codemirror/state").Extension }} config
    */
-  constructor(host, editor) {
+  constructor(host, editor, config) {
     this.#host = host;
     this.#editor = editor;
+    this.#split = splitDiff({
+      getParent: config.getParent,
+      options: () => ({
+        lineNumbers: !host.noLineNumbers,
+        indentGuides: !host.noIndentGuides,
+        wrap: host.wrap,
+        tabSize: host.tabSize,
+        extensions: config.pluginExtensions(),
+      }),
+    });
     host.addEventListener("cdx-diff-config", (event) => {
       if (event.target !== host) this.#reconfigure();
     });
@@ -128,7 +143,7 @@ export class DiffController {
 
   /** Change column, review, baseline — in that order, left of the line numbers. */
   get extension() {
-    return [this.#shared.of([]), this.#review.of([]), this.#baseline.of([])];
+    return [this.#shared.of([]), this.#review.of([]), this.#baseline.of([]), this.#layout.of([])];
   }
 
   /** @param {HTMLSlotElement} slot */
@@ -151,6 +166,17 @@ export class DiffController {
 
   /** @param {import("lit").PropertyValues} changed */
   update(changed) {
+    this.#applyData(changed);
+    if (changed.has("diffLayout")) this.#editor.dispatch({ effects: this.layoutEffect() });
+  }
+
+  /** The editor-level layout, for a tab's state too. */
+  layoutEffect() {
+    return this.#layout.reconfigure(this.#host.diffLayout === "split" ? this.#split : []);
+  }
+
+  /** @param {import("lit").PropertyValues} changed */
+  #applyData(changed) {
     if (changed.has("reviewBase")) {
       const next = this.#host.reviewBase;
       if (next !== null && this.#isEcho(next)) return this.#applyBaseline(changed);

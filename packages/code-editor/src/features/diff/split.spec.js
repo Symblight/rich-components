@@ -140,6 +140,45 @@ describe("diff-layout", () => {
     expect(right.querySelector(".cdx-text-added")?.textContent).to.equal("new");
   });
 
+  it("marks words only where part of a line changed, not lines changed whole", async () => {
+    const base = ["first", "old word here", "  gone one", "  gone two", "last"].join("\n");
+    const current = ["first", "new word here", "last"].join("\n");
+    const el = await mount(
+      html`<cdx-code-editor
+        diff-layout="split"
+        .value=${current}
+        .baseline=${base}
+      ></cdx-code-editor>`,
+    );
+    const texts = (/** @type {Element} */ pane, /** @type {string} */ name) =>
+      [...pane.querySelectorAll(name)].map((mark) => mark.textContent);
+
+    const [left, right] = panes(el);
+
+    expect(texts(left, ".cdx-text-removed")).to.deep.equal(["old"]);
+    expect(texts(left, ".cdx-line-removed")).to.include("  gone one");
+    expect(texts(right, ".cdx-text-added")).to.deep.equal(["new"]);
+  });
+
+  it("marks no words in a chunk whose lines changed whole", async () => {
+    const base = ["first", "  aaaa bbbb", "  cccc dddd", "last"].join("\n");
+    const current = ["first", "  xxxx yyyy", "  zzzz wwww", "last"].join("\n");
+    const el = await mount(
+      html`<cdx-code-editor
+        diff-layout="split"
+        .value=${current}
+        .baseline=${base}
+      ></cdx-code-editor>`,
+    );
+
+    const [left, right] = panes(el);
+
+    expect(left.querySelectorAll(".cdx-line-removed")).to.have.length(2);
+    expect(right.querySelectorAll(".cdx-line-added")).to.have.length(2);
+    expect(left.querySelectorAll(".cdx-text-removed").length).to.equal(0);
+    expect(right.querySelectorAll(".cdx-text-added").length).to.equal(0);
+  });
+
   it("stays aligned around comment widgets and wrapped lines", async () => {
     const long = `${"wrapped ".repeat(60)}end`;
     const base = ["first", long, "second", "gone", "third", "tail"].join("\n");

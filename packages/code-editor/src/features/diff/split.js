@@ -94,10 +94,30 @@ function changeMarks(chunks, doc, isOriginal) {
       const [changeFrom, changeTo] = isOriginal
         ? [change.fromA, change.toA]
         : [change.fromB, change.toB];
-      if (changeFrom < changeTo) ranges.push(text.range(from + changeFrom, from + changeTo));
+      wordMarks(doc, from + changeFrom, from + changeTo, text, ranges);
     }
   }
   return { lines: Decoration.set(ranges, true), gutter: RangeSet.of(gutters, true) };
+}
+
+/**
+ * Marks a change line by line, skipping a line it takes whole: the line's own background says that
+ * already, and a darker bar on top of it leaves stripes between the rows.
+ * @param {import("@codemirror/state").Text} doc
+ * @param {number} from
+ * @param {number} to
+ * @param {Decoration} text
+ * @param {import("@codemirror/state").Range<Decoration>[]} ranges
+ */
+function wordMarks(doc, from, to, text, ranges) {
+  for (let pos = from; pos < to;) {
+    const line = doc.lineAt(pos);
+    const stop = Math.min(to, line.to);
+    const textStart = line.from + line.text.search(/\S|$/);
+    const textEnd = line.from + line.text.trimEnd().length;
+    if (pos < stop && (pos > textStart || stop < textEnd)) ranges.push(text.range(pos, stop));
+    pos = line.to + 1;
+  }
 }
 
 /** The editor's own text, with the marks of the layer it shows. */

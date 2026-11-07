@@ -593,6 +593,48 @@ describe("chx-message-list", () => {
       expect(event).to.exist;
     });
 
+    for (const noVirtualization of [false, true]) {
+      it(`a send scrolled away from the bottom goes back down and follows the reply${noVirtualization ? " (no virtualization)" : ""}`, async function () {
+        this.timeout(10000);
+        // Arrange: the user scrolled up to read
+        const el = /** @type {ChxMessageList} */ (
+          await fixture(
+            html`<chx-message-list style="height: 400px;" ?no-virtualization=${noVirtualization}></chx-message-list>`,
+          )
+        );
+        const text = (/** @type {number} */ words) =>
+          Array.from({ length: words }, (_, i) => `word${i}`).join(" ");
+        /** @param {string} id @param {boolean} own @param {number} words */
+        const message = (id, own, words) =>
+          makeMessage({ id, own, parts: [{ id: `${id}-t`, type: "text", text: text(words) }] });
+        const history = Array.from({ length: 20 }, (_, i) => message(`m${i}`, false, 60));
+        el.messages = history;
+        await el.updateComplete;
+        const scroller = /** @type {HTMLElement} */ (
+          infinityScrollOf(el).shadowRoot?.querySelector(".infinity-scroll__scroller")
+        );
+        const distance = () => scroller.scrollHeight - scroller.scrollTop - scroller.clientHeight;
+        await waitFor(() => scroller.scrollHeight > 1000 && distance() <= 8);
+        scroller.dispatchEvent(new Event("wheel"));
+        scroller.scrollTop = 0;
+        scroller.dispatchEvent(new Event("scroll"));
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
+        // Act: a send, then its reply streaming in
+        el.messages = [...history, message("sent", true, 20)];
+        await el.updateComplete;
+        for (let words = 20; words <= 400; words += 40) {
+          el.messages = [...history, message("sent", true, 20), message("reply", false, words)];
+          await el.updateComplete;
+          await new Promise((resolve) => setTimeout(resolve, 50));
+        }
+        await new Promise((resolve) => setTimeout(resolve, 300));
+
+        // Assert
+        expect(distance()).to.be.at.most(8);
+      });
+    }
+
     it("chx-load-more-start bubbles out of chx-message-list", async () => {
       const el = /** @type {ChxMessageList} */ (
         await fixture(html`<chx-message-list style="height: 400px;"></chx-message-list>`)

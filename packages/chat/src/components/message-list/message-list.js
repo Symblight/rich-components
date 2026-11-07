@@ -557,7 +557,7 @@ export class ChxMessageList extends LitElement {
   willUpdate(changedProperties) {
     if (changedProperties.has("messages")) {
       this.#readTracking.syncReadStates();
-      if (!this.#switching) this.#pinSentMessage(changedProperties.get("messages"));
+      if (!this.#switching) this.#onSent(changedProperties.get("messages"));
     }
     this.#switching = false;
     if (changedProperties.has("partElements")) this.#partRenderer.clear();
@@ -573,15 +573,17 @@ export class ChxMessageList extends LitElement {
   }
 
   /**
-   * `scroll-mode="pin-top"`: a send is an own message appended at the tail. Runs before
+   * A send is an own message appended at the tail: `pin-top` pins it, `stick-bottom` goes back to
+   * the bottom and follows again, even when the user had scrolled up. Runs before
    * chx-infinity-scroll receives the new `messages`, which `pinToStart()` requires.
    * @param {ChxMessage[] | undefined} previous
    */
-  #pinSentMessage(previous) {
-    if (this.scrollMode !== "pin-top" || !previous) return;
+  #onSent(previous) {
+    if (!previous) return;
     const last = this.messages.at(-1);
     if (!last?.own || !this.#isAppendTo(previous)) return;
-    if (this.#infinityScrollElement) this.#infinityScrollElement.pinToStart(last.id);
+    if (this.scrollMode !== "pin-top") this.#infinityScrollElement?.scrollToBottom();
+    else if (this.#infinityScrollElement) this.#infinityScrollElement.pinToStart(last.id);
     else this.#pendingPinId = last.id;
   }
 

@@ -10,6 +10,7 @@ const PINNED_CLASS = "infinity-scroll__content_pinned";
  *   getEnabled: () => boolean,
  *   indexOfKey: (key: string | number) => number,
  *   getOffset: (index: number) => number | undefined,
+ *   isMeasured: (index: number) => boolean,
  *   scrollTo: (offset: number) => void,
  *   onFollowChange: (following: boolean) => void,
  *   isUserScroll: () => boolean,
@@ -100,10 +101,12 @@ export class PinController {
     const offset = index < 0 ? undefined : this.#config.getOffset(index);
     if (offset === undefined) return; // not rendered yet — retried on the next update
 
-    this.#pinnedKey = this.#pendingKey;
-    this.#pendingKey = undefined;
     this.#setOffset(offset);
     this.#scrollToPin(offset);
+    // aimed by its estimate: a row taller than the view is aimed by its end, so again once measured
+    if (!this.#config.isMeasured(index)) return;
+    this.#pinnedKey = this.#pendingKey;
+    this.#pendingKey = undefined;
   }
 
   /** Call synchronously from the scroll handler. */

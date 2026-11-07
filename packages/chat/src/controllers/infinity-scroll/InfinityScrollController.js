@@ -101,6 +101,7 @@ export class InfinityScrollController {
       getEnabled: config.getPinEnabled ?? (() => false),
       indexOfKey: (key) => this.#indexOfKey(key),
       getOffset: (index) => this.#pinOffset(index),
+      isMeasured: (index) => this.#isMeasured(index),
       scrollTo: (offset) => this.#scrollToPin(offset),
       onFollowChange: () => this.#syncFollowing(),
       isUserScroll: () => this.#grace.recent,
@@ -267,16 +268,36 @@ export class InfinityScrollController {
     return -1;
   }
 
-  /** The row's offset from the content top — the scrollTop that rests it at the top.
+  /** The scrollTop that rests the row at the top. A row taller than the view rests its end halfway
+   *  down instead: the reply starts below it, and following is off.
    *  @param {number} index @returns {number | undefined} */
   #pinOffset(index) {
-    if (!this.#noVirtualization) return this.#list.virtualizer.getMeasurements()[index]?.start;
+    const el = this.#config.getScrollElement();
+    const row = this.#pinRow(index);
+    if (!el || !row) return undefined;
+    const view = el.clientHeight;
+    return Math.round(row.size > view ? row.start + row.size - view / 2 : row.start);
+  }
+
+  /** @param {number} index */
+  #isMeasured(index) {
+    if (this.#noVirtualization) return true;
+    const { virtualizer } = this.#list;
+    const item = virtualizer.getMeasurements()[index];
+    return item !== undefined && virtualizer.itemSizeCache.has(item.key);
+  }
+
+  /** The row's offset from the content top, and its height (an estimate until it's measured).
+   *  @param {number} index @returns {{ start: number, size: number } | undefined} */
+  #pinRow(index) {
+    if (!this.#noVirtualization) return this.#list.virtualizer.getMeasurements()[index];
 
     const el = this.#config.getScrollElement();
     const rowTop = this.#plainList.getOffsetForIndex(index, "start");
-    if (!el || rowTop === undefined) return undefined;
+    const rowEnd = this.#plainList.getOffsetForIndex(index, "end");
+    if (!el || rowTop === undefined || rowEnd === undefined) return undefined;
     const paddingTop = parseFloat(getComputedStyle(el).paddingBlockStart) || 0;
-    return Math.max(0, Math.round(rowTop - paddingTop));
+    return { start: Math.max(0, rowTop - paddingTop), size: rowEnd - rowTop + el.clientHeight };
   }
 
   /** @param {number} offset */

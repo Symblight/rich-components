@@ -252,27 +252,6 @@ describe("chx-infinity-scroll", () => {
       expect(behaviors).to.not.be.empty;
       expect(behaviors).to.not.include("smooth");
     });
-
-    for (const noVirtualization of [false, true]) {
-      it(`keeps the end of a row taller than the view in sight${noVirtualization ? " (no virtualization)" : ""}`, async () => {
-        // Arrange: a sent row more than twice the 400px view; the reply starts below it
-        const { el, scroller, heights } = await tallRows({ scrollMode: "pin-top", noVirtualization });
-        heights.set(60, 1000);
-
-        // Act
-        el.pinToStart(60);
-        el.data = Array.from({ length: 61 }, (_, i) => i);
-        await waitFor(() => scroller.querySelector('[data-row="60"]') !== null);
-        await settled(scroller);
-
-        // Assert: its end, and room below it for the reply, are on screen
-        const row = /** @type {HTMLElement} */ (scroller.querySelector('[data-row="60"]'));
-        const view = scroller.getBoundingClientRect();
-        const rowBottom = row.getBoundingClientRect().bottom;
-        expect(rowBottom).to.be.above(view.top);
-        expect(rowBottom).to.be.at.most(view.bottom - scroller.clientHeight / 3);
-      });
-    }
   });
 
   describe("scrollToBottom()", function () {

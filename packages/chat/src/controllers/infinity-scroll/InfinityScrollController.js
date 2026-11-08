@@ -282,6 +282,9 @@ export class InfinityScrollController {
   /** @param {number} offset */
   #scrollToPin(offset) {
     if (!this.#noVirtualization) {
+      // virtual-core replays a scroll write the browser clamped once the range grows — which the
+      // pin's reserved space does, so a replay would land on top of the pin; the record is private
+      /** @type {any} */ (this.#list.virtualizer)._clampedAdjustment = null;
       // through virtual-core, so its own offset never lags scrollTop
       this.#list.virtualizer.scrollToOffset(offset, { behavior: "auto" });
       return;

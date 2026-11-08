@@ -52,8 +52,6 @@ export class PlainListController {
   #resizeObserver = null;
   /** @type {number | null} */
   #scrollFrame = null;
-  /** rows mutated since the last scroll event — see `takeContentChanged()` */
-  #contentChanged = false;
   #disposed = false;
   /** From `show()` until the new rows' layout goes quiet or a gesture takes over. */
   #settling = false;
@@ -172,13 +170,6 @@ export class PlainListController {
     // set up front: a smooth scroll is still on its way, and must not read as having left the bottom
     this.#latch.atBottom = true;
     el.scrollTo({ top: el.scrollHeight - el.clientHeight, behavior });
-  }
-
-  /** Whether rows mutated since the last call — once per scroll event, for `BottomLatch`. */
-  takeContentChanged() {
-    const changed = this.#contentChanged;
-    this.#contentChanged = false;
-    return changed;
   }
 
   /** After a gesture's grace ran out without leaving the bottom: catch up with what grew meanwhile. */
@@ -306,7 +297,6 @@ export class PlainListController {
   /** Waits for row readiness instead of reconciling inline, against the pre-mutation anchor. */
   #handleMutation = () => {
     if (this.#disposed) return;
-    this.#contentChanged = true;
     // a capture queued by an in-flight scroll would land after the prepend and re-baseline onto the
     // shifted layout, zeroing the restore delta — drop it; #reconcile() re-captures
     this.#cancelScrollFrame();
@@ -325,8 +315,9 @@ export class PlainListController {
     // first: a moved pin changes the reserved min-height, which the skip below must see
     this.#config.beforeReconcile?.();
     // nothing moved since the last baseline: a streamed chunk that didn't wrap a line, or the
-    // resize half of a change its mutation already reconciled
-    if (el && this.#unchangedSinceCapture(el)) return;
+    // resize half of a change its mutation already reconciled. Unless a follow is owed: a scroll
+    // event's anchor capture can baseline growth before the resize that reports it arrives
+    if (el && this.#unchangedSinceCapture(el) && !this.#behindBottom(el)) return;
     if (this.#settling) {
       clearTimeout(this.#settleTimer);
       this.#settleTimer = setTimeout(() => this.endSettling(), SETTLE_QUIET);
@@ -376,6 +367,16 @@ export class PlainListController {
     if (this.#scrollFrame === null) return;
     cancelAnimationFrame(this.#scrollFrame);
     this.#scrollFrame = null;
+  }
+
+  /** Following the bottom, but not at it. @param {Element} el */
+  #behindBottom(el) {
+    return (
+      this.#target === undefined &&
+      this.#latch.atBottom &&
+      (this.#config.getFollowing?.() ?? true) &&
+      distanceToBottom(el) > 1
+    );
   }
 
   /** @param {Element} el */

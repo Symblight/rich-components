@@ -76,11 +76,26 @@ function createAgent() {
   };
 }
 
+/**
+ * How a text part re-renders, the way streamed markdown does: emptied, laid out, refilled. `"grow"`
+ * refills it to its new height, `"same"` to the height it had (a chunk that wraps no new line).
+ * @type {false | "grow" | "same"}
+ */
+let flicker = false;
+
 /** A text part as a block exactly as tall as its text says. */
 const partElements = {
   text: (/** @type {any} */ part, /** @type {HTMLElement | undefined} */ previous) => {
     const el = previous ?? document.createElement("div");
-    el.style.height = `${part.text.length * PX_PER_CHAR}px`;
+    const height = flicker === "same" ? el.style.height : `${part.text.length * PX_PER_CHAR}px`;
+    if (flicker && el.isConnected) {
+      // a re-rendered block is 0px tall until it renders, and a layout read in between clamps
+      el.style.height = "0px";
+      void el.offsetHeight;
+      queueMicrotask(() => (el.style.height = height));
+    } else {
+      el.style.height = height;
+    }
     return el;
   },
 };
@@ -97,8 +112,12 @@ function historyMessage(i) {
   };
 }
 
-/** @param {{ virtualization: boolean }} options */
-async function agentChat({ virtualization }) {
+/**
+ * @param {{ virtualization: boolean, scrollMode?: "pin-top" | "stick-bottom", history?: boolean, draft?: boolean }} options
+ *   `history: false` is a new chat: no messages until the first send. `draft` lays it out as an app
+ *   shows a new chat: the list hidden and sized by the chat's flex column, a banner over the composer.
+ */
+async function agentChat({ virtualization, scrollMode = "pin-top", history = true, draft = false }) {
   const agent = createAgent();
   const el = /** @type {ChxChat} */ (
     await fixture(html`
@@ -109,19 +128,20 @@ async function agentChat({ virtualization }) {
         .noVirtualization=${!virtualization}
         .partElements=${partElements}
         .adapter=${agent.adapter}
-        .messages=${Array.from({ length: 12 }, (_, i) => historyMessage(i))}
+        .messages=${history ? Array.from({ length: 12 }, (_, i) => historyMessage(i)) : []}
       >
         <chx-message-list
           slot="message-list"
           content-align="start"
-          scroll-mode="pin-top"
-          style="height: ${VIEWPORT}px"
+          scroll-mode=${scrollMode}
+          style=${draft ? "display: none" : `height: ${VIEWPORT}px`}
         >
           <chx-streaming-indicator slot="streaming"></chx-streaming-indicator>
           <chx-scroll-to-bottom-affordance
             slot="scroll-to-bottom"
           ></chx-scroll-to-bottom-affordance>
         </chx-message-list>
+        ${draft ? html`<div slot="input-banner" style="height: 40px">Starting agent…</div>` : ""}
       </chx-chat>
     `)
   );
@@ -132,7 +152,7 @@ async function agentChat({ virtualization }) {
   const scroller = /** @type {HTMLElement} */ (
     infinityScroll.shadowRoot?.querySelector(".infinity-scroll__scroller")
   );
-  await waitFor(() => scroller.scrollHeight > VIEWPORT * 2);
+  if (history) await waitFor(() => scroller.scrollHeight > VIEWPORT * 2);
   await settled(scroller);
 
   /** @param {string} id */
@@ -359,6 +379,101 @@ describe("agent chat scrolling (scroll-mode=pin-top)", function () {
         await chat.say(300);
 
         expect(chat.distanceToBottom(), "following again").to.be.at.most(1);
+      });
+    });
+  }
+});
+
+describe("agent chat scrolling (scroll-mode=stick-bottom)", function () {
+  this.timeout(20000);
+
+  for (const virtualization of [true, false]) {
+    describe(virtualization ? "virtualized" : "without virtualization", () => {
+      it("S2. a new chat's first reply is followed from the first overflow", async () => {
+        // Arrange: a new chat, nothing in it yet
+        const chat = await agentChat({ virtualization, scrollMode: "stick-bottom", history: false });
+        /** @type {string[]} where the view wasn't at the bottom, by reply height */
+        const away = [];
+
+        // Act: the first send, then a reply streaming past the viewport
+        await chat.send();
+        for (let height = 100; height <= VIEWPORT * 2; height += 100) {
+          await chat.say(100);
+          const distance = Math.round(chat.distanceToBottom());
+          if (distance > 1) away.push(`${height}px of reply: ${distance}px below`);
+        }
+
+        // Assert
+        expect(away).to.deep.equal([]);
+      });
+
+      it("S2. a draft's first reply is followed once its list shows and its banner goes", async () => {
+        // Arrange: a new chat laid out as an app shows a draft
+        const chat = await agentChat({ virtualization, scrollMode: "stick-bottom", history: false, draft: true });
+        /** @type {string[]} where the view wasn't at the bottom, by reply height */
+        const away = [];
+
+        // Act: sent while hidden, then the list shows, the banner goes and the reply streams
+        await chat.send();
+        chat.list.style.display = "";
+        await chat.say(50);
+        chat.el.querySelector('[slot="input-banner"]')?.remove();
+        for (let height = 100; height <= VIEWPORT * 2; height += 100) {
+          await chat.say(100);
+          const distance = Math.round(chat.distanceToBottom());
+          if (distance > 1) away.push(`${height}px of reply: ${distance}px below`);
+        }
+
+        // Assert
+        expect(away).to.deep.equal([]);
+      });
+
+      it("S2. a reply whose last block re-renders while it streams keeps the bottom", async () => {
+        // Arrange: a reply already past the viewport, followed
+        const chat = await agentChat({ virtualization, scrollMode: "stick-bottom", history: false });
+        await chat.send();
+        await chat.say(VIEWPORT * 2);
+        /** @type {string[]} where the view wasn't at the bottom, by step */
+        const away = [];
+
+        // Act: each new chunk re-renders the reply, empty for a moment
+        flicker = "grow";
+        try {
+          for (let step = 1; step <= 5; step++) {
+            await chat.say(30);
+            const distance = Math.round(chat.distanceToBottom());
+            if (distance > 1) away.push(`step ${step}: ${distance}px below`);
+          }
+        } finally {
+          flicker = false;
+        }
+
+        // Assert
+        expect(away).to.deep.equal([]);
+      });
+
+      it("S2. a re-render that ends at the same height leaves following on", async () => {
+        // Arrange: a reply already past the viewport, followed
+        const chat = await agentChat({ virtualization, scrollMode: "stick-bottom", history: false });
+        await chat.send();
+        await chat.say(VIEWPORT * 2);
+
+        // Act: a chunk re-renders the reply without a new line, then the reply grows
+        flicker = "same";
+        try {
+          chat.agent.say(30);
+          await settled(chat.scroller);
+        } finally {
+          flicker = false;
+        }
+        const afterRerender = Math.round(chat.distanceToBottom());
+        await chat.say(100);
+
+        // Assert
+        expect({ afterRerender, afterGrowth: Math.round(chat.distanceToBottom()) }).to.deep.equal({
+          afterRerender: 0,
+          afterGrowth: 0,
+        });
       });
     });
   }

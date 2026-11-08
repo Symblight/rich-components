@@ -77,7 +77,7 @@ async function tallRows({
 
 /** A user scroll to the top, as the wheel would do it. @param {HTMLElement} scroller */
 async function userScrollToTop(scroller) {
-  scroller.dispatchEvent(new Event("wheel"));
+  scroller.dispatchEvent(new WheelEvent("wheel", { deltaY: -scroller.scrollTop }));
   scroller.scrollTop = 0;
   scroller.dispatchEvent(new Event("scroll"));
   await settled(scroller);
@@ -224,6 +224,35 @@ describe("chx-infinity-scroll", () => {
       await grow(el, 18);
       await settled(scroller);
 
+      expect(scroller.scrollTop).to.be.below(100);
+    });
+
+    it("follows a row that grows in the frame of a scroll event", async () => {
+      // Arrange: following the bottom
+      const { scroller } = await tallRows({ count: 10, noVirtualization: true });
+      const last = /** @type {HTMLElement} */ (scroller.querySelector('[data-row="9"]'));
+
+      // Act: the last row grows with no mutation the list sees, as a part's own shadow DOM does,
+      // in the next frame, before that frame's anchor capture a scroll event queued
+      requestAnimationFrame(() => (last.style.height = "400px"));
+      scroller.dispatchEvent(new Event("scroll"));
+      await settled(scroller);
+
+      // Assert
+      expect(distanceToBottom(scroller)).to.be.at.most(1);
+    });
+
+    it("stays where the consumer scrolled it, with no gesture", async () => {
+      // Arrange: following the bottom
+      const { el, scroller } = await tallRows({ count: 10, noVirtualization: true });
+
+      // Act: the app scrolls to the top itself, then rows arrive
+      el.scrollToOffset(0);
+      await settled(scroller);
+      await grow(el, 14);
+      await settled(scroller);
+
+      // Assert
       expect(scroller.scrollTop).to.be.below(100);
     });
   });

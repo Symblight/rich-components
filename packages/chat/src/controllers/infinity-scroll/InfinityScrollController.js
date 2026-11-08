@@ -81,6 +81,8 @@ export class InfinityScrollController {
   #pointerHeld = false;
   /** Text in the list is selected — following would move it out from under the user. */
   #selectionHeld = false;
+  /** The scroller's `scrollTop` at the last scroll event. */
+  #lastScrollTop = 0;
 
   /** @param {ReactiveControllerHost} host @param {InfinityScrollConfig} config */
   constructor(host, config) {
@@ -423,7 +425,8 @@ export class InfinityScrollController {
 
   handleScroll = () => {
     const el = this.#config.getScrollElement();
-    const contentChanged = this.#plainList.takeContentChanged();
+    const movedUp = !!el && el.scrollTop < this.#lastScrollTop - 0.5;
+    if (el) this.#lastScrollTop = el.scrollTop;
     let left = false;
     if (this.#plainList.settling) {
       // rows laying out and our own re-aims: no gesture ended the settling, so nobody scrolled
@@ -434,13 +437,17 @@ export class InfinityScrollController {
       left = el
         ? this.#latch.update(el, this.#config.getBuffer(), {
             layoutJumps: this.#noVirtualization && !this.#grace.recent,
-            contentChanged,
             held: this.#pointerHeld,
           })
         : false;
     }
     if (this.#noVirtualization) {
       this.#plainList.handleScroll();
+      // up with no gesture: a transient shrink clamped scrollTop, and the content regrew to a height
+      // no reconcile will see as a change; WebKit, lacking scroll anchoring, never restores it
+      if (movedUp && !this.#plainList.settling && !this.#grace.recent && !this.#paused) {
+        this.#plainList.resumeFollow();
+      }
     } else {
       this.#stick.refresh(left);
     }
@@ -509,6 +516,8 @@ export class InfinityScrollController {
   /** @param {number} offset @param {{behavior?: "auto" | "smooth" | "instant"}} [options] */
   scrollToOffset(offset, options) {
     if (this.#noVirtualization) {
+      // the consumer's scroll, not a gesture: the latch would read it as layout
+      this.#latch.atBottom = false;
       this.#plainList.scrollToOffset(offset, options);
       return;
     }
@@ -527,6 +536,8 @@ export class InfinityScrollController {
    */
   scrollToIndex(index, options) {
     if (this.#noVirtualization) {
+      // the consumer's scroll, not a gesture: the latch would read it as layout
+      this.#latch.atBottom = false;
       this.#plainList.scrollToIndex(index, options);
       return;
     }

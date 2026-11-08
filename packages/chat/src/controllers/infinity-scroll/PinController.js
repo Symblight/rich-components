@@ -13,6 +13,7 @@ const PINNED_CLASS = "infinity-scroll__content_pinned";
  *   scrollTo: (offset: number) => void,
  *   onFollowChange: (following: boolean) => void,
  *   isUserScroll: () => boolean,
+ *   contentReachesEnd: () => boolean,
  * }} PinConfig
  */
 
@@ -20,8 +21,9 @@ const PINNED_CLASS = "infinity-scroll__content_pinned";
  * `scroll-mode="pin-top"`: scrolls a sent item to the top once and reserves the space below it in
  * CSS (`PINNED_CLASS` + `--_chx-pin-offset`), so layout never clamps the scroll. The scroll is always
  * instant: a smooth one aims at an offset taken while rows are still measured, and can end on the
- * wrong item (WebKit). Also owns whether
- * the list follows new content: off after a pin or any upward scroll, back on at the very bottom.
+ * wrong item (WebKit). Also holds following off after a pin, until the reply has filled the
+ * reserved space, the user scrolls to the very bottom, or `scrollToBottom()`. Whether the user
+ * has scrolled away is `BottomLatch`'s call, as in stick-bottom — not judged here.
  */
 export class PinController {
   /** @type {PinConfig} */
@@ -34,9 +36,8 @@ export class PinController {
   /** @type {number | undefined} */
   #offset;
   #following = true;
-  /** our own pin scroll must not count as "the user reached the bottom" — cleared by a user scroll */
-  #suppressResume = false;
-  #lastScrollTop = 0;
+  /** following is off for the pin alone, not the user: it resumes once content reaches the end */
+  #awaitingContent = false;
 
   /** @param {PinConfig} config */
   constructor(config) {
@@ -53,13 +54,13 @@ export class PinController {
   pin(key) {
     if (!this.#config.getEnabled()) return;
     this.#pendingKey = key;
-    this.#suppressResume = true;
+    this.#awaitingContent = true;
     this.#setFollowing(false);
   }
 
-  /** An explicit jump to the bottom is a request to follow again. */
-  noteScrollToBottom() {
-    this.#suppressResume = false;
+  /** Follows again: an explicit jump to the bottom, or the hold released by `refresh`/`handleScroll`. */
+  resume() {
+    this.#awaitingContent = false;
     this.#setFollowing(true);
   }
 
@@ -67,12 +68,6 @@ export class PinController {
   reset(following) {
     this.#clear();
     this.#setFollowing(following);
-    this.rebase();
-  }
-
-  /** The scroll position moved with nobody scrolling: nothing to read from it. */
-  rebase() {
-    this.#lastScrollTop = this.#config.getScrollElement()?.scrollTop ?? 0;
   }
 
   /** Re-reads the pinned row's offset (it moves when older rows are prepended), or drops the pin
@@ -86,6 +81,8 @@ export class PinController {
     }
     const offset = this.#config.getOffset(index);
     if (offset !== undefined) this.#setOffset(offset);
+    // the reply filled the reserved space: from here its end is followed, as in stick-bottom
+    if (this.#awaitingContent && this.#config.contentReachesEnd()) this.resume();
   }
 
   /** Call from every host update, once the DOM reflects the current data. */
@@ -103,32 +100,16 @@ export class PinController {
     this.#pinnedKey = this.#pendingKey;
     this.#pendingKey = undefined;
     this.#setOffset(offset);
-    this.#scrollToPin(offset);
+    this.#config.scrollTo(offset);
   }
 
-  /** Call synchronously from the scroll handler. */
+  /** Call synchronously from the scroll handler. Only a scroll a gesture just started is the
+   *  user's: the pin's own, a layout clamp, or a compensation for a shrinking row is not. */
   handleScroll() {
     const el = this.#config.getScrollElement();
-    if (!el) return;
-    const top = el.scrollTop;
-    const scrolledUp = top < this.#lastScrollTop - 0.5;
-    this.#lastScrollTop = top;
-    if (!this.#config.getEnabled()) return;
-
-    // only a scroll a gesture just started is the user's — a later layout clamp to the bottom isn't
-    if (this.#config.isUserScroll()) this.#suppressResume = false;
-    const atVeryBottom = distanceToBottom(el) <= VERY_BOTTOM;
-    // still at the bottom, it's no scroll away: rows above shrinking (a wider column) move scrollTop up
-    if (scrolledUp && !atVeryBottom) this.#setFollowing(false);
-    else if (atVeryBottom && !this.#suppressResume) this.#setFollowing(true);
-  }
-
-  /** @param {number} offset */
-  #scrollToPin(offset) {
-    const el = this.#config.getScrollElement();
-    if (!el) return;
-    this.#config.scrollTo(offset);
-    this.#lastScrollTop = el.scrollTop;
+    if (!el || !this.#config.getEnabled() || !this.#config.isUserScroll()) return;
+    if (distanceToBottom(el) <= VERY_BOTTOM) this.resume();
+    else this.#awaitingContent = false; // the user's choice now, not the pin's
   }
 
   /** @param {number} offset */
@@ -144,7 +125,7 @@ export class PinController {
     this.#pendingKey = undefined;
     this.#pinnedKey = undefined;
     this.#offset = undefined;
-    this.#suppressResume = false;
+    this.#awaitingContent = false;
     const content = this.#config.getContentElement();
     content?.classList.remove(PINNED_CLASS);
     content?.style.removeProperty("--_chx-pin-offset");

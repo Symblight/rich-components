@@ -179,7 +179,8 @@ export class ChxMessageList extends LitElement {
     this.contentAlign = "end";
 
     /** Forwarded to chx-infinity-scroll. `"pin-top"` pins each sent message to the top of the
-     *  viewport and doesn't follow the reply (agent chats). @type {"pin-top" | "stick-bottom"} */
+     *  viewport and follows the reply only once it has filled the view below (agent chats).
+     *  @type {"pin-top" | "stick-bottom"} */
     this.scrollMode = "stick-bottom";
 
     /** Forwarded straight through to chx-infinity-scroll — real-DOM mode, no windowing/measurement.

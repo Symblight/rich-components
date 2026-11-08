@@ -104,6 +104,11 @@ export class InfinityScrollController {
       scrollTo: (offset) => this.#scrollToPin(offset),
       onFollowChange: () => this.#syncFollowing(),
       isUserScroll: () => this.#grace.recent,
+      // the reserved space keeps the pin at the very bottom; only content past it opens a distance
+      contentReachesEnd: () => {
+        const el = config.getScrollElement();
+        return !!el && distanceToBottom(el) > 1;
+      },
     });
 
     this.#list = new VirtualListController(host, {
@@ -422,7 +427,6 @@ export class InfinityScrollController {
     let left = false;
     if (this.#plainList.settling) {
       // rows laying out and our own re-aims: no gesture ended the settling, so nobody scrolled
-      this.#pin.rebase();
       if (el) this.#latch.baseline(el);
     } else {
       this.#pin.handleScroll();
@@ -457,7 +461,7 @@ export class InfinityScrollController {
 
   /** An explicit jump to the bottom — re-engages following. @param {"auto" | "smooth" | "instant"} behavior */
   scrollToBottom(behavior) {
-    this.#pin.noteScrollToBottom();
+    this.#pin.resume();
     this.#releaseSelection(); // asked for the end, selection or not
     if (this.#noVirtualization) {
       this.#plainList.scrollToBottom(behavior);

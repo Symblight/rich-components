@@ -37,7 +37,7 @@ function distanceToBottom(scroller) {
 
 /**
  * Rows far taller than the estimate, like agent replies with code blocks.
- * @param {{ count?: number, scrollMode?: "pin-top" | "stick-bottom", footer?: boolean, scrollBehavior?: "auto" | "smooth", noVirtualization?: boolean }} [options]
+ * @param {{ count?: number, scrollMode?: "pin-top" | "stick-bottom", footer?: boolean, scrollBehavior?: "auto" | "smooth", noVirtualization?: boolean, contentAlign?: "start" | "end" }} [options]
  */
 async function tallRows({
   count = 60,
@@ -45,6 +45,7 @@ async function tallRows({
   footer = false,
   scrollBehavior = "auto",
   noVirtualization = false,
+  contentAlign = "end",
 } = {}) {
   /** @type {Map<number, number>} */
   const heights = new Map();
@@ -54,6 +55,7 @@ async function tallRows({
         style="height: 400px;"
         scroll-mode=${scrollMode}
         scroll-behavior=${scrollBehavior}
+        content-align=${contentAlign}
         ?no-virtualization=${noVirtualization}
         .hasMore=${false}
         .data=${Array.from({ length: count }, (_, i) => i)}
@@ -241,6 +243,66 @@ describe("chx-infinity-scroll", () => {
       // Assert
       expect(distanceToBottom(scroller)).to.be.at.most(1);
     });
+
+    it("never paints a frame above the bottom when a row re-renders in a frame", async () => {
+      // Arrange: following the bottom, sampling each frame after layout and the list's own observers
+      const { scroller } = await tallRows({ count: 10, noVirtualization: true });
+      const last = /** @type {HTMLElement} */ (scroller.querySelector('[data-row="9"]'));
+      /** @type {number[]} */
+      const painted = [];
+      const sample = new ResizeObserver(() => painted.push(distanceToBottom(scroller)));
+      const sentinel = document.body.appendChild(document.createElement("div"));
+      sample.observe(sentinel);
+
+      // Act: as streamed markdown repaints its last blocks in a frame: emptied, read, refilled
+      for (let frame = 0; frame < 5; frame++) {
+        await new Promise((resolve) =>
+          requestAnimationFrame(() => {
+            last.style.height = "0px";
+            void last.offsetHeight;
+            last.style.height = "240px";
+            sentinel.style.width = `${frame + 1}px`;
+            resolve(undefined);
+          }),
+        );
+      }
+      await settled(scroller);
+      sample.disconnect();
+      sentinel.remove();
+
+      // Assert
+      expect(painted.filter((distance) => distance > 1)).to.deep.equal([]);
+    });
+
+    for (const [shrinking, contentAlign] of /** @type {const} */ ([
+      ["row", "end"],
+      ["row", "start"],
+      ["footer", "start"],
+    ])) {
+      it(`leaves no space below when the ${shrinking} really shrinks (content-align=${contentAlign})`, async () => {
+        // Arrange: following the bottom
+        const { el, scroller } = await tallRows({
+          count: 10,
+          noVirtualization: true,
+          footer: true,
+          contentAlign,
+        });
+        const height = scroller.scrollHeight;
+
+        // Act: 200px of the last row, or the whole footer, goes for good
+        if (shrinking === "row") {
+          /** @type {HTMLElement} */ (scroller.querySelector('[data-row="9"]')).style.height =
+            "40px";
+        } else {
+          el.querySelector('[slot="footer"]')?.remove();
+        }
+        await settled(scroller);
+
+        // Assert
+        expect(scroller.scrollHeight).to.be.at.most(height - 120);
+        expect(distanceToBottom(scroller)).to.be.at.most(1);
+      });
+    }
 
     it("stays where the consumer scrolled it, with no gesture", async () => {
       // Arrange: following the bottom

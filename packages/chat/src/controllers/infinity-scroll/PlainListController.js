@@ -2,6 +2,9 @@ import { RowMeasurer } from "../../components/infinity-scroll/RowMeasurer.js";
 import { VERY_BOTTOM } from "../../components/infinity-scroll/BottomLatch.js";
 import { distanceToBottom } from "../../utils/dom.js";
 
+/** The content's held height, see `holdHeight()`. */
+const HOLD = "--_chx-follow-hold";
+
 /** ms with no layout change before a `show()` counts as settled. */
 const SETTLE_QUIET = 150;
 
@@ -12,6 +15,7 @@ const SETTLE_QUIET = 150;
  * @typedef {{
  *   getScrollElement: () => Element | undefined,
  *   getCanvasElement: () => Element | undefined,
+ *   getContentElement?: () => HTMLElement | undefined,
  *   rows: () => Iterable<HTMLElement>,
  *   getBuffer: () => number,
  *   onReconciled?: () => void,
@@ -317,7 +321,11 @@ export class PlainListController {
     // nothing moved since the last baseline: a streamed chunk that didn't wrap a line, or the
     // resize half of a change its mutation already reconciled. Unless a follow is owed: a scroll
     // event's anchor capture can baseline growth before the resize that reports it arrives
-    if (el && this.#unchangedSinceCapture(el) && !this.#behindBottom(el)) return;
+    if (el && this.#unchangedSinceCapture(el) && !this.#behindBottom(el)) {
+      // the held height hides a shrink below the anchor (content-align="start") from that check
+      this.holdHeight();
+      return;
+    }
     if (this.#settling) {
       clearTimeout(this.#settleTimer);
       this.#settleTimer = setTimeout(() => this.endSettling(), SETTLE_QUIET);
@@ -335,8 +343,31 @@ export class PlainListController {
       else if (distance <= VERY_BOTTOM) this.#latch.atBottom = true;
     }
     if (el) this.#latch.baseline(el);
+    this.holdHeight();
     this.captureAnchor();
     this.#config.onReconciled?.();
+  }
+
+  /**
+   * While following, the content keeps at least its current height, so a re-render that empties a
+   * row for a moment (streamed markdown repainting its last blocks) can't clamp `scrollTop` in a
+   * frame that then paints: the shrink and regrow happen in one frame, under the observers, and
+   * nothing would follow before the paint. Lowered as soon as a resize reports a real shrink.
+   */
+  holdHeight() {
+    const content = this.#config.getContentElement?.();
+    if (!content) return;
+    if (
+      this.#target !== undefined ||
+      !this.#latch.atBottom ||
+      !(this.#config.getFollowing?.() ?? true)
+    ) {
+      content.style.removeProperty(HOLD);
+      return;
+    }
+    let height = 0;
+    for (const child of content.children) height += child.getBoundingClientRect().height;
+    content.style.setProperty(HOLD, `${height}px`);
   }
 
   /**

@@ -154,6 +154,7 @@ export class InfinityScrollController {
     this.#plainList = new PlainListController({
       getScrollElement: config.getScrollElement,
       getCanvasElement,
+      getContentElement: config.getContentElement,
       rows: config.rows,
       getBuffer: config.getBuffer,
       // the only maybeLoad() check in this mode — scrollTop is post-correction here, unlike in hostUpdated
@@ -353,6 +354,7 @@ export class InfinityScrollController {
     const el = this.#config.getScrollElement();
     if (this.#disposed || !el || !this.following) return;
     if (this.#noVirtualization) {
+      this.#plainList.holdHeight();
       this.#plainList.resumeFollow();
       return;
     }

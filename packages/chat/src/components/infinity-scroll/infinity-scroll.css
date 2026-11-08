@@ -21,7 +21,8 @@
   display: flex;
   flex-direction: column;
   justify-content: flex-end;
-  min-height: 100%;
+  /* --_chx-follow-hold: PlainListController.holdHeight() */
+  min-height: max(100%, var(--_chx-follow-hold, 0px));
   box-sizing: border-box;
 }
 
